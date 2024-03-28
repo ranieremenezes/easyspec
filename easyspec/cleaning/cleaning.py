@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib
 from mpl_toolkits.axes_grid1 import make_axes_locatable #this is to adjust the colorbars
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -9,6 +8,9 @@ from scipy import stats as st
 from pathlib import Path
 import warnings
 from scipy import odr
+from astropy.nddata import CCDData
+from astropy import units as u
+import ccdproc as ccdp
 
 class cleaning:
 
@@ -50,6 +52,8 @@ class cleaning:
                 self.all_images_list = self.all_images_list + self.bias_list
             else:
                 raise TypeError("Invalid diretory for bias files.")
+        else:
+            self.bias_list = []
 
         if flats is not None:
             if Path(flats).is_dir():
@@ -58,6 +62,8 @@ class cleaning:
                 self.all_images_list = self.all_images_list + self.flat_list
             else:
                 raise TypeError("Invalid diretory for flat files.")
+        else:
+            self.flat_list = []
 
         if lamp is not None:
             if Path(lamp).is_dir():
@@ -66,6 +72,8 @@ class cleaning:
                 self.all_images_list = self.all_images_list + self.lamp_list
             else:
                 raise TypeError("Invalid diretory for lamp files.")
+        else:
+            self.lamp_list = []
 
         if standard_star is not None:
             if Path(standard_star).is_dir():
@@ -74,6 +82,8 @@ class cleaning:
                 self.all_images_list = self.all_images_list + self.std_list
             else:
                 raise TypeError("Invalid diretory for standard star files.")
+        else:
+            self.std_list = []
 
 
         if targets is not None:
@@ -96,6 +106,8 @@ class cleaning:
                 self.all_images_list = self.all_images_list + self.target_list
             else:
                 raise RuntimeError("Variable 'target' must be a string or a list of strings.")
+        else:
+            self.target_list
 
 
         if darks is not None:
@@ -105,6 +117,8 @@ class cleaning:
                 self.all_images_list = self.all_images_list + self.darks_list
             else:
                 raise TypeError("Invalid diretory for dark files.")
+        else:
+            self.darks_list = []
 
         # Here we create a dictionary with all raw images:
         all_raw_data = {}
@@ -134,7 +148,7 @@ class cleaning:
         Parameters
         ----------
         raw_image_data: dict
-            Dictionary containing the path (keys) and the raw raw data for one or several images.
+            Dictionary containing the path (keys) and the raw data (values) for one or several images.
         x1,x2,y1,y2: integers
             Values giving the cutting limits for the trim function.
 
@@ -184,12 +198,12 @@ class cleaning:
             warnings.warn("A temptative of setting Ncols < 1 was done. easyspec is setting it back to the default value.")
 
         if image_type == "all":
-            imagenames = self.all_images_list
+            imagenames = list(datacube.keys())
         elif image_type == "bias":
             imagenames = self.bias_list
         elif image_type == "flat":
             imagenames = self.flat_list
-        elif image_type == "lmap":
+        elif image_type == "lamp":
             imagenames = self.lamp_list
         elif image_type == "standard_star":
             imagenames = self.std_list
@@ -243,7 +257,7 @@ class cleaning:
         plt.show()
     
 
-    def master(self,Type,trimmed_data,method="median",plot=True):
+    def master(self,Type,trimmed_data,method="median",header_hdu_entry=0,plot=True):
 
         """
         Function to stack the data files into a master file.
@@ -256,6 +270,8 @@ class cleaning:
             Dictionary containing trimmed data. At the end we select only the entries defined with the variable 'Type'.
         method: string
             Stacking method. Options are "median", "mean", or "mode".
+        header_hdu_entry: int
+            HDU extension where we can find the header. Please check your data before choosing this value.
         plot: bool
             Keep it as True if you want to plot the master bias/dark/flat/etc.
 
@@ -300,8 +316,8 @@ class cleaning:
 
         # Saving master file:
 
-        ref_hdul = fits.open(data_list[0])  # open a bias FITS file
-        hdr = ref_hdul[0].header
+        ref_hdul = fits.open(data_list[0])  # open a FITS file
+        hdr = ref_hdul[header_hdu_entry].header
         hdu = fits.PrimaryHDU(master) 
         hdu.header = hdr
         hdu.header['COMMENT'] = 'This is the master '+Type+' generated with easyspec. Method: '+method
@@ -426,7 +442,7 @@ class cleaning:
         return subdark_data_out
 
 
-    def norm_master_flat(self,masterflat,degree=5,plots=True):
+    def norm_master_flat(self,masterflat,degree=5,header_hdu_entry=0,plots=True):
 
         """
         Function to normalize the master flat.
@@ -437,6 +453,8 @@ class cleaning:
             Array with master flat raw data.
         degree: int
             Polynomial degree to be fitted to the median masterflat x-profile.
+        header_hdu_entry: int
+            HDU extension where we can find the header. Please check your data before choosing this value.
         plots: bool
             If True, easyspec will plot the master flat profile, fit residuals and normalized master flat. 
 
@@ -462,11 +480,9 @@ class cleaning:
         fit_matrix = np.ones(np.shape(masterflat))*poly_y
         normalized_master_flat = masterflat/fit_matrix
 
-        # Saving master flat:
-        ref_flat_hdul = fits.open(self.flat_list[0])  # open a flat FITS file
-        hdr = ref_flat_hdul[0].header
-        hdu = fits.PrimaryHDU(normalized_master_flat)
-        hdu.header = hdr
+        # Saving norm master flat:
+        hdr = fits.getheader(self.flat_list[0],ext=header_hdu_entry)
+        hdu = fits.PrimaryHDU(normalized_master_flat,header=hdr)
         hdu.header['COMMENT'] = 'This is the normalized master flat generated with easyspec'
         hdu.header['BZERO'] = 0 #This is to avoid a rescaling of the data
         hdul = fits.HDUList([hdu])
@@ -482,10 +498,11 @@ class cleaning:
                     plt.title("Master flat profile")
                     plt.plot(xvals, yvals, 'x', alpha=0.5,label="column-median data")
                     plt.plot(xvals, poly_y, color='limegreen',label="ODR polynomial fit")
+                    plt.legend()
                 else:
                     plt.title("Polynomial fit residuals")
                     plt.plot(xvals, yvals - poly_y, color='limegreen')
-            plt.legend()
+            
             
             plt.figure()
             image_shape = np.shape(normalized_master_flat)
@@ -503,6 +520,297 @@ class cleaning:
         return normalized_master_flat
     
 
-    # IMPORTANT: do a function to rotate all raw data files such that the dispersion axis is in the horizontal.
-    # IMPORTANT: add function to remove reflex. E.g. a 'pad' function which takes the variable 'value' with the padding value and xy image coordinates.
+    def rotate(self,raw_image_data,N_rotations=1):
+
+        """
+        Function to rotate the raw data files by N_rotations*90°. In easyspec, the dispersion axis must be in the horizontal.
+        
+        Parameters
+        ----------
+        raw_image_data: dict
+            A dictionary containing the paths to all data files (dictionary keys) and the raw data for all images (dictionary values). E.g.: the output from the data_paths() function.
+        N_rotations: int
+            Number of 90° rotations to be performed.
+
+        Returns
+        -------
+        raw_images_rotated: dict
+            A dictionary containing the paths to all data files (dictionary keys) and the rotated raw data for all images (dictionary values).
+        """
+
+        raw_images_rotated = {}
+
+        for name,data in raw_image_data.items():
+            raw_images_rotated[name] = np.rot90(data,k=N_rotations)
+        
+        return raw_images_rotated
+
+
+    def pad(self,image_data,value,x1,x2,y1,y2,plot=True):
+
+        """
+        We use this function to pad a specific section of an image with a given value. It is particularly useful when handling the master files.
+        
+        Parameters
+        ----------
+        image_data: array
+            Array containing the raw data for one image.
+        value: float
+            The value that is going to be substituted in the image section defided by the limits x1,x2,y1,y2.
+        x1,x2,y1,y2: integers
+            Values giving the image section limits for padding.
+        plot: bool
+            If True, easyspec will print the padded image.
+
+        Returns
+        -------
+        image_data: array
+            An array with the new padded image.
+        """
+
+        image_data = np.copy(image_data)
+
+        image_data[y1:y2,x1:x2] = value
+        if plot:
+            image_shape = np.shape(image_data)
+            aspect_ratio = image_shape[0]/image_shape[1]
+            plt.figure(figsize=(12,12*aspect_ratio)) 
+            plt.title('Padded image')
+            ax = plt.gca()
+            im = ax.imshow(np.log10(image_data), origin='lower', cmap='gray')
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="2%", pad=0.08)
+            plt.colorbar(im, cax=cax,label="Counts in log scale")
+            plt.show()
+        
+        return image_data
+
+    def plot(self,image_data,figure_name,save=True,format="png"):
+
+        """
+        This function plots and saves a single image.
+        
+        Parameters
+        ----------
+        image_data: array
+            Array containing the raw data for one image.
+        figure_name: string
+            Name of the figure. It can also be a path ending with the figure name, e.g. ./output/FIGURE_NAME, as long as this directory exists.
+        save: bool
+            If True, the image will be saved.
+        format: string
+            You can use png, jpeg, pdf and all other formats accepted by matplotlib.
+
+        Returns
+        -------
+        figure_name.png : file
+            An image saved in the current directory.
+        """
+        
+        image_shape = np.shape(image_data)
+        aspect_ratio = image_shape[0]/image_shape[1]
+        plt.figure(figsize=(12,12*aspect_ratio)) 
+        plt.title(figure_name)
+        ax = plt.gca()
+        im = ax.imshow(np.log10(image_data), origin='lower', cmap='gray')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="2%", pad=0.08)
+        plt.colorbar(im, cax=cax,label="Counts in log scale")
+
+        if save:
+            plt.savefig(figure_name+"."+format,bbox_inches='tight')
+        
+        plt.show()
+
+
+    def flatten(self,debiased_data,norm_master_flat,Type="all"):
+
+        """
+        Function to apply the master flat on the rest of the data.
+        
+        Parameters
+        ----------
+        debiased_data: dict
+            Dictionary containing debiased data. It can even contain the raw bias and dark files, but they will be ignored in the process.
+        norm_master_flat: array
+            Array with normalized master flat raw data.
+        Type: string
+            Type of data files to apply the normalized master flat. Options are: "all", "lamp", "standard_star", and "target".
+
+        Returns
+        -------
+        flattened_debiased_data_out: dict
+            Dictionary containing the flattened data.
+        """
+
+        flatten_list = []
+        for file_name in debiased_data.keys():
+            if Type == "all" and file_name not in self.bias_list and file_name not in self.darks_list and file_name not in self.flat_list:
+                flatten_list = flatten_list + [file_name]
+            elif Type == "lamp" and file_name in self.lamp_list:
+                flatten_list = flatten_list + [file_name]
+            elif Type == "standard_star" and file_name in self.std_list:
+                flatten_list = flatten_list + [file_name]
+            elif Type == "target" and file_name in self.target_list:
+                flatten_list = flatten_list + [file_name]
+
+        flattened_debiased_data_out = {}  # Dictionary for the flattened images
+
+        for i in range(len(flatten_list)):  
+            flattened_debiased_data_out[flatten_list[i]] = debiased_data[flatten_list[i]]/norm_master_flat  # Flattening the images with the normalized master flat.
+        
+        return flattened_debiased_data_out
     
+
+    def look_in_header(self,file_name,I_am_looking_for):
+
+        """
+        This function looks for a specific entry over all header entries in a fits file.
+
+        Parameters
+        ----------
+        file_name: string
+            The path to the fits data file.
+        I_am_looking_for: string
+            Which entry are you looking for? E.g. "EXPTIME" or "RDNOISE".
+
+        Returns
+        -------
+        value: don't have a predefined type
+            The value corresponding to the key you are looking for.
+        
+        """
+
+        ref_hdul = fits.open(file_name)
+        value = None
+        for extension in range(len(ref_hdul)):
+            try:
+                value = ref_hdul[extension].header[I_am_looking_for]
+                if value is not None:
+                    break
+            except:
+                pass
+        
+        if value is None:
+            raise RuntimeError("No entry called "+I_am_looking_for+" was found in the fits file.")
+        
+        return value
+
+    def CR_and_gain_corrections(self,flattened_debiased_data,gain=None,gain_header_entry="GAIN",readnoise=None,readnoise_header_entry="RDNOISE",Type="all",sigclip=5):
+
+        """
+        Function to remove cosmic rays from target and standard star raw data based on the LACosmic method originally developed and implemented for IRAF by Pieter G. van Dokkum.
+        This function also renormalizes the data according to the CCD/CMOS gain. We always need to work in electrons for cosmic ray detection.
+
+        Parameters
+        ----------
+        flattened_debiased_data: dict
+            A dictionary containing the data that needs correction.
+        gain: float
+            This is the CCD gain. We will use it to convert the image units from ADU to electrons. If gain = None, easyspec will look for this entry automatically in the file header.
+        gain_header_entry: string
+            We use this only if gain=None. This must be the keyword containing the gain value in the fits file header.
+        readnoise: float
+            This is the CCD read noise, used to generate the noise model of the image. If readnoise = None, easyspec will look for this entry automatically in the file header.
+        readnoise_header_entry: string
+            We use this only if readnoise=None. This must be the keyword containing the read noise value in the fits file header.
+        Type: string
+            Type of data files to apply the corrections. Options are: "all", "standard_star", and "target".
+        sigclip: float
+            Laplacian-to-noise limit for cosmic ray detection. Lower values will flag more pixels as cosmic rays.
+            
+        Returns
+        -------
+        CR_corrected_data: dict
+            Dictionary containing the data corrected for gain and cosmic rays.
+        
+        """
+
+        rm_cr_list = []
+        for file_name in flattened_debiased_data.keys():
+            if Type == "all" and file_name not in self.bias_list and file_name not in self.darks_list and file_name not in self.flat_list and file_name not in self.lamp_list:
+                rm_cr_list = rm_cr_list + [file_name]
+            elif Type == "target" and file_name in self.target_list:
+                rm_cr_list = rm_cr_list + [file_name]
+            elif Type == "standard_star" and file_name in self.std_list:
+                rm_cr_list = rm_cr_list + [file_name]
+            
+        if len(rm_cr_list) == 0:
+            raise KeyError('Empty list with target and standard star data. There are two possibilities for this error:\n1) There is an invalid value for the variable Type. '
+                           +'Options are: "all", "standard_star", and "target".'+
+                            '\n2)If the value of Type is fine, please be sure that you did not change the keys in the input dictionary.')
+ 
+
+        CR_corrected_data = {}
+        for file_name in rm_cr_list:
+            if readnoise is None:
+                readnoise = self.look_in_header(file_name,readnoise_header_entry)
+            if gain is None:
+                gain = self.look_in_header(file_name,gain_header_entry)
+            
+            CR_corrected_data[file_name] = CCDData(flattened_debiased_data[file_name], unit='adu')
+            CR_corrected_data[file_name] = ccdp.gain_correct(CR_corrected_data[file_name], gain * u.electron / u.adu)
+            CR_corrected_data[file_name] = ccdp.cosmicray_lacosmic(CR_corrected_data[file_name], readnoise=readnoise, sigclip=sigclip, verbose=True)
+
+        # The mask saved in CR_corrected_data includes cosmic rays identified by the function cosmicray_lacosmic.
+        # The sum of the mask indicates how many pixels have been identified as cosmic rays.
+        # Let's apply the cosmic-ray masks:
+
+        for file_name in rm_cr_list:
+            q = CR_corrected_data[file_name].mask
+            q[CR_corrected_data[file_name].mask]=False
+            CR_corrected_data[file_name].mask.sum()
+
+
+        return CR_corrected_data
+
+
+    def save_fits_files(self,datacube,output_directory,header_hdu_entry=0,Type="all"):
+
+        """
+        This function saves the raw data contained in the dictionary 'datacube' as fits files in the directory 'output_directory'.
+        
+        Parameters
+        ----------
+        datacube: dict
+            A dictionary containing the paths to the data files (dictionary keys) and the data for their respective images (dictionary values).
+        output_directory: string
+            String with the path to the output directory.
+        header_hdu_entry: int
+            HDU extension where we can find the header. Please check your data before choosing this value.
+        Type: string
+            Type of data files to be saved. Options are: "all", "bias", "flat", "lamp", "standard_star", "target", and "dark".
+
+        Returns
+        -------
+            Saves one or more fits files in the output directory.
+        
+        """
+
+        if Type == "all":
+            imagenames = list(datacube.keys())
+        elif Type == "bias":
+            imagenames = self.bias_list
+        elif Type == "flat":
+            imagenames = self.flat_list
+        elif Type == "lamp":
+            imagenames = self.lamp_list
+        elif Type == "standard_star":
+            imagenames = self.std_list
+        elif Type == "target":
+            imagenames = self.target_list
+        elif Type == "dark":
+            imagenames = self.darks_list
+        else:
+            raise KeyError('Invalid variable Type. Options are: "bias", "flat", "lamp", "standard_star", "target", and "dark".')
+        
+        for n,file_name in enumerate(imagenames):
+            hdr = fits.getheader(file_name,ext=header_hdu_entry)
+            hdu = fits.PrimaryHDU(datacube[file_name],header=hdr)
+            hdu.header['COMMENT'] = 'File generated with easyspec'
+            hdu.header['BZERO'] = 0  # This is to avoid a rescaling of the data
+            hdul = fits.HDUList([hdu])
+            hdul.writeto(str(Path(output_directory).resolve())+'/'+Type+'_{:03d}'.format(n)+'.fits', overwrite=True)
+
+
+    # Do a function to align the spectra, if needed
