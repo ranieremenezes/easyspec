@@ -315,11 +315,8 @@ class cleaning:
 
 
         # Saving master file:
-
-        ref_hdul = fits.open(data_list[0])  # open a FITS file
-        hdr = ref_hdul[header_hdu_entry].header
-        hdu = fits.PrimaryHDU(master) 
-        hdu.header = hdr
+        hdr = fits.getheader(data_list[0],ext=header_hdu_entry)
+        hdu = fits.PrimaryHDU(master,header=hdr)
         hdu.header['COMMENT'] = 'This is the master '+Type+' generated with easyspec. Method: '+method
         hdu.header['BZERO'] = 0  # This is to avoid a rescaling of the data
         hdul = fits.HDUList([hdu])
@@ -748,7 +745,7 @@ class cleaning:
             if gain is None:
                 gain = self.look_in_header(file_name,gain_header_entry)
             
-            CR_corrected_data[file_name] = CCDData(flattened_debiased_data[file_name], unit='adu')
+            CR_corrected_data[file_name] = CCDData(flattened_debiased_data[file_name], unit='adu')  # The data is now in the CCDData format. We make it get better to a numpy array below.
             CR_corrected_data[file_name] = ccdp.gain_correct(CR_corrected_data[file_name], gain * u.electron / u.adu)
             CR_corrected_data[file_name] = ccdp.cosmicray_lacosmic(CR_corrected_data[file_name], readnoise=readnoise, sigclip=sigclip, verbose=True)
 
@@ -760,6 +757,7 @@ class cleaning:
             q = CR_corrected_data[file_name].mask
             q[CR_corrected_data[file_name].mask]=False
             CR_corrected_data[file_name].mask.sum()
+            CR_corrected_data[file_name] = np.asarray(CR_corrected_data[file_name])  # Back to the numpy array format.
 
 
         return CR_corrected_data
@@ -812,5 +810,18 @@ class cleaning:
             hdul = fits.HDUList([hdu])
             hdul.writeto(str(Path(output_directory).resolve())+'/'+Type+'_{:03d}'.format(n)+'.fits', overwrite=True)
 
+
+    def align(self, CR_corrected_data, Type):
+
+        """
+        
+        """
+
+        align_list = []
+        for file_name in CR_corrected_data.keys():
+            if Type == "target" and file_name in self.target_list:
+                align_list = align_list + [file_name]
+            elif Type == "standard_star" and file_name in self.std_list:
+                align_list = align_list + [file_name]
 
     # Do a function to align the spectra, if needed
