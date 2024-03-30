@@ -97,7 +97,7 @@ class cleaning:
             elif isinstance(targets,list):
                 self.target_list = []
                 for target in targets:
-                    if Path(targets).is_dir():
+                    if Path(target).is_dir():
                         # Make a list with the raw science images:
                         self.target_list = self.target_list + glob.glob(str(Path(target).resolve())+'/*.fit*')
                     else:
@@ -107,7 +107,7 @@ class cleaning:
             else:
                 raise RuntimeError("Variable 'target' must be a string or a list of strings.")
         else:
-            self.target_list
+            self.target_list = []
 
 
         if darks is not None:
@@ -257,7 +257,7 @@ class cleaning:
         plt.show()
     
 
-    def master(self,Type,trimmed_data,method="median",header_hdu_entry=0,plot=True):
+    def master(self,Type,trimmed_data,method="median",header_hdu_entry=0,exposure_header_entry=None,airmass_header_entry=None,plot=True):
 
         """
         Function to stack the data files into a master file.
@@ -272,6 +272,10 @@ class cleaning:
             Stacking method. Options are "median", "mean", or "mode".
         header_hdu_entry: int
             HDU extension where we can find the header. Please check your data before choosing this value.
+        exposure_header_entry: string
+            If you want to save the mean/median exposure time in the master fits file, type the header keyword for the exposure here.
+        airmass_header_entry: string
+            If you want to save the mean/median airmass in the master fits file, type the header keyword for the airmass here.
         plot: bool
             Keep it as True if you want to plot the master bias/dark/flat/etc.
 
@@ -300,46 +304,105 @@ class cleaning:
 
         data_cube = np.stack([trimmed_data[frame] for frame in data_list],axis=0)
 
+        # If Type == target, we have to check if we have more than one target:
+        if Type == "target":
+            data_path = ""
+            data_splitter = []
+            for n,file in enumerate(data_list):
+                parent_directory = str(Path(file).parent.resolve())
+                if parent_directory != data_path:
+                    data_path = parent_directory
+                    data_splitter.append(n)
+            data_splitter.append(len(data_list))
+        else:
+            data_splitter = [0,len(data_list)]
+
+        
         if method == "mode":
             if str(data_cube[0].dtype).find("int") < 0:
                 method = "median"
                 warnings.warn("The 'mode' method only works if the pixels have integer values. The pixels in the given file are of the "+str(data_cube[0].dtype)+
                               " type. easyspec will reset method='median'.")
 
-        if method == "median":
-            master = np.median(data_cube, axis=0)  # To combine with a median
-        elif method == "mode":
-            master = st.mode(data_cube, axis=0, keepdims=True)[0][0].astype(int)  # To combine with a mode
-        elif method == "mean":
-            master = np.mean(data_cube, axis=0)  # To combine with a mean
+        master_list = []
+        for n in range(len(data_splitter[:-1])):
+
+            if method == "median":
+                master = np.median(data_cube[data_splitter[n]:data_splitter[n+1]], axis=0)  # To combine with a median
+            elif method == "mode":
+                master = st.mode(data_cube[data_splitter[n]:data_splitter[n+1]], axis=0, keepdims=True)[0][0].astype(int)  # To combine with a mode
+            elif method == "mean":
+                master = np.mean(data_cube[data_splitter[n]:data_splitter[n+1]], axis=0)  # To combine with a mean
 
 
-        # Saving master file:
-        hdr = fits.getheader(data_list[0],ext=header_hdu_entry)
-        hdu = fits.PrimaryHDU(master,header=hdr)
-        hdu.header['COMMENT'] = 'This is the master '+Type+' generated with easyspec. Method: '+method
-        hdu.header['BZERO'] = 0  # This is to avoid a rescaling of the data
-        hdul = fits.HDUList([hdu])
-        hdul.writeto('master_'+Type+'.fits', overwrite=True)
+            # Saving master file:
+            hdr = fits.getheader(data_list[0],ext=header_hdu_entry)
+            hdu = fits.PrimaryHDU(master,header=hdr)
+            hdu.header['COMMENT'] = 'This is the master '+Type+' generated with easyspec. Method: '+method
+            hdu.header['BZERO'] = 0  # This is to avoid a rescaling of the data
 
-        if plot:
-            image_shape = np.shape(master)
-            aspect_ratio = image_shape[0]/image_shape[1]
-            plt.figure(figsize=(12,12*aspect_ratio)) 
-            plt.title('Master '+Type+' - Method: '+method)
-            ax = plt.gca()
-            if Type == "bias":
-                vmax = np.median(np.log10(master))
-                im = ax.imshow(np.log10(master), origin='lower', cmap='gray', vmax=vmax)
+            # Adding exposure and airmass to the master file header:
+            if Type == "target" or Type == "standard_star":
+                allow_exp_and_airmass = True
             else:
-                im = ax.imshow(np.log10(master), origin='lower', cmap='gray')
-            divider = make_axes_locatable(ax)
-            cax = divider.append_axes("right", size="2%", pad=0.08)
-            plt.colorbar(im, cax=cax,label="Counts in log scale")
+                allow_exp_and_airmass = False
+
+            if exposure_header_entry is not None and allow_exp_and_airmass:
+                list_of_exposure_times = []
+                for file in data_list[data_splitter[n]:data_splitter[n+1]]:
+                    list_of_exposure_times.append(self.look_in_header(file,exposure_header_entry))
+                
+                average_exposure = np.mean(list_of_exposure_times)
+                median_exposure  = np.median(list_of_exposure_times)
+                summed_exposure = np.sum(list_of_exposure_times)
+                hdu.header.append(('EXPSUM', summed_exposure, 'Summed exposure time for all observations'), end=True)
+                hdu.header.append(('AVEXP', average_exposure, 'Average exposure time for all observations'), end=True)
+                hdu.header.append(('MEDEXP', median_exposure, 'Median exposure time for all observations'), end=True)
+
+            if airmass_header_entry is not None and allow_exp_and_airmass:
+                list_of_airmasses = []
+                for file in data_list[data_splitter[n]:data_splitter[n+1]]:
+                    list_of_airmasses.append(self.look_in_header(file,airmass_header_entry))
+                
+                average_airmass = np.mean(list_of_airmasses)
+                median_airmass  = np.median(list_of_airmasses)
+                hdu.header.append(('AVAIRMAS', average_airmass, 'Average airmass'), end=True)
+                hdu.header.append(('MDAIRMAS', median_airmass, 'Median airmass'), end=True)
             
-            plt.show()
+            hdul = fits.HDUList([hdu])
+            if Type == "target":
+                hdul.writeto('master_'+Type+f'_{n}.fits', overwrite=True)
+            else:
+                hdul.writeto('master_'+Type+'.fits', overwrite=True)
+
+            if len(data_splitter) > 2:
+                master_list.append(master)
+
+            if plot:
+                image_shape = np.shape(master)
+                aspect_ratio = image_shape[0]/image_shape[1]
+                plt.figure(figsize=(12,12*aspect_ratio))
+                if Type == "target":
+                    plt.title('Master '+Type+f' {n} - Method: '+method)
+                else:
+                    plt.title('Master '+Type+' - Method: '+method)
+                ax = plt.gca()
+                if Type == "bias":
+                    vmax = np.median(np.log10(master))
+                    im = ax.imshow(np.log10(master), origin='lower', cmap='gray', vmax=vmax)
+                else:
+                    im = ax.imshow(np.log10(master), origin='lower', cmap='gray')
+                divider = make_axes_locatable(ax)
+                cax = divider.append_axes("right", size="2%", pad=0.08)
+                plt.colorbar(im, cax=cax,label="Counts in log scale")
+            
+            if n == (len(data_splitter[:-1]) - 1):
+                plt.show()
         
-        return master
+        if len(data_splitter) > 2:
+            return master_list
+        else:
+            return master
 
     def debias(self, trimmed_data, masterbias, Type="all", pad_with_zeros=True):
 
