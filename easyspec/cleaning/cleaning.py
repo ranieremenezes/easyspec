@@ -11,13 +11,15 @@ from scipy import odr
 from astropy.nddata import CCDData
 from astropy import units as u
 import ccdproc as ccdp
+import os
 
 class cleaning:
 
     """This class contains all the functions necessary to perform the image reduction/cleaning, including cosmic ray removal."""
 
-    def __init__(self,target_name=""):
-        self.target_name = target_name
+    def __init__(self): 
+        # Print the current version of easyspec       
+        os.system("pip show easyspec")
 
 
     def data_paths(self,bias=None,flats=None,lamp=None,standard_star=None,targets=None,darks=None):
@@ -48,7 +50,7 @@ class cleaning:
         if bias is not None:
             if Path(bias).is_dir():
                 # Make a list with the bias files:
-                self.bias_list = glob.glob(str(Path(bias).resolve())+'/*.fit*')
+                self.bias_list = np.sort(glob.glob(str(Path(bias).resolve())+'/*.fit*')).tolist()
                 self.all_images_list = self.all_images_list + self.bias_list
             else:
                 raise TypeError("Invalid diretory for bias files.")
@@ -58,7 +60,7 @@ class cleaning:
         if flats is not None:
             if Path(flats).is_dir():
                 # Make a list with the flat images:
-                self.flat_list = glob.glob(str(Path(flats).resolve())+'/*.fit*')
+                self.flat_list = np.sort(glob.glob(str(Path(flats).resolve())+'/*.fit*')).tolist()
                 self.all_images_list = self.all_images_list + self.flat_list
             else:
                 raise TypeError("Invalid diretory for flat files.")
@@ -68,7 +70,7 @@ class cleaning:
         if lamp is not None:
             if Path(lamp).is_dir():
                 # Make a list with the lamp images:
-                self.lamp_list = glob.glob(str(Path(lamp).resolve())+'/*.fit*')
+                self.lamp_list = np.sort(glob.glob(str(Path(lamp).resolve())+'/*.fit*')).tolist()
                 self.all_images_list = self.all_images_list + self.lamp_list
             else:
                 raise TypeError("Invalid diretory for lamp files.")
@@ -78,7 +80,7 @@ class cleaning:
         if standard_star is not None:
             if Path(standard_star).is_dir():
                 # Make a list with the standard star images:
-                self.std_list = glob.glob(str(Path(standard_star).resolve())+'/*.fit*')
+                self.std_list = np.sort(glob.glob(str(Path(standard_star).resolve())+'/*.fit*')).tolist()
                 self.all_images_list = self.all_images_list + self.std_list
             else:
                 raise TypeError("Invalid diretory for standard star files.")
@@ -90,7 +92,7 @@ class cleaning:
             if isinstance(targets,str):
                 if Path(targets).is_dir():
                     # Make a list with the raw science images:
-                    self.target_list = glob.glob(str(Path(targets).resolve())+'/*.fit*')
+                    self.target_list = np.sort(glob.glob(str(Path(targets).resolve())+'/*.fit*')).tolist()
                     self.all_images_list = self.all_images_list + self.target_list
                 else:
                     raise TypeError("Invalid diretory for target files.")
@@ -99,7 +101,7 @@ class cleaning:
                 for target in targets:
                     if Path(target).is_dir():
                         # Make a list with the raw science images:
-                        self.target_list = self.target_list + glob.glob(str(Path(target).resolve())+'/*.fit*')
+                        self.target_list = self.target_list + np.sort(glob.glob(str(Path(target).resolve())+'/*.fit*')).tolist()
                     else:
                         raise TypeError("Invalid diretory for target files.")
                 
@@ -113,7 +115,7 @@ class cleaning:
         if darks is not None:
             if Path(darks).is_dir():
                 # Make a list with the dark files:
-                self.darks_list = glob.glob(str(Path(darks).resolve())+'/*.fit*')
+                self.darks_list = np.sort(glob.glob(str(Path(darks).resolve())+'/*.fit*')).tolist()
                 self.all_images_list = self.all_images_list + self.darks_list
             else:
                 raise TypeError("Invalid diretory for dark files.")
@@ -371,7 +373,8 @@ class cleaning:
             
             hdul = fits.HDUList([hdu])
             if Type == "target":
-                hdul.writeto('master_'+Type+f'_{n}.fits', overwrite=True)
+                target_name = str(Path(data_list[data_splitter[n]]).parent.resolve()).split("/")[-1]
+                hdul.writeto('master_'+Type+f'_{target_name}.fits', overwrite=True)
             else:
                 hdul.writeto('master_'+Type+'.fits', overwrite=True)
 
@@ -383,7 +386,7 @@ class cleaning:
                 aspect_ratio = image_shape[0]/image_shape[1]
                 plt.figure(figsize=(12,12*aspect_ratio))
                 if Type == "target":
-                    plt.title('Master '+Type+f' {n} - Method: '+method)
+                    plt.title('Master '+Type+f' {target_name} - Method: '+method)
                 else:
                     plt.title('Master '+Type+' - Method: '+method)
                 ax = plt.gca()
@@ -775,7 +778,7 @@ class cleaning:
         readnoise_header_entry: string
             We use this only if readnoise=None. This must be the keyword containing the read noise value in the fits file header.
         Type: string
-            Type of data files to apply the corrections. Options are: "all", "standard_star", and "target".
+            Type of data files to apply the corrections. Options are: "all", "lamp", "standard_star", and "target".
         sigclip: float
             Laplacian-to-noise limit for cosmic ray detection. Lower values will flag more pixels as cosmic rays.
             
@@ -788,11 +791,13 @@ class cleaning:
 
         rm_cr_list = []
         for file_name in flattened_debiased_data.keys():
-            if Type == "all" and file_name not in self.bias_list and file_name not in self.darks_list and file_name not in self.flat_list and file_name not in self.lamp_list:
+            if Type == "all" and file_name not in self.bias_list and file_name not in self.darks_list and file_name not in self.flat_list:
                 rm_cr_list = rm_cr_list + [file_name]
             elif Type == "target" and file_name in self.target_list:
                 rm_cr_list = rm_cr_list + [file_name]
             elif Type == "standard_star" and file_name in self.std_list:
+                rm_cr_list = rm_cr_list + [file_name]
+            elif Type == "lamp" and file_name in self.lamp_list:
                 rm_cr_list = rm_cr_list + [file_name]
             
         if len(rm_cr_list) == 0:
@@ -874,17 +879,96 @@ class cleaning:
             hdul.writeto(str(Path(output_directory).resolve())+'/'+Type+'_{:03d}'.format(n)+'.fits', overwrite=True)
 
 
-    def align(self, CR_corrected_data, Type):
+    def vertical_align(self, CR_corrected_data, Type="all"):
 
         """
+        This function is used to align target and standard star data taht are shifted in the vertical axis.
+        Although this function does not align lamp images, it accepts the raw lamp data in the dictionary CR_corrected_data.
+        In the last step of this function, all data will be trimmed according to the alignment cuts, including the lamp data (if provided). 
+        
+        Parameters
+        ----------
+        CR_corrected_data: dict
+            A dictionary containing the paths to the data files (dictionary keys) and the data for their respective images (dictionary values).
+        Type: string
+            Type of data files to align. Options are: "all", "standard_star", and "target".
+
+        Returns
+        -------
+        aligned_data: dict
+            Dictionary containing the aligned and trimmed data passed in the variable CR_corrected_data.
         
         """
 
+        CR_corrected_data = CR_corrected_data.copy()
+
         align_list = []
         for file_name in CR_corrected_data.keys():
-            if Type == "target" and file_name in self.target_list:
+            if Type == "all" and file_name not in self.bias_list and file_name not in self.darks_list and file_name not in self.flat_list:
+                align_list = align_list + [file_name]
+            elif Type == "target" and file_name in self.target_list:
                 align_list = align_list + [file_name]
             elif Type == "standard_star" and file_name in self.std_list:
                 align_list = align_list + [file_name]
 
-    # Do a function to align the spectra, if needed
+
+        if Type == "all" or Type == "target":
+            data_path = ""
+            data_splitter = []
+            for n,file in enumerate(align_list):
+                parent_directory = str(Path(file).parent.resolve())
+                if parent_directory != data_path:
+                    data_path = parent_directory
+                    data_splitter.append(n)
+            data_splitter.append(len(align_list))
+        else:
+            data_splitter = [0,len(align_list)]
+
+
+
+        maximum_y1_cut = 0
+        maximum_y2_cut = 0
+        for n in range(len(data_splitter[:-1])): 
+            reference_image = align_list[data_splitter[n]]  # Selecting the first image as the reference image
+            print("Reference image: ", reference_image)
+
+            # Selecting the strongest horizontal and vertical lines:
+            ref_yvals = np.argmax(CR_corrected_data[reference_image], axis=0)  # Selects the index of the pixel with highest value in each column     
+
+            for file_name in align_list[data_splitter[n]:data_splitter[n+1]]:
+                if file_name == reference_image:
+                    continue
+
+                print("Current image: ", file_name)
+                yvals = np.argmax(CR_corrected_data[file_name], axis=0)  # Selects the index of the pixel with highest value in each column
+
+                difference_y = ref_yvals - yvals
+                difference_y = int(st.mode(difference_y, keepdims=True)[0][0])  # To find the global y shift
+
+                print("Vertical shift (pixels): ", difference_y)
+
+                # Vertical alignment: 
+                if difference_y < 0:
+                    # Remember that y increases from the top to the bottom!!!
+                    temporary_image = np.concatenate([CR_corrected_data[file_name], np.zeros([difference_y,np.shape(CR_corrected_data[file_name])[1]])])
+                    temporary_image = self.trim({'temporary' : temporary_image},x1=0,x2=np.shape(CR_corrected_data[file_name])[1],y1=difference_y,y2=np.shape(CR_corrected_data[file_name])[0]+difference_y)
+                    CR_corrected_data[file_name] = temporary_image['temporary']  # Remember that the function trim above returns a dictionary.
+                    if difference_y < maximum_y2_cut:
+                        maximum_y2_cut = difference_y
+
+                elif difference_y > 0:
+                    temporary_image = np.concatenate([np.zeros([difference_y,np.shape(CR_corrected_data[file_name])[1]]), CR_corrected_data[file_name]])
+                    temporary_image = self.trim({'temporary' : temporary_image},x1=0,x2=np.shape(CR_corrected_data[file_name])[1],y1=0,y2=np.shape(CR_corrected_data[file_name])[0])
+                    CR_corrected_data[file_name] = temporary_image['temporary']  # Remember that the function trim above returns a dictionary.
+                    if difference_y > maximum_y1_cut:
+                        maximum_y1_cut = difference_y
+                else:
+                    print("Images are already aligned in the vertical.")
+
+        print("Final vertical cuts (y1, y2): ",maximum_y1_cut, maximum_y2_cut)
+        aligned_data = self.trim(CR_corrected_data,x1=0,x2=np.shape(CR_corrected_data[file_name])[1],y1=maximum_y1_cut,y2=np.shape(CR_corrected_data[file_name])[0]+maximum_y2_cut)  # Remember that maximum_y2_cut is negative
+
+            
+        return aligned_data
+    
+    
