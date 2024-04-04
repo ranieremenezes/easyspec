@@ -609,7 +609,7 @@ class cleaning:
         return raw_images_rotated
 
 
-    def pad(self,image_data,value,x1,x2,y1,y2,plot=True):
+    def pad(self,image_data,value,x1,x2,y1,y2,plot=True, save_fits=False, get_header_from=None, fits_name="padded_image.fits", header_hdu_entry=0):
 
         """
         We use this function to pad a specific section of an image with a given value. It is particularly useful when handling the master files.
@@ -624,7 +624,15 @@ class cleaning:
             Values giving the image section limits for padding.
         plot: bool
             If True, easyspec will print the padded image.
-
+        save_fits: bool
+            Set it to True if you want to save a fits file for the padded image. It only works if get_header_from is not None.
+        get_header_from: string
+            This is the path to the original fits file you want to import the header. E.g.: "./master_flat.fits" 
+        fits_name: string
+            Name of the fits file to be saved.
+        header_hdu_entry: int
+            HDU extension where we can find the header. Please check your data before choosing this value.
+            
         Returns
         -------
         image_data: array
@@ -645,6 +653,17 @@ class cleaning:
             cax = divider.append_axes("right", size="2%", pad=0.08)
             plt.colorbar(im, cax=cax,label="Counts in log scale")
             plt.show()
+
+        if save_fits and get_header_from is not None:
+            # Saving padded file:
+            hdr = fits.getheader(get_header_from,ext=header_hdu_entry)
+            hdu = fits.PrimaryHDU(image_data,header=hdr)
+            hdu.header['COMMENT'] = 'This image was padded with easyspec'
+            hdu.header['BZERO'] = 0 #This is to avoid a rescaling of the data
+            hdul = fits.HDUList([hdu])
+            hdul.writeto(fits_name, overwrite=True)
+        else:
+            print("Fits file not saved. To save the fits file, please set the variables save_fits and get_header_from.")
         
         return image_data
 
