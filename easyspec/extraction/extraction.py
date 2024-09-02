@@ -20,6 +20,7 @@ from easyspec.cleaning import cleaning
 from astropy.modeling.polynomial import Polynomial1D
 from astropy.modeling.fitting import LinearLSQFitter
 
+
 cleaning = cleaning()
 
 
