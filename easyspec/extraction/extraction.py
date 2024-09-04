@@ -20,7 +20,6 @@ from easyspec.cleaning import cleaning
 from astropy.modeling.polynomial import Polynomial1D
 from astropy.modeling.fitting import LinearLSQFitter
 
-
 cleaning = cleaning()
 
 
@@ -189,7 +188,7 @@ class extraction:
 
         return continuum_selection
     
-    def import_data(self, target_spec_file, target_name, exposure_target = None, exposure_header_entry="AVEXP", reddening = None, std_star_spec_file = None, exposure_std_star = None, plot = True):
+    def import_data(self, target_spec_file, target_name, exposure_target = None, exposure_header_entry="AVEXP", airmass_target = None, airmass_header_entry="AVAIRMAS", reddening = None, std_star_spec_file = None, exposure_std_star = None, airmass_std_star = None, plot = True):
 
         """
         This function opens the data file (i.e. fits image with one or more spectra) and reads the exposure time from its header. Optionally, the user can manually add the exposure time.
@@ -202,15 +201,21 @@ class extraction:
         target_name: string
             The name of the target to be used in subsequent plots.
         exposure_target: float
-            Optional. You can manually pass the exposure time (in seconds) of your observation. If 'None', easyspec will automatically look in the image header for the entry given by the variable 'exposure_header_entry'
+            Optional. You can manually pass the exposure time (in seconds) of your observation. If 'None', easyspec will automatically look in the image header for the entry given by the variable 'exposure_header_entry'.
         exposure_header_entry: string
-            Optional. If 'exposure_target' is not None, easyspec will automatically look in the image header for the exposure time corresponding to this entry.
+            Optional. If 'exposure_target' is not None, easyspec will automatically look into the image header for the exposure time corresponding to this entry. This entry will be used for the target and standard star images.
+        airmass_target: float
+            Optional. You can manually pass the average airmass of your observation. If 'None', easyspec will automatically look in the image header for the entry given by the variable 'airmass_header_entry'.
+        airmass_header_entry: string
+            Optional. If 'airmass_target' is not None, easyspec will automatically look into the image header for the average airmass corresponding to this entry. This entry will be used for the target and standard star images.
         reddening: float
             Optional. The Galactic redening in the direction of your observation. You can look for the appropriate reddening here: 'https://irsa.ipac.caltech.edu/applications/DUST/' 
         std_star_spec_file: string
             Optional. The path to the data '.fits' or '.fit' file containing the standard star spectrum.
         exposure_std_star: float
             Optional. You can manually pass the exposure time (in seconds) of your observation. If 'None', easyspec will automatically look in the image header for the entry given by the variable 'exposure_header_entry'
+        airmass_std_star: float
+            Optional. You can manually pass the average airmass of your standard star observation. If 'None', easyspec will automatically look in the image header for the entry given by the variable 'airmass_header_entry'.        
         plot: boolean
             If True, easyspec will plot the input spectra.
 
@@ -223,6 +228,7 @@ class extraction:
             Matrix containing the standard star spectral image (only if the standard star spectral file is given by the user).
         """
 
+        # Main target:
         self.target_spec_data = fits.open(target_spec_file)[0].data
         self.target_name = target_name
         if exposure_target is None:
@@ -231,12 +237,22 @@ class extraction:
             self.exposure_target = exposure_target
         if reddening is not None:
             self.reddening = reddening
+        if airmass_target is not None:
+            self.airmass_target = airmass_target
+        elif airmass_header_entry is not None:
+            self.airmass_target = cleaning.look_in_header(target_spec_file,airmass_header_entry)
+
+        # Standard star:
         if std_star_spec_file is not None:
             self.std_star_spec_data = fits.open(std_star_spec_file)[0].data
-        if exposure_std_star is not None:
-            self.exposure_std_star = exposure_std_star
-        elif std_star_spec_file is not None:
-            self.exposure_std_star = cleaning.look_in_header(std_star_spec_file,exposure_header_entry)
+            if exposure_std_star is not None:
+                self.exposure_std_star = exposure_std_star
+            elif std_star_spec_file is not None:
+                self.exposure_std_star = cleaning.look_in_header(std_star_spec_file,exposure_header_entry)
+            if airmass_std_star is not None:
+                self.airmass_std_star = airmass_std_star
+            elif airmass_header_entry is not None:
+                self.airmass_std_star = cleaning.look_in_header(std_star_spec_file,airmass_header_entry)
 
         if plot:
             cleaning.plot(image_data=self.target_spec_data,figure_name=target_name,save=False)
@@ -250,7 +266,7 @@ class extraction:
             print("No standard star file was found. Returning only the target image.")
             return self.target_spec_data
         
-    def tracing(self, target_spec_data, method = "argmax", y_pixel_range = 15, xlims = None, poly_order = 2, trace_half_width = 7, prominence = 50, distance = 20, Number_of_slices = 20, peak_dispersion_limit = 3, main_plot = True, plot_residuals = True):
+    def tracing(self, target_spec_data, method = "argmax", y_pixel_range = 15, xlims = None, poly_order = 2, trace_half_width = 10, prominence = 50, distance = 20, Number_of_slices = 20, peak_dispersion_limit = 3, main_plot = True, plot_residuals = True):
 
         """
         This function detects all the spectra available in an image and fits a polynomial to recover the trace of each one of them. 
@@ -293,7 +309,7 @@ class extraction:
         
         Returns
         -------
-        fitted_polymodel: list
+        fitted_polymodel_list: list
             List with the fitted spine for all spectra in the image or only the brighter spectrum.
         """
 
@@ -314,17 +330,17 @@ class extraction:
         else:
             xmin, xmax = xlims[0], xlims[1]
         
-        fitted_polymodel = []
+        fitted_polymodel_list = []
         bad_pixels = []
         if method == "argmax":
             bad_pixels.append( (yvals[0] < ymin[0]) | (yvals[0] > ymax[0]) | (xvals < xmin) | (xvals > xmax) )  # That "|" is a bitwise "or" with assignment
-            fitted_polymodel.append(linfitter(polymodel, xvals[~bad_pixels[-1]], yvals[0][~bad_pixels[-1]]))
+            fitted_polymodel_list.append(linfitter(polymodel, xvals[~bad_pixels[-1]], yvals[0][~bad_pixels[-1]]))
         
         elif method == "moments":
             yvals = []
             yaxis = np.repeat(np.arange(ymin[0], ymax[0])[:,None], target_spec_data[:,:].shape[1], axis=1)
             background = [] 
-            for i in range(np.shape(target_spec_data[ymin[0]:ymax[0],:])[1]):
+            for i in range(np.shape(target_spec_data)[1]):
                 background.append(np.median(target_spec_data[ymin[0]:ymax[0],i]))
 
             background = np.asarray(background*np.shape(target_spec_data)[0])
@@ -337,7 +353,7 @@ class extraction:
             yvals.append( np.average(yaxis, axis=0, weights=weight) )
             
             bad_pixels.append( (yvals[0] > ymax[0]) | (yvals[0] < ymin[0]) | (xvals < xmin) | (xvals > xmax) )
-            fitted_polymodel.append(linfitter(polymodel, xvals[~bad_pixels[-1]], yvals[0][~bad_pixels[-1]]))
+            fitted_polymodel_list.append(linfitter(polymodel, xvals[~bad_pixels[-1]], yvals[0][~bad_pixels[-1]]))
         
         elif method == "multi":
             yvals = []
@@ -355,7 +371,7 @@ class extraction:
             final_peak_positions = scipy.signal.find_peaks(peaks_histogram[0],prominence=prominence,width=None,threshold=None,distance=distance,height=None)[0]
             print("Total number of spectra: ", len(final_peak_positions),", centered at y-pixels ", final_peak_positions)
 
-            fitted_polymodel = []
+            fitted_polymodel_list = []
             ymin = []
             ymax = []
             # The purpose of this loop is to find the minimum and maximum values in the x-axis at which it is still worth to use the peak
@@ -391,13 +407,13 @@ class extraction:
 
                 bad_pixels.append( (yvals[-1] < ymin[-1]) | (yvals[-1] > ymax[-1]) | (xvals < xmin) | (xvals > xmax))
                 # We fit a polynomial to extract the trace:
-                fitted_polymodel.append(linfitter(polymodel, xvals[~bad_pixels[-1]], yvals[-1][~bad_pixels[-1]]))
+                fitted_polymodel_list.append(linfitter(polymodel, xvals[~bad_pixels[-1]], yvals[-1][~bad_pixels[-1]]))
         else:
             raise RuntimeError("Wrong method name. Accepted entries: 'argmax', 'moments' or 'multi'.")
 
+        image_shape = np.shape(target_spec_data)
+        aspect_ratio = image_shape[0]/image_shape[1]
         if main_plot:
-            image_shape = np.shape(target_spec_data)
-            aspect_ratio = image_shape[0]/image_shape[1]
             plt.figure(figsize=(12,12*aspect_ratio)) 
             plt.imshow(np.log10(target_spec_data), vmax=np.log10(target_spec_data.max()), cmap = "gray", origin='lower')
             plt.gca().set_aspect(1)
@@ -405,23 +421,23 @@ class extraction:
                 plt.title(f"We have a total of {len(final_peak_positions)} detected spectra")
             else:
                 plt.title(f"We have detected {len(final_peak_positions)} spectrum")
-            for n in range(len(fitted_polymodel)):
-                plt.plot(xvals, fitted_polymodel[n](xvals), 'C0')
-                plt.fill_between(xvals, fitted_polymodel[n](xvals)-trace_half_width, fitted_polymodel[n](xvals)+trace_half_width, color='C1', alpha=0.3)
+            for n in range(len(fitted_polymodel_list)):
+                plt.plot(xvals, fitted_polymodel_list[n](xvals), 'C0')
+                plt.fill_between(xvals, fitted_polymodel_list[n](xvals)-trace_half_width, fitted_polymodel_list[n](xvals)+trace_half_width, color='C1', alpha=0.3)
                 plt.text(target_spec_data.shape[1]*0.1, final_peak_positions[n], f"Spec {n}")
 
         if plot_residuals:
-            for n in range(len(fitted_polymodel)):
+            for n in range(len(fitted_polymodel_list)):
                 plt.figure(figsize=(12,12*aspect_ratio)) 
                 plt.imshow(np.log10(target_spec_data[ymin[n]:ymax[n],:]), extent=[0,target_spec_data.shape[1],ymin[n],ymax[n]], vmax=np.log10(target_spec_data[ymin[n]:ymax[n],:].max()), cmap = "gray", origin='lower')
                 plt.gca().set_aspect(10)
-                plt.plot(xvals, fitted_polymodel[n](xvals), 'C0')
+                plt.plot(xvals, fitted_polymodel_list[n](xvals), 'C0')
                 plt.axis((0,len(target_spec_data[0,:]),ymin[n],ymax[n]))
-                plt.fill_between(xvals, fitted_polymodel[n](xvals)-trace_half_width, fitted_polymodel[n](xvals)+trace_half_width, color='C1', alpha=0.15)
+                plt.fill_between(xvals, fitted_polymodel_list[n](xvals)-trace_half_width, fitted_polymodel_list[n](xvals)+trace_half_width, color='C1', alpha=0.15)
                 plt.title(f"Spectrum {n} - "+self.target_name+" field")
 
                 plt.figure(figsize=(12,12*aspect_ratio))
-                plt.plot(xvals[~bad_pixels[n]], yvals[n][~bad_pixels[n]] - fitted_polymodel[n](xvals[~bad_pixels[n]]), 'x')
+                plt.plot(xvals[~bad_pixels[n]], yvals[n][~bad_pixels[n]] - fitted_polymodel_list[n](xvals[~bad_pixels[n]]), 'x')
                 plt.plot([xvals.min(),xvals.max()],[0,0],"k--")
                 plt.ylabel("Trace residuals (data-model)")
                 plt.title(f"Spectrum {n} - Trace residuals")
@@ -429,14 +445,144 @@ class extraction:
         if main_plot or plot_residuals:
             plt.show()
 
-        return fitted_polymodel
+        return fitted_polymodel_list
     
     
-    def extracting(self):
+    def extracting(self, target_spec_data, fitted_polymodel_list, trace_half_width = 7, shift_y_pixels = 30, diagnostic_plots = True, spec_plots = True):
 
         """
-        Function that takes the trace as input to extract the spectrum.
+        Function that takes the trace as input to extract the spectrum with a Gaussian-weighted model.
 
-        Usar trace_half_width aqui de novo.
+        shift_y_pixels: integer or list
+            Value used to shift the trace vertically by +-15 pixels and repeat the extracting process to get the sky spectrum:
+
+
+        LIMITE DE 3*trace_half_width PRA O shift_y_pixels NO CASODE LISTA!!!!!!!!!
+
         
+        """
+
+        individual_spec_shift = False
+        if isinstance(shift_y_pixels, int):
+            # The value shift_y_pixels must be at least the double of trace_half_width, otherwise the background will be estimated too close to the spectral trace.
+            if shift_y_pixels < 3*trace_half_width:
+                print(f"The given value of 'shift_y_pixels' is below the limit '3*trace_half_width'. We are resetting shift_y_pixels to 3*trace_half_width (i.e. = {3*trace_half_width})")
+                shift_y_pixels = 3*trace_half_width
+            shift_y_pixels_up = shift_y_pixels
+            shift_y_pixels_down = shift_y_pixels
+        elif isinstance(shift_y_pixels, list):
+            if np.shape(shift_y_pixels) == (2,):
+                shift_y_pixels_up = int(shift_y_pixels[0])
+                shift_y_pixels_down = int(shift_y_pixels[1])
+            elif np.shape(shift_y_pixels)[0] == len(fitted_polymodel_list):
+                individual_spec_shift = True
+            else:
+                raise TypeError("Invalid input for shift_y_pixels. This parameter must be an integer, a list with 2 integers, or a list with N pairs of integers given as sublists, where N is equal to the length of fitted_polymodel_list.")
+        else:
+            raise TypeError("Invalid input for shift_y_pixels. This parameter must be an integer, a list with 2 integers, or a list with N pairs of integers given as sublists, where N is equal to the length of fitted_polymodel_list.")
+
+        xvals = np.arange(np.shape(target_spec_data)[1])
+
+        gaussian_trace_avg_spectrum_list = []
+
+        image_shape = np.shape(target_spec_data)
+        aspect_ratio = image_shape[0]/image_shape[1]
+
+        for number,fitted_polymodel in enumerate(fitted_polymodel_list):
+            if individual_spec_shift:
+                shift_y_pixels_up = shift_y_pixels[number][0]
+                shift_y_pixels_down = shift_y_pixels[number][1]
+
+            trace_center = fitted_polymodel(xvals)
+            median_trace_value = np.median(trace_center)
+            ymin = int(median_trace_value - shift_y_pixels_up)
+            ymax = int(median_trace_value + shift_y_pixels_down)
+
+            # Here we estimate the background in the regions around the trace, excluding the region within trace_half_width
+            background1 = [] 
+            background2 = []
+            for i in range(np.shape(target_spec_data)[1]):
+                background1.append(np.median(target_spec_data[int(median_trace_value)+trace_half_width:ymax,i]))
+                background2.append(np.median(target_spec_data[ymin:int(median_trace_value)-trace_half_width,i]))
+
+            background1 = np.asarray(background1*np.shape(target_spec_data)[0])  # Here we increase the size of the list by a factor equal to the y-axis resolution and transform it into an array
+            background2 = np.asarray(background2*np.shape(target_spec_data)[0])
+            background1 = background1.reshape(np.shape(target_spec_data))  # Each *colum* of this matrix is filled with the same background value
+            background2 = background2.reshape(np.shape(target_spec_data))
+            background = (background1+background2)/2
+
+            # Here we select only the region around the spine:
+            cutouts = np.array([target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval]
+                        for yval, xval in zip(trace_center, xvals)])
+            
+            mean_trace_profile = (cutouts - background.T[:,:np.shape(cutouts)[1]]).mean(axis=0)  # Here we also transpose and crop the background matrix just to fit the size of "cutouts"
+            trace_profile_xaxis = np.arange(-trace_half_width, trace_half_width)
+
+            lmfitter = LevMarLSQFitter()
+            guess = Gaussian1D(amplitude=mean_trace_profile.max(), mean=0, stddev=trace_half_width/2)
+            fitted_trace_profile = lmfitter(model=guess, x=trace_profile_xaxis, y=mean_trace_profile)
+            model_trace_profile = fitted_trace_profile(trace_profile_xaxis)
+
+            # Spectral extraction:
+            gaussian_trace_avg_spectrum = np.array([np.average(
+            target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval] - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval],
+            weights=model_trace_profile) for yval, xval in zip(trace_center, xvals)])
+
+            # Sky spectra:
+            trace_center_sky = fitted_polymodel(xvals) + shift_y_pixels_up - trace_half_width
+            trace_center_sky2 = fitted_polymodel(xvals) - shift_y_pixels_down + trace_half_width
+            
+            gaussian_trace_sky_spectrum1 = np.array([np.average(
+            target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval] - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval],
+            weights=model_trace_profile) for yval, xval in zip(trace_center_sky, xvals)])
+
+            gaussian_trace_sky_spectrum2 = np.array([np.average(
+            target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval] - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval],
+            weights=model_trace_profile) for yval, xval in zip(trace_center_sky2, xvals)])
+
+            gaussian_trace_sky_spectrum = (gaussian_trace_sky_spectrum1 + gaussian_trace_sky_spectrum2)/2  # Final sky spectrum
+            
+            # Final target spectrum:
+            gaussian_trace_avg_spectrum = gaussian_trace_avg_spectrum - gaussian_trace_sky_spectrum
+
+            gaussian_trace_avg_spectrum_list.append(gaussian_trace_avg_spectrum)
+
+            if spec_plots:
+                plt.figure(figsize=(12,12*aspect_ratio)) 
+                plt.plot(gaussian_trace_avg_spectrum, label=f'Gaussian trace spec {number}', alpha=0.9, linewidth=0.5, color='orange')
+                plt.title(f"Non-calibrated Gaussian-extracted spectrum {number}")
+                plt.grid(linestyle=":",which="both")
+                plt.minorticks_on()
+                plt.ylabel("Counts")
+                plt.xlabel("Pixels")
+                plt.legend(loc='upper left')
+
+            if diagnostic_plots:
+                plt.figure(figsize=(12,12*aspect_ratio)) 
+                plt.imshow(np.log10(target_spec_data), vmax=np.log10(target_spec_data.max()), cmap = "gray", origin='lower')
+                #plt.gca().set_aspect(10)
+                plt.plot(xvals, trace_center, 'C0', linewidth=1, label=f"Spine spec {number}")
+                plt.fill_between(xvals, trace_center-trace_half_width, trace_center+trace_half_width, color='C1', alpha=0.4)
+                plt.plot(xvals, trace_center_sky, color='C0', linestyle="--", linewidth=1, label="Sky spines")
+                plt.fill_between(xvals, trace_center_sky-trace_half_width, trace_center_sky+trace_half_width, color='magenta', alpha=0.3)
+                plt.plot(xvals, trace_center_sky2, color='C0', linestyle="--", linewidth=1)
+                plt.fill_between(xvals, trace_center_sky2-trace_half_width, trace_center_sky2+trace_half_width, color='magenta', alpha=0.3)
+                plt.title(f"Spectrum {number} - "+self.target_name+" field")
+                plt.legend()
+
+        if spec_plots or diagnostic_plots:
+            plt.show()
+        
+        return gaussian_trace_avg_spectrum_list
+    
+    def extracting_lamp(self):
+
+        """
+        Function to load and extract the raw spectrum from the lamp.
+        """
+
+    def wavelength_calibration(self):
+
+        """
+        Function to take the list of guessed peaks and equivalent wavelengths and return the calibrated x-axis.
         """
