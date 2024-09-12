@@ -22,11 +22,10 @@ from IPython.display import Image
 from astropy import units as u
 from astropy.modeling.models import Linear1D
 
-
-cleaning = cleaning()
-
-
 plt.rcParams.update({'font.size': 12})
+
+libpath = Path(__file__).parent.resolve() / Path("airmass")
+cleaning = cleaning()
 
 easyspec_extraction_version = "1.0.0"
 
@@ -272,7 +271,7 @@ class extraction:
             print("No standard star file was found. Returning only the target image.")
             return self.target_spec_data
         
-    def tracing(self, target_spec_data, method = "argmax", y_pixel_range = 15, xlims = None, poly_order = 2, trace_half_width = 7, prominence = 50, distance = 20, Number_of_slices = 20, peak_dispersion_limit = 3, main_plot = True, plot_residuals = True):
+    def tracing(self, target_spec_data, method = "argmax", y_pixel_range = 15, xlims = None, poly_order = 2, trace_half_width = 7, peak_height = 100, distance = 50, Number_of_slices = 20, peak_dispersion_limit = 3, main_plot = True, plot_residuals = True):
 
         """
         This function detects all the spectra available in an image and fits a polynomial to recover the trace of each one of them. 
@@ -296,8 +295,8 @@ class extraction:
             The order of the polynomial(s) used to fit the trace.
         trace_half_width: integer
             The half-width of the trace. Here it is useful for estimating the background and plotting the data.
-        prominence: float
-            The vertical distance between the peak and its lowest contour line. The smaller this value, the more spectra you will find in your image.
+        peak_height: float
+            The required height of the peaks. The smaller this value, the more spectra you will find in your image.
         distance: float
             Required minimal distance (>= 1) in pixels between neighbouring peaks in the y-axis. Default is 20 pixels. If you set this value too high with respect to the y-axis
             resolultion of your image, this function will return undesired results.
@@ -346,6 +345,7 @@ class extraction:
         if method == "argmax":
             bad_pixels.append( (yvals[0] < ymin[0]) | (yvals[0] > ymax[0]) | (xvals < xmin) | (xvals > xmax) )  # That "|" is a bitwise "or" with assignment
             fitted_polymodel_list.append(linfitter(polymodel, xvals[~bad_pixels[-1]], yvals[0][~bad_pixels[-1]]))
+            final_peak_positions = [median_trace_value]
         
         elif method == "moments":
             yvals = []
@@ -355,8 +355,8 @@ class extraction:
             background1 = [] 
             background2 = []
             for i in range(np.shape(target_spec_data)[1]):
-                background1.append(np.median(target_spec_data[int(median_trace_value)+trace_half_width:ymax,i]))
-                background2.append(np.median(target_spec_data[ymin:int(median_trace_value)-trace_half_width,i]))
+                background1.append(np.median(target_spec_data[int(median_trace_value)+trace_half_width:ymax[0],i]))
+                background2.append(np.median(target_spec_data[ymin[0]:int(median_trace_value)-trace_half_width,i]))
 
             background1 = np.asarray(background1*np.shape(target_spec_data)[0])  # Here we increase the size of the list by a factor equal to the y-axis resolution and transform it into an array
             background2 = np.asarray(background2*np.shape(target_spec_data)[0])
@@ -372,12 +372,13 @@ class extraction:
             
             bad_pixels.append( (yvals[0] > ymax[0]) | (yvals[0] < ymin[0]) | (xvals < xmin) | (xvals > xmax) )
             fitted_polymodel_list.append(linfitter(polymodel, xvals[~bad_pixels[-1]], yvals[0][~bad_pixels[-1]]))
+            final_peak_positions = [median_trace_value]
         
         elif method == "multi":
             yvals = []
             multi_peaks = []
             for i in range(len(target_spec_data[0,:])):
-                local_peaks = scipy.signal.find_peaks(target_spec_data[:,i],prominence=prominence,width=None,threshold=None,distance=distance,height=None)[0]
+                local_peaks = scipy.signal.find_peaks(target_spec_data[:,i],height=peak_height,distance=distance)[0]
                 multi_peaks.append(local_peaks)
             
             multi_peaks = np.asarray(multi_peaks,dtype=object)
@@ -386,7 +387,7 @@ class extraction:
                 flat_multi_peaks = np.concatenate([flat_multi_peaks,i])
             
             peaks_histogram = np.histogram(flat_multi_peaks, bins=np.shape(target_spec_data)[0])
-            final_peak_positions = scipy.signal.find_peaks(peaks_histogram[0],prominence=prominence,width=None,threshold=None,distance=distance,height=None)[0]
+            final_peak_positions = scipy.signal.find_peaks(peaks_histogram[0],height=peak_height,distance=distance)[0]
             print("Total number of spectra: ", len(final_peak_positions),", centered at y-pixels ", final_peak_positions)
 
             fitted_polymodel_list = []
@@ -440,7 +441,7 @@ class extraction:
             for n in range(len(fitted_polymodel_list)):
                 plt.plot(xvals, fitted_polymodel_list[n](xvals), 'C0')
                 plt.fill_between(xvals, fitted_polymodel_list[n](xvals)-trace_half_width, fitted_polymodel_list[n](xvals)+trace_half_width, color='C1', alpha=0.3)
-                plt.text(target_spec_data.shape[1]*0.1, final_peak_positions[n], f"Spec {n}")
+                plt.text(target_spec_data.shape[1]*0.1, final_peak_positions[n], f"Spec {n}", color="limegreen", fontsize=14)
 
         if plot_residuals:
             for n in range(len(fitted_polymodel_list)):
@@ -662,7 +663,7 @@ class extraction:
             return spec_list, lamp_spec_list, lamp_peak_positions_list
 
 
-    def wavelength_calibration(self, lamp_peak_positions_list, corresponding_wavelengths, unit = "angstrom", poly_order=2, diagnostic_plots = True):
+    def wavelength_calibration(self, lamp_peak_positions_list, corresponding_wavelengths, unit = "angstrom", poly_order = 2, diagnostic_plots = True):
 
         """
         This function takes the list of lamp spectral peak positions (in pixels) and their corresponding wavelengths, and returns a list with
@@ -725,7 +726,7 @@ class extraction:
             wavelengths_fit_std_list.append(wavelengths_fit_std)
             
             if diagnostic_plots:
-                print(f"Spectrum {number}")
+                print(f"Spectrum {number}:")
                 print(f"Fit standard deviation = {wavelengths_fit_std} {str(unit)}")
                 print("Wavelength error per pixel (linear approximation): ", wavelength_error_per_pixel, f"{unit}/pixel")
 
@@ -755,3 +756,133 @@ class extraction:
         
 
         return wavelengths_list, wavelengths_fit_std_list, wavelength_error_per_pixel_list
+    
+    def extinction_correction(self, spec_list, wavelengths_list, observatory, data_type, custom_observatory = None, spline_order = 1, plots = True):
+
+        """
+
+        WAVELENGTHS DO ARQUIVO TXT TEM QUE SER NA UNIDADE CERTA!!!! CONFERIR ISSO!
+        We can ask for these units as an input and then, if necessary, convert them to match the data units.
+
+        The Earth's atmosphere is highly chromatic in its transmission of light. The wavelength-dependence is dominated by scattering in the optical (320-700 nm).
+
+        custom_observatory: string
+            Optional. Path to a txt file containing the airmass extinction curve. This file must have two columns, the first with the wavelengths
+            and the second with the extinction in mag/airmass.
+        spline_order: integer
+            The degree of the spline fit. It is recommended to use cubic splines. Even values of spline_order should be avoided.
+        """
+
+
+
+        reference_dictionaty = {"ctio" : "The CTIO extinction curve was originally distributed with IRAF and comes from the work of Stone & Baldwin (1983 MN 204, 347) \
+plus Baldwin & Stone (1984 MN 206, 241). The first of these papers lists the points from 3200-8370A while the second extended the \
+flux calibration from 6056 to 10870A but the derived extinction curve was not given in the paper. The IRAF table follows SB83 out \
+to 6436, the redder points presumably come from BS84 with averages used in the overlap region. More recent CTIO extinction curves \
+are shown as Figures in Hamuy et al (92, PASP 104, 533 ; 94 PASP 106, 566).", 
+"kpno" : "The KPNO extinction table was originally distributed with IRAF. The usage of this table is discouraged since the data provenance of this data is unclear.",
+"lapalma" : "Extinction table for Roque de Los Muchachos Observatory, La Palma. Described in https://www.ing.iac.es/Astronomy/observing/manuals/ps/tech_notes/tn031.pdf",
+"mko" : "Median atmospheric extinction data for Mauna Kea Observatory measured by the Nearby SuperNova Factory: https://www.aanda.org/articles/aa/pdf/2013/01/aa19834-12.pdf",
+"mtham" : "Extinction table for Lick Observatory on Mt. Hamilton constructed from https://mthamilton.ucolick.org/techdocs/standards/lick_mean_extinct.html",
+"paranal": "Updated extinction table for ESO-Paranal taken from https://www.aanda.org/articles/aa/pdf/2011/03/aa15537-10.pdf",
+"apo" : "Extinction table for Apache Point Observatory. Based on the extinction table used for SDSS and available \
+at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/arc35m/Instruments/DIS/images/apoextinct.dat)."}
+
+        try:
+            _ = self.airmass_target
+        except:
+            raise NameError("The variable self.airmass_target does not exist. Please load your data with the function extraction.import_data() to avoid this issue.")
+
+        if data_type == "target":
+            airmass = self.airmass_target
+        elif data_type == "std_star":
+            try:
+                airmass = self.airmass_std_star
+            except:
+                raise RuntimeError("Airmass for the standard star was not found. Did you loaded the standard star data with the function extraction.tracing()?")
+        else:
+            raise NameError("Invalid entry for data_type. The options are 'target' or 'std_star'.")
+
+        if custom_observatory is None:
+            airmass_extinction = np.loadtxt(str(libpath)+f"/{observatory}_airmass_extinction.txt")
+            extinction_wavelength = airmass_extinction[:,0]
+            extinction = airmass_extinction[:,1]
+        else:
+            airmass_extinction = np.loadtxt(custom_observatory)
+            if np.shape(airmass_extinction)[1] != 2:
+                raise RuntimeError("The custom_observatory file does not have two columns. Please be sure to use a txt file with two columns, the first with the wavelengths and the second with the extinction in mag/airmass.")
+            extinction_wavelength = airmass_extinction[:,0]
+            extinction = airmass_extinction[:,1]
+
+        spec_atm_corrected_list = []
+        for spec, wavelength in zip(spec_list,wavelengths_list):
+            wavelength_min_index = self.find_nearest(extinction_wavelength, [wavelength.value.min()])
+            wavelength_max_index = self.find_nearest(extinction_wavelength, [wavelength.value.max()])
+            extinction_wavelength = extinction_wavelength[wavelength_min_index:wavelength_max_index]
+            extinction = extinction[wavelength_min_index:wavelength_max_index]
+
+            tck = interpolate.splrep(extinction_wavelength, extinction,k=spline_order)
+
+            spec_atm_corrected = spec*2.51188643151**( airmass * interpolate.splev(wavelength.value, tck))  # The numerical factor here is 100**(1/5), which is the increase in flux when the magnitude decreases 1.
+            spec_atm_corrected_list.append(spec_atm_corrected)
+
+            if plots:
+                plt.figure(figsize=(12,5)) 
+                plt.plot(wavelength, spec, label="No atm correction")
+                plt.plot(wavelength, spec_atm_corrected,color="orange",label="Atm corrected")
+                plt.xlabel(f"Wavelength [${wavelength.unit}$]")
+                plt.minorticks_on()
+                plt.grid(which="both", linestyle=":")
+                number = len(spec_atm_corrected_list)-1
+                if data_type == "target":
+                    plt.title(f"Atmospheric-corrected spectrum {number} - "+self.target_name+f" field - Airmass = {airmass}")
+                else:
+                    plt.title(f"Atmospheric-corrected spectrum for the standard star - Airmass = {airmass}")
+                plt.legend()                    
+
+                plt.figure(figsize=(12,5)) 
+                plt.plot(wavelength.value, interpolate.splev(wavelength.value, tck),label="Fit Spline")
+                if custom_observatory is None:
+                    plt.plot(extinction_wavelength, extinction,label=f"Extinction data {observatory}")
+                else:
+                    plt.plot(extinction_wavelength, extinction,label="Extinction data custom observatory")
+                plt.axhline(y=0.0, color='r', linestyle=':')
+                plt.xlabel(f"Wavelength [${wavelength.unit}$]")
+                plt.ylabel("Extinction (mag/airmass)")
+                plt.ylim(-0.1,1.9)
+                plt.minorticks_on()
+                plt.grid(which="both", linestyle=":")
+                if data_type == "target":
+                    plt.title(f"Extinction interpolation for spectrum {number} - "+self.target_name+" field")
+                else:
+                    plt.title("Extinction interpolation for spectrum for the standard star")
+                plt.legend()
+
+                plt.show()
+        
+        if plots and custom_observatory is None:
+            print("Please cite the work where this extinction curve was measured:\n"+reference_dictionaty[observatory])
+
+        return spec_atm_corrected_list
+
+
+def std_star_normalization(self):
+
+    """
+
+    std star exposure time here
+
+    archival spectrum here
+    
+    """
+
+def target_flux_calibration(self):
+
+    """
+
+    target exposure time here
+
+    std star normalization solution here
+    
+    """
+        
