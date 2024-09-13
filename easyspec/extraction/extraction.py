@@ -21,10 +21,12 @@ from astropy.modeling.fitting import LinearLSQFitter, LevMarLSQFitter
 from IPython.display import Image
 from astropy import units as u
 from astropy.modeling.models import Linear1D
+from scipy.signal import medfilt
 
 plt.rcParams.update({'font.size': 12})
 
 libpath = Path(__file__).parent.resolve() / Path("airmass")
+libpath_std = Path(__file__).parent.resolve() / Path("standards")
 cleaning = cleaning()
 
 easyspec_extraction_version = "1.0.0"
@@ -453,7 +455,7 @@ class extraction:
                 plt.fill_between(xvals, fitted_polymodel_list[n](xvals)-trace_half_width, fitted_polymodel_list[n](xvals)+trace_half_width, color='C1', alpha=0.15)
                 plt.title(f"Spectrum {n} - "+self.target_name+" field")
 
-                plt.figure(figsize=(12,12*self.aspect_ratio))
+                plt.figure(figsize=(12,5))
                 plt.plot(xvals[~bad_pixels[n]], yvals[n][~bad_pixels[n]] - fitted_polymodel_list[n](xvals[~bad_pixels[n]]), 'x')
                 plt.plot([xvals.min(),xvals.max()],[0,0],"k--")
                 plt.ylabel("Trace residuals (data-model)")
@@ -610,7 +612,7 @@ class extraction:
             spec_list.append(gaussian_trace_avg_spectrum)
 
             if spec_plots:
-                plt.figure(figsize=(12,12*self.aspect_ratio)) 
+                plt.figure(figsize=(12,5)) 
                 plt.plot(gaussian_trace_avg_spectrum, label=f'Gaussian trace spec {number}', alpha=0.9, linewidth=0.5, color='orange')
                 plt.title(f"Non-calibrated Gaussian-extracted spectrum {number} - "+self.target_name+" field")
                 plt.grid(linestyle=":",which="both")
@@ -620,7 +622,7 @@ class extraction:
                 plt.legend(loc='upper left')
 
                 if master_lamp_data is not None:
-                    plt.figure(figsize=(12,12*self.aspect_ratio)) 
+                    plt.figure(figsize=(12,5)) 
                     plt.plot(lamp_spectrum, label='Lamp spec', alpha=0.9, linewidth=0.5, color='orange')
                     plt.title(f"Lamp spectrum - based on the trace of spec {number}")
                     plt.grid(linestyle=":",which="both")
@@ -730,7 +732,7 @@ class extraction:
                 print(f"Fit standard deviation = {wavelengths_fit_std} {str(unit)}")
                 print("Wavelength error per pixel (linear approximation): ", wavelength_error_per_pixel, f"{unit}/pixel")
 
-                plt.figure(figsize=(12,12*self.aspect_ratio))
+                plt.figure(figsize=(12,5))
                 plt.plot(lamp_peak_positions, corresponding_wavelengths, 'o')
                 plt.plot(xrange, wavelengths, '-',label=f"Wavelength solution\nError = {round(wavelength_error_per_pixel,5)} {unit}/pixel")
                 plt.ylabel(f"$\lambda(x)$ [{str(unit)}]")
@@ -740,7 +742,7 @@ class extraction:
                 plt.minorticks_on()
                 plt.legend()
 
-                plt.figure(figsize=(12,12*self.aspect_ratio)) 
+                plt.figure(figsize=(12,5)) 
                 plt.plot(lamp_peak_positions, linfit_wlmodel(lamp_peak_positions)-corresponding_wavelengths, 'o', label="Fit standard deviation = "+str(round(wavelengths_fit_std,3))+" "+str(unit))
                 plt.plot(lamp_peak_positions,np.zeros(len(lamp_peak_positions)),'k--')
                 plt.ylabel(f"Wavelength residuals [{str(unit)}]")
@@ -763,6 +765,8 @@ class extraction:
 
         WAVELENGTHS DO ARQUIVO TXT TEM QUE SER NA UNIDADE CERTA!!!! CONFERIR ISSO!
         We can ask for these units as an input and then, if necessary, convert them to match the data units.
+
+        APRUMAR O SPEC_LIST PARA A STD STAR: SE ENTRAR COM MAIS DE UM ESPECTRO, A GENTE TEM QUE CAIR NUM ERRO!
 
         The Earth's atmosphere is highly chromatic in its transmission of light. The wavelength-dependence is dominated by scattering in the optical (320-700 nm).
 
@@ -855,7 +859,7 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
                 if data_type == "target":
                     plt.title(f"Extinction interpolation for spectrum {number} - "+self.target_name+" field")
                 else:
-                    plt.title("Extinction interpolation for spectrum for the standard star")
+                    plt.title("Extinction interpolation for the standard star")
                 plt.legend()
 
                 plt.show()
@@ -865,24 +869,175 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
 
         return spec_atm_corrected_list
 
+    def list_available_standards(self, std_star_dataset=None):
 
-def std_star_normalization(self):
+        """
+        This function lists the available datasets and their standard stars.
 
-    """
+        Parameters
+        ----------
+        dataset: string
+            If None, the function will plot all available datasets. Options are "ctiocal", "irscal", "bstdscal", "spec16cal", "spechayescal", "iidscal", "spec50cal",
+            "redcal", "ctionewcal", "ctio", "oke1990", "blackbody".
 
-    std star exposure time here
+        Returns
+        -------
+        reference_dictionaty[dataset]: string
+            If a dataset is given, the function will return the reference for this dataset.
+            
+        """
 
-    archival spectrum here
-    
-    """
+        reference_dictionaty = {"blackbody" :  "Blackbody flux distributions in various magnitude bands.",
+"bstdscal" :  "The brighter KPNO IRS standards (i.e. those with HR numbers) at 29 bandpasses, data from various\
+sources transformed to the Hayes and Latham system, unpublished.",
+"ctiocal" :  "Fluxes for the southern tertiary standards as published by Baldwin & Stone, 1984, MNRAS,\
+206, 241 and Stone and Baldwin, 1983, MNRAS, 204, 347.",
+"ctionewcal" : "Fluxes at 50A steps in the blue range 3300-7550A for the tertiary standards of Baldwin and\
+Stone derived from the revised calibration of Hamuy et al., 1992, PASP, 104, 533. This dataset also contains the fluxes of\
+the tertiaries in the red (6050-10000A) at 50A steps as will be published in PASP (Hamuy et al 1994). The combined fluxes are\
+obtained by gray shifting the blue fluxes to match the red fluxes in the overlap region of 6500A-7500A and averaging the red and\
+blue fluxes in the overlap.  The separate red and blue fluxes may be selected by following the star name with 'red' or 'blue'; i.e. CD 32 blue.",
+"iidscal" : "Dataset of the KPNO IIDS standards at 29 bandpasses, data from various sources transformed to the Hayes and Latham system, unpublished.",
+"irscal" :  "Dataset of the KPNO IRS standards at 78 bandpasses, data from various sources transformed to the Hayes and Latham\
+system, unpublished (note that in this dataset the brighter standards have no values - the `bstdscal' dataset must be used for these standards at this time).",
+"oke1990" : "Dataset of spectrophotometric standards observed for use with the HST, Table VII, Oke 1990, AJ, 99. 1621 (no correction\
+was applied). An arbitrary 1A bandpass is specified for these smoothed and interpolated flux 'points'.  Users may copy and modify these\
+files for other bandpasses.",
+"redcal" : "Dataset of standard stars with flux data beyond 8370A. These stars are from the IRS or the IIDS dataset but have data\
+extending as far out into the red as the literature permits. Data from various sources.",
+"spechayescal" : "The KPNO spectrophotometric standards at the Hayes flux points, Table IV, Spectrophotometric Standards, Massey et al., 1988, ApJ 328, p. 315.",
+"spec16cal" : "Dataset containing fluxes at 16A steps in the blue range 3300-7550A for the secondary standards, published in Hamuy et al., 1992, PASP, 104, 533.\
+This dataset also contains the fluxes of the secondaries in the red (6020-10300A) at 16A steps as will be published in PASP (Hamuy et al 1994).\
+The combined fluxes are obtained by gray shifting the blue fluxes to match the red fluxes in the overlap region of 6500A-7500A and averaging the blue\
+and red fluxes in the overlap.  The separate red and blue fluxes may be selected by following the star name with 'red' or 'blue'; i.e. HR 1544 blue.",
+"spec50cal" : "The KPNO spectrophotometric standards at 50 A intervals. The data are from (1) Table V, Spectrophotometric Standards, Massey et al., 1988,\
+ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Extension to 1 micron, Massey and Gronwall, 1990, ApJ 358, p. 344."}
 
-def target_flux_calibration(self):
+        available_datasets = glob.glob(str(libpath_std)+"/*")
+        available_datasets = np.sort(available_datasets)
 
-    """
-
-    target exposure time here
-
-    std star normalization solution here
-    
-    """
+        if std_star_dataset is None:
+            print("Available datasets:")
+            for available_dataset in available_datasets:
+                print(available_dataset.split("/")[-1])
         
+        elif str(libpath_std)+"/"+std_star_dataset in available_datasets:
+            available_std_stars = glob.glob(str(libpath_std)+f"/{std_star_dataset}/*")
+            std_stars = []
+            for available_std_star in available_std_stars:
+                std_stars.append(available_std_star.split("/")[-1])
+
+            return std_stars, reference_dictionaty[std_star_dataset]
+        else:
+            print("Input dataset not found in our library. Try using the function extraction.list_available_standards(dataset=None) to see the available datasets.")
+
+
+    def std_star_normalization(self, spec_atm_corrected_std, wavelengths_std, std_star_dataset, std_star_archive_file, smooth_window = 101, smooth_window_archive = 11, correction_factor_yscale = 2e-13, plots = True):
+
+        """
+
+        CORRIGIR A ESCALA Y NOS DOIS ULTIMOS PLOTS. O MELHOR A SE FAZER É APLICAR UM CORTE NO EIXO X.
+
+        spec_atm_corrected_std: list
+            It can be [1,2,3] or [[1,2,3]]
+        wavelengths_std: list
+            It can be [1,2,3] or [[1,2,3]]
+
+
+        std star exposure time here
+
+        archival spectrum here
+
+        smooth_window: integer
+            Must be an odd number.
+        
+        """
+
+        if isinstance(spec_atm_corrected_std[0],np.ndarray):
+            spec_atm_corrected_std = spec_atm_corrected_std[0]
+        if isinstance(wavelengths_std[0], u.quantity.Quantity):
+            wavelengths_std = wavelengths_std[0]
+
+        if smooth_window%2 == 0:
+            smooth_window = smooth_window - 1
+            print(f"The input parameter 'smooth_window' must be odd. We are resetting it to {smooth_window}.")
+
+        spec_atm_corrected_std = np.asarray(spec_atm_corrected_std)
+        spec_atm_corrected_std = spec_atm_corrected_std/self.exposure_std_star  # Correcting for exposure
+        smoothed_spec = medfilt(spec_atm_corrected_std, smooth_window)
+
+        _, reference = self.list_available_standards(std_star_dataset=std_star_dataset)
+        archival_data = np.loadtxt(libpath_std/Path(std_star_dataset)/Path(std_star_archive_file))
+        archival_wavelength = archival_data[:,0] * u.angstrom
+        archival_flux = archival_data[:,1] * u.ABmag
+        archival_flux = archival_flux.to(u.erg / u.cm**2 / u.s / u.AA, equivalencies=u.spectral_density(archival_wavelength))
+        archival_flux_smoothed = medfilt(archival_flux, smooth_window_archive)
+
+        tck2 = interpolate.splrep(wavelengths_std.value, smoothed_spec,k=3)
+        tck = interpolate.splrep(archival_wavelength.value, archival_flux_smoothed,k=3)
+        archival_model = interpolate.splev(wavelengths_std.value, tck)
+        measured_spec_continuum = interpolate.splev(wavelengths_std.value, tck2)
+        measured_spec_continuum[measured_spec_continuum <= 0.0] = archival_model[measured_spec_continuum <= 0.0]
+
+        correction_factor = archival_model/measured_spec_continuum
+        correction_factor = medfilt(correction_factor, 11) 
+
+        if plots:
+            print(reference)
+            plt.figure(figsize=(12,5)) 
+            plt.plot(wavelengths_std, spec_atm_corrected_std, label="Measured std star spectrum")
+            plt.plot(wavelengths_std, smoothed_spec, label = "Std star continuum")
+            plt.xlabel(f"Wavelength [${wavelengths_std.unit}$]")
+            plt.ylabel("Counts")
+            plt.minorticks_on()
+            plt.title("Standard star measured spectrum and continuum")
+            plt.grid(which="both", linestyle=":")
+            plt.legend()
+
+            plt.figure(figsize=(12,5)) 
+            plt.plot(archival_wavelength, archival_flux,label="Archival std star spectrum")
+            plt.plot(archival_wavelength, archival_flux_smoothed,label="Archival std star continuum")
+            plt.xlabel(f"Wavelength ({archival_wavelength.unit})")
+            plt.ylabel(r"$F_{\lambda}$"+f"({archival_flux.unit})")
+            plt.title("Standard star archival spectrum and continuum")
+            plt.minorticks_on()
+            plt.grid(which="both", linestyle=":")
+            plt.legend()
+
+            plt.figure(figsize=(12,5)) 
+            plt.plot(wavelengths_std, correction_factor ,color="C0",label="Archival/measured")
+            plt.xlabel(f"Wavelength ({wavelengths_std.unit})")
+            plt.ylabel("Correction factor")
+            plt.ylim(0,correction_factor_yscale)
+            plt.minorticks_on()
+            plt.title("Flux correction curve")
+            plt.grid(which="both", linestyle=":")
+            plt.legend()
+
+            plt.figure(figsize=(12,5)) 
+            plt.plot(wavelengths_std, spec_atm_corrected_std*correction_factor,color="orange",label="Corrected-measured std star spec")
+            plt.plot(archival_wavelength, archival_flux,color="C0",label="Archival std star spec")
+            plt.xlabel(f"Wavelength ({wavelengths_std.unit})")
+            plt.ylabel(r"$F_{\lambda}$"+f"({archival_flux.unit})")
+            plt.title("Corrected standard star spectrum")
+            plt.ylim(0,correction_factor_yscale)
+            plt.grid(which="both", linestyle=":")
+            plt.legend()
+
+            plt.show()
+
+        return correction_factor
+        
+
+        
+
+    def target_flux_calibration(self):
+
+        """
+
+        target exposure time here
+
+        std star normalization solution here
+        
+        """
+            
