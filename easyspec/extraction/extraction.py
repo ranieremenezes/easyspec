@@ -22,6 +22,7 @@ from IPython.display import Image
 from astropy import units as u
 from astropy.modeling.models import Linear1D
 from scipy.signal import medfilt
+from dust_extinction.parameter_averages import F99
 
 plt.rcParams.update({'font.size': 12})
 
@@ -60,14 +61,8 @@ class extraction:
         """
 
         array = np.asarray(array)
-        if len(value) > 1:
-            idx = []
-            for i in value:
-                idx.append((np.abs(array - i)).argmin())      
-            return idx
-        else: 
-            idx = (np.abs(array - value)).argmin()
-            return idx
+        idx = (np.abs(array - value)).argmin()
+        return idx
 
     def savitzky_golay(self,y, window_size, order, deriv=0, rate=1):
     
@@ -192,7 +187,7 @@ class extraction:
 
         return continuum_selection
     
-    def import_data(self, target_spec_file, target_name, exposure_target = None, exposure_header_entry="AVEXP", airmass_target = None, airmass_header_entry="AVAIRMAS", reddening = None, std_star_spec_file = None, exposure_std_star = None, airmass_std_star = None, plot = True):
+    def import_data(self, target_spec_file, target_name, exposure_target = None, exposure_header_entry="AVEXP", airmass_target = None, airmass_header_entry="AVAIRMAS", std_star_spec_file = None, exposure_std_star = None, airmass_std_star = None, plot = True):
 
         """
         This function opens the data file (i.e. fits image with one or more spectra) and reads the exposure time from its header. Optionally, the user can manually add the exposure time.
@@ -212,8 +207,6 @@ class extraction:
             Optional. You can manually pass the average airmass of your observation. If 'None', easyspec will automatically look in the image header for the entry given by the variable 'airmass_header_entry'.
         airmass_header_entry: string
             Optional. If 'airmass_target' is not None, easyspec will automatically look into the image header for the average airmass corresponding to this entry. This entry will be used for the target and standard star images.
-        reddening: float
-            Optional. The Galactic redening in the direction of your observation. You can look for the appropriate reddening here: 'https://irsa.ipac.caltech.edu/applications/DUST/' 
         std_star_spec_file: string
             Optional. The path to the data '.fits' or '.fit' file containing the standard star spectrum.
         exposure_std_star: float
@@ -239,8 +232,6 @@ class extraction:
             self.exposure_target = cleaning.look_in_header(target_spec_file,exposure_header_entry)
         else:
             self.exposure_target = exposure_target
-        if reddening is not None:
-            self.reddening = reddening
         if airmass_target is not None:
             self.airmass_target = airmass_target
         elif airmass_header_entry is not None:
@@ -820,8 +811,8 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
 
         spec_atm_corrected_list = []
         for spec, wavelength in zip(spec_list,wavelengths_list):
-            wavelength_min_index = self.find_nearest(extinction_wavelength, [wavelength.value.min()])
-            wavelength_max_index = self.find_nearest(extinction_wavelength, [wavelength.value.max()])
+            wavelength_min_index = self.find_nearest(extinction_wavelength, wavelength.value.min())
+            wavelength_max_index = self.find_nearest(extinction_wavelength, wavelength.value.max())
             extinction_wavelength = extinction_wavelength[wavelength_min_index:wavelength_max_index]
             extinction = extinction[wavelength_min_index:wavelength_max_index]
 
@@ -876,7 +867,7 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
 
         Parameters
         ----------
-        dataset: string
+        std_star_dataset: string
             If None, the function will plot all available datasets. Options are "ctiocal", "irscal", "bstdscal", "spec16cal", "spechayescal", "iidscal", "spec50cal",
             "redcal", "ctionewcal", "ctio", "oke1990", "blackbody".
 
@@ -932,11 +923,11 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
             print("Input dataset not found in our library. Try using the function extraction.list_available_standards(dataset=None) to see the available datasets.")
 
 
-    def std_star_normalization(self, spec_atm_corrected_std, wavelengths_std, std_star_dataset, std_star_archive_file, smooth_window = 101, smooth_window_archive = 11, correction_factor_yscale = 2e-13, plots = True):
+    def std_star_normalization(self, spec_atm_corrected_std, wavelengths_std, std_star_dataset, std_star_archive_file, smooth_window = 101, smooth_window_archive = 11, plots = True):
 
         """
 
-        CORRIGIR A ESCALA Y NOS DOIS ULTIMOS PLOTS. O MELHOR A SE FAZER É APLICAR UM CORTE NO EIXO X.
+        Here we also correct the std star spectrum for the exposure
 
         spec_atm_corrected_std: list
             It can be [1,2,3] or [[1,2,3]]
@@ -979,8 +970,8 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         measured_spec_continuum = interpolate.splev(wavelengths_std.value, tck2)
         measured_spec_continuum[measured_spec_continuum <= 0.0] = archival_model[measured_spec_continuum <= 0.0]
 
-        correction_factor = archival_model/measured_spec_continuum
-        correction_factor = medfilt(correction_factor, 11) 
+        correction_factor = (archival_model/measured_spec_continuum)
+        correction_factor = medfilt(correction_factor, 11) * u.erg / u.cm**2 / u.s / u.AA
 
         if plots:
             print(reference)
@@ -1004,11 +995,11 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
             plt.grid(which="both", linestyle=":")
             plt.legend()
 
-            plt.figure(figsize=(12,5)) 
+            plt.figure(figsize=(12,5))
             plt.plot(wavelengths_std, correction_factor ,color="C0",label="Archival/measured")
             plt.xlabel(f"Wavelength ({wavelengths_std.unit})")
             plt.ylabel("Correction factor")
-            plt.ylim(0,correction_factor_yscale)
+            plt.ylim(0,archival_flux.value.max()*1.5)
             plt.minorticks_on()
             plt.title("Flux correction curve")
             plt.grid(which="both", linestyle=":")
@@ -1020,7 +1011,8 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
             plt.xlabel(f"Wavelength ({wavelengths_std.unit})")
             plt.ylabel(r"$F_{\lambda}$"+f"({archival_flux.unit})")
             plt.title("Corrected standard star spectrum")
-            plt.ylim(0,correction_factor_yscale)
+            plt.ylim(0,archival_flux.value.max()*1.5)
+            plt.minorticks_on()
             plt.grid(which="both", linestyle=":")
             plt.legend()
 
@@ -1031,13 +1023,72 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
 
         
 
-    def target_flux_calibration(self):
+    def target_flux_calibration(self, wavelengths_list, spec_atm_corrected_list, correction_factor, reddening = None, Rv = None, wavelength_cuts = None, plot = True):
 
         """
 
-        target exposure time here
+        Here we correct for exposure time, reddening and std star calibration
 
-        std star normalization solution here
+        Rv : float
+            visual extinction to reddening ratio. Default is 3.1, but depending on the case, even a value up to 5 can be used. You can
+            check what is a reasonable value for your target here: 'https://irsa.ipac.caltech.edu/applications/DUST/'
+
+        reddening: float
+            Optional. The E(B-V) reddening in magnitudes. This is the Galactic redening in the direction of your observation. You can look
+            for the appropriate reddening for your target here: 'https://irsa.ipac.caltech.edu/applications/DUST/' 
+        
+        wavelength_cuts: list
+            List with two wavelength values. The spectrum within this wavelength range will survive the analysis. The rest will be removed.
+            Example: wavelength_cuts = [3500,7500]. Assuming the units in Angstroms.
         
         """
+
+        if Rv is None:
+            Rv = 3.1
+        
+        dust_extinction_model = F99(Rv=Rv)  # F99 is the Fitzpatrick (1999) Milky Way R(V) dependent model
+
+        calibrated_flux = []
+        for wavelengths,spec_atm_corrected in zip(wavelengths_list,spec_atm_corrected_list):
+            if reddening is not None:
+                calibrated_flux.append((spec_atm_corrected*correction_factor/self.exposure_target)/dust_extinction_model.extinguish(wavelengths,Ebv=reddening))
+            else:
+                calibrated_flux.append(spec_atm_corrected*correction_factor/self.exposure_target)
+
+            if wavelength_cuts is None:
+                wavelength_min_index = None
+                wavelength_max_index = None
+            else:
+                wavelength_min_index = self.find_nearest(wavelengths, wavelength_cuts[0])
+                wavelength_max_index = self.find_nearest(wavelengths, wavelength_cuts[1])
+
+        
+            if plot:
+                plt.figure(figsize=(12,5))
+                if reddening is not None:
+                    plt.plot(wavelengths[wavelength_min_index:wavelength_max_index], calibrated_flux[-1][wavelength_min_index:wavelength_max_index], color='orange', label=f'Spec {len(calibrated_flux)-1}, E(B-V)={reddening}, R(V)={Rv}')
+                else:
+                    plt.plot(wavelengths[wavelength_min_index:wavelength_max_index], calibrated_flux[-1][wavelength_min_index:wavelength_max_index], color='orange', label=f'Spec {len(calibrated_flux)-1}, not corrected for reddening')
+                plt.minorticks_on()
+                plt.grid(which="both",linestyle=":")
+                plt.xlim(wavelengths.value[wavelength_min_index:wavelength_max_index].min(),wavelengths.value[wavelength_min_index:wavelength_max_index].max())
+                plt.ylim(0,calibrated_flux[-1].value[wavelength_min_index:wavelength_max_index].max()*1.2)
+                plt.title(f"Calibrated spec {len(calibrated_flux)-1} - "+self.target_name+" field")
+                plt.ylabel("F$_{\lambda}$ "+f"[{calibrated_flux[-1].unit}]",fontsize=12)
+                plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
+                plt.legend()
+                
+        
+        if plot:
+            plt.show()
+
+        return calibrated_flux
+
+
+
+
+
+
+
+
             
