@@ -1,26 +1,15 @@
 from astropy.io import fits
 import numpy as np
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from math import factorial
 import scipy
-from astropy.modeling.models import Gaussian1D, Voigt1D, Lorentz1D
+from astropy.modeling.models import Gaussian1D
 import matplotlib.pyplot as plt
-import emcee
-import corner
-from scipy import stats
 import glob
 from pathlib import Path
-from multiprocessing import Pool
-import time
-import warnings
-from matplotlib.ticker import AutoMinorLocator
 from scipy import interpolate
 from easyspec.cleaning import cleaning
 from astropy.modeling.polynomial import Polynomial1D
 from astropy.modeling.fitting import LinearLSQFitter, LevMarLSQFitter
-from IPython.display import Image
 from astropy import units as u
-from astropy.modeling.models import Linear1D
 from scipy.signal import medfilt
 from dust_extinction.parameter_averages import F99
 
@@ -63,129 +52,6 @@ class extraction:
         array = np.asarray(array)
         idx = (np.abs(array - value)).argmin()
         return idx
-
-    def savitzky_golay(self,y, window_size, order, deriv=0, rate=1):
-    
-        r"""
-        This function was taken from https://scipy.github.io/old-wiki/pages/Cookbook/SavitzkyGolay
-
-        Smooth (and optionally differentiate) data with a Savitzky-Golay filter.
-        The Savitzky-Golay filter removes high frequency noise from data.
-        It has the advantage of preserving the original shape and
-        features of the signal better than other types of filtering
-        approaches, such as moving averages techniques.
-
-        Parameters
-        ----------
-        y : array_like, shape (N,)
-            the values of the time history of the signal.
-        window_size : int
-            the length of the window. Must be an odd integer number.
-        order : int
-            the order of the polynomial used in the filtering.
-            Must be less then `window_size` - 1.
-        deriv: int
-            the order of the derivative to compute (default = 0 means only smoothing)
-
-        Returns
-        -------
-        ys : ndarray, shape (N)
-            the smoothed signal.
-
-        Notes
-        -----
-        The Savitzky-Golay is a type of low-pass filter, particularly
-        suited for smoothing noisy data. The main idea behind this
-        approach is to make for each point a least-square fit with a
-        polynomial of high order over an odd-sized window centered at
-        the point.
-
-        References
-        ----------
-        .. [1] A. Savitzky, M. J. E. Golay, Smoothing and Differentiation of
-        Data by Simplified Least Squares Procedures. Analytical
-        Chemistry, 1964, 36 (8), pp 1627-1639.
-        .. [2] Numerical Recipes 3rd Edition: The Art of Scientific Computing
-        W.H. Press, S.A. Teukolsky, W.T. Vetterling, B.P. Flannery
-        Cambridge University Press ISBN-13: 9780521880688
-        """
-        
-        try:
-            window_size = np.abs(int(window_size))
-            order = np.abs(int(order))
-        except ValueError:
-            raise ValueError("window_size and order have to be of type int")
-        if window_size % 2 != 1 or window_size < 1:
-            raise TypeError("window_size size must be a positive odd number")
-        if window_size < order + 2:
-            raise TypeError("window_size is too small for the polynomials order")
-        order_range = range(order+1)
-        half_window = (window_size -1) // 2
-        # precompute coefficients
-        b = np.mat([[k**i for i in order_range] for k in range(-half_window, half_window+1)])
-        m = np.linalg.pinv(b).A[deriv] * rate**deriv * factorial(deriv)
-        # pad the signal at the extremes with
-        # values taken from the signal itself
-        firstvals = y[0] - np.abs( y[1:half_window+1][::-1] - y[0] )
-        lastvals = y[-1] + np.abs(y[-half_window-1:-1][::-1] - y[-1])
-        y = np.concatenate((firstvals, y, lastvals))
-
-        return np.convolve( m[::-1], y, mode='valid')
-    
-    def continuum_fit(self,diff_flux, wavelengths, continuum_regions, bkg_model="spline", pl_order=2, window_size=11, smoothing_order=3, smoothing=True, interpolation_order=2):
-    
-        """
-        This function fits the continuum emission with an spline or a power law. For a spline, it can also smooth the continuum if requested.
-
-        Parameters
-        ----------
-        diff_flux: array (float)
-            Array with the differential flux to be fitted and (if spline is chosen) smoothed. 
-        wavelengths: array (float)
-            Wavelength must be in absolute values, i.e. without units.
-        continuum_regions: list of intervals (float)
-            The continuum will be computed only within these wavelength regions and then extrapolated everywhere else. E.g.: continuum_regions = [[3000,6830],[6930,7500]]
-        bkg_model: string
-            Model for extracting the continuum. Options are "spline" or "pl" (power law). 
-        pl_order: int
-            Polynomial order for the power law fit.
-        window_size: int
-            Window size for the smoothing Savitzky-Golay algorithm. Must be an **odd** integer number.
-        smoothing_order: int
-            Polynomial order for the smoothing. Must be less then `window_size` - 1.
-        smoothing: bool
-            Set to True if you want to smooth the continuum spectrum.
-        interpolation_order: int
-            The interpolation order when extracting the continuum.
-
-        Returns
-        -------
-        continuum_selection: array (float)
-            Array with the continuum differential flux.
-        """
-        
-        selection = np.asarray([])
-        for wavelength_region in continuum_regions:
-            # Here we select the indexes of the wavelengths inside the intervals given by continuum_regions:
-            index = np.where((wavelengths > wavelength_region[0]) & (wavelengths < wavelength_region[1]))[0]
-            selection = np.concatenate([selection,index])
-        
-        selection = selection.astype(int)
-        diff_flux_continuum = diff_flux[selection]
-        wavelengths_continuum = wavelengths[selection]
-        
-        if bkg_model == "spline":
-            tck_selection = interpolate.splrep(wavelengths_continuum, diff_flux_continuum, k=interpolation_order)
-            continuum_selection = interpolate.splev(wavelengths, tck_selection)
-            if smoothing:
-                continuum_selection = self.savitzky_golay(continuum_selection, window_size, smoothing_order, deriv=0, rate=1)
-
-        elif bkg_model == "PL" or bkg_model == "pl" or bkg_model == "power law" or bkg_model == "power-law" or bkg_model == "powerlaw":
-            z = np.polyfit(wavelengths_continuum, diff_flux_continuum, pl_order)
-            continuum_selection = np.poly1d(z)
-            continuum_selection = continuum_selection(wavelengths)
-
-        return continuum_selection
     
     def import_data(self, target_spec_file, target_name, exposure_target = None, exposure_header_entry="AVEXP", airmass_target = None, airmass_header_entry="AVAIRMAS", std_star_spec_file = None, exposure_std_star = None, airmass_std_star = None, plot = True):
 
@@ -753,19 +619,30 @@ class extraction:
     def extinction_correction(self, spec_list, wavelengths_list, observatory, data_type, custom_observatory = None, spline_order = 1, plots = True):
 
         """
+        This function removes the atmospheric extinction from the observed spectra.        
 
-        WAVELENGTHS DO ARQUIVO TXT TEM QUE SER NA UNIDADE CERTA!!!! CONFERIR ISSO!
-        We can ask for these units as an input and then, if necessary, convert them to match the data units.
-
-        APRUMAR O SPEC_LIST PARA A STD STAR: SE ENTRAR COM MAIS DE UM ESPECTRO, A GENTE TEM QUE CAIR NUM ERRO!
-
-        The Earth's atmosphere is highly chromatic in its transmission of light. The wavelength-dependence is dominated by scattering in the optical (320-700 nm).
-
+        Parameters
+        ----------
+        spec_list: list
+            List with the extracted spectra of all the targets in the image or only the brightest spectrum. This is one of the outputs from function extraction.extracting().
+        wavelengths_list: list
+            List with the wavelength solutions for each given spectrum. This is the main result from function extraction.wavelength_calibration().
+        observatory: string
+            This is the observatory where you collected yoru data. Options are "ctio", "kpno", "lapalma", "mko", "mtham", "paranal", "apo".
+        data_type: string
+            Options are "target" or "std_star". We use this information to correctly select the airmass for the extinction correction.
         custom_observatory: string
             Optional. Path to a txt file containing the airmass extinction curve. This file must have two columns, the first with the wavelengths
-            and the second with the extinction in mag/airmass.
+            *in Angstroms* and the second with the extinction in mag/airmass.
         spline_order: integer
-            The degree of the spline fit. It is recommended to use cubic splines. Even values of spline_order should be avoided.
+            The degree of the spline fit. Even values of spline_order should be avoided.
+        plots: boolean
+            If True, easyspec will plot a comparison between the corrected and original spectrum, as well as the extinction interpolation curve.
+        
+        Returns
+        -------
+        spec_atm_corrected_list: list
+            List with all the spectra corrected for atmospheric extinction.
         """
 
 
@@ -795,6 +672,9 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
                 airmass = self.airmass_std_star
             except:
                 raise RuntimeError("Airmass for the standard star was not found. Did you loaded the standard star data with the function extraction.tracing()?")
+            if len(spec_list) > 1:
+                raise RuntimeError(f"We have {len(spec_list)} spectra given as input. Since the variable data_type was set as 'std_star' by the user, the variable\
+                                 'spec_list' must contain only one spectrum.")
         else:
             raise NameError("Invalid entry for data_type. The options are 'target' or 'std_star'.")
 
@@ -875,7 +755,6 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
         -------
         reference_dictionaty[dataset]: string
             If a dataset is given, the function will return the reference for this dataset.
-            
         """
 
         reference_dictionaty = {"blackbody" :  "Blackbody flux distributions in various magnitude bands.",
@@ -926,22 +805,33 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
     def std_star_normalization(self, spec_atm_corrected_std, wavelengths_std, std_star_dataset, std_star_archive_file, smooth_window = 101, smooth_window_archive = 11, plots = True):
 
         """
+        This function normalizes the measured standard spectrum by its exposure time (read in the function extraction.import_data()) and
+        by its archival spectrum.
 
-        Here we also correct the std star spectrum for the exposure
-
+        Parameters
+        ----------
         spec_atm_corrected_std: list
-            It can be [1,2,3] or [[1,2,3]]
+            This is the standard star spectrum after being corrected for atmospheric extinction.
         wavelengths_std: list
-            It can be [1,2,3] or [[1,2,3]]
-
-
-        std star exposure time here
-
-        archival spectrum here
-
+            This is the wavelength solution for the standard star obtained with the function extraction.wavelength_calibration().
+        std_star_dataset: string
+            This is the dataset where you can find your standard star.The options are "ctiocal", "irscal", "bstdscal", "spec16cal",
+            "spechayescal", "iidscal", "spec50cal", "redcal", "ctionewcal", "ctio", "oke1990", "blackbody".
+        std_star_archive_file: string
+            This is the name of the datafile of the archival standard star spectrum. You can find more by running the function
+            extraction.list_available_standards(). In any case, it should be something like "l4364blue.dat".
         smooth_window: integer
-            Must be an odd number.
+            Must be an odd number. This is the number of neighbouring wavelength bins used to extract the standard star continuum
+            with a median filter.
+        smooth_window_archive: integer
+            Must be an odd number. Same as above but for the archival spectrum.   
+        plots: boolean
+            If True, easyspec will plot several diagnostic plots showing the step-by-step of the flux calibration solution.
         
+        Returns
+        -------
+        correction_factor: array
+            This is an array in astropy units of erg/cm2/s/Angstrom containing the flux calibration solution for the standard star.
         """
 
         if isinstance(spec_atm_corrected_std[0],np.ndarray):
@@ -1023,24 +913,41 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
 
         
 
-    def target_flux_calibration(self, wavelengths_list, spec_atm_corrected_list, correction_factor, reddening = None, Rv = None, wavelength_cuts = None, plot = True):
+    def target_flux_calibration(self, wavelengths_list, spec_atm_corrected_list, correction_factor, reddening = None, Rv = None, wavelength_cuts = None, output_directory = "./", save_spec = True, plot = True):
 
         """
-
-        Here we correct for exposure time, reddening and std star calibration
-
-        Rv : float
-            visual extinction to reddening ratio. Default is 3.1, but depending on the case, even a value up to 5 can be used. You can
-            check what is a reasonable value for your target here: 'https://irsa.ipac.caltech.edu/applications/DUST/'
-
+        This function normalizes the target spectra for exposure time, corrects them by reddening (optional) and calibrate them using
+        the correction_factor obtained with the standard star.
+        
+        Parameters
+        ----------
+        wavelengths_list: list
+            List with the wavelength solutions for all target spectra.
+        spec_atm_corrected_list: list
+            List with all the spectra corrected for atmospheric extinction.
+        correction_factor: array
+            This is the array (in astropy units of erg/cm2/s/Angstrom) containing the flux calibration solution for the standard star.
+            This is the main result from the function extraction.std_star_normalization().
         reddening: float
             Optional. The E(B-V) reddening in magnitudes. This is the Galactic redening in the direction of your observation. You can look
-            for the appropriate reddening for your target here: 'https://irsa.ipac.caltech.edu/applications/DUST/' 
-        
+            for the appropriate reddening for your target here: 'https://irsa.ipac.caltech.edu/applications/DUST/'.
+        Rv: float
+            visual extinction to reddening ratio. Default is 3.1, but depending on the case, even a value up to 5 can be used. You can
+            check what is a reasonable value for your target here: 'https://irsa.ipac.caltech.edu/applications/DUST/'.
         wavelength_cuts: list
             List with two wavelength values. The spectrum within this wavelength range will survive the analysis. The rest will be removed.
-            Example: wavelength_cuts = [3500,7500]. Assuming the units in Angstroms.
+            Example: wavelength_cuts = [3500,7500]. Assuming the units in *Angstroms*.
+        output_directory: string
+            A string with the path to the output directory.   
+        save_spec: boolean
+            If True, the spectra will be saved in the output directory as "spec_0.dat", "spec_1.dat" and so on.  
+        plots: boolean
+            If True, easyspec will plot several diagnostic plots showing the step-by-step of the flux calibration solution.
         
+        Returns
+        -------
+        calibrated_flux_list: list
+            This is a list with the spectra calibrated in flux.
         """
 
         if Rv is None:
@@ -1048,12 +955,12 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         
         dust_extinction_model = F99(Rv=Rv)  # F99 is the Fitzpatrick (1999) Milky Way R(V) dependent model
 
-        calibrated_flux = []
+        calibrated_flux_list = []
         for wavelengths,spec_atm_corrected in zip(wavelengths_list,spec_atm_corrected_list):
             if reddening is not None:
-                calibrated_flux.append((spec_atm_corrected*correction_factor/self.exposure_target)/dust_extinction_model.extinguish(wavelengths,Ebv=reddening))
+                calibrated_flux_list.append((spec_atm_corrected*correction_factor/self.exposure_target)/dust_extinction_model.extinguish(wavelengths,Ebv=reddening))
             else:
-                calibrated_flux.append(spec_atm_corrected*correction_factor/self.exposure_target)
+                calibrated_flux_list.append(spec_atm_corrected*correction_factor/self.exposure_target)
 
             if wavelength_cuts is None:
                 wavelength_min_index = None
@@ -1062,27 +969,34 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
                 wavelength_min_index = self.find_nearest(wavelengths, wavelength_cuts[0])
                 wavelength_max_index = self.find_nearest(wavelengths, wavelength_cuts[1])
 
-        
+            wavelengths = wavelengths[wavelength_min_index:wavelength_max_index]
+            calibrated_flux_list[-1] = calibrated_flux_list[-1][wavelength_min_index:wavelength_max_index]
+            spec_number = len(calibrated_flux_list)-1
+
             if plot:
                 plt.figure(figsize=(12,5))
                 if reddening is not None:
-                    plt.plot(wavelengths[wavelength_min_index:wavelength_max_index], calibrated_flux[-1][wavelength_min_index:wavelength_max_index], color='orange', label=f'Spec {len(calibrated_flux)-1}, E(B-V)={reddening}, R(V)={Rv}')
+                    plt.plot(wavelengths, calibrated_flux_list[-1], color='orange', label=f'Spec {spec_number}, E(B-V)={reddening}, R(V)={Rv}')
                 else:
-                    plt.plot(wavelengths[wavelength_min_index:wavelength_max_index], calibrated_flux[-1][wavelength_min_index:wavelength_max_index], color='orange', label=f'Spec {len(calibrated_flux)-1}, not corrected for reddening')
+                    plt.plot(wavelengths, calibrated_flux_list[-1], color='orange', label=f'Spec {spec_number}, not corrected for reddening')
                 plt.minorticks_on()
                 plt.grid(which="both",linestyle=":")
-                plt.xlim(wavelengths.value[wavelength_min_index:wavelength_max_index].min(),wavelengths.value[wavelength_min_index:wavelength_max_index].max())
-                plt.ylim(0,calibrated_flux[-1].value[wavelength_min_index:wavelength_max_index].max()*1.2)
-                plt.title(f"Calibrated spec {len(calibrated_flux)-1} - "+self.target_name+" field")
-                plt.ylabel("F$_{\lambda}$ "+f"[{calibrated_flux[-1].unit}]",fontsize=12)
+                plt.xlim(wavelengths.value.min(),wavelengths.value.max())
+                plt.ylim(0,calibrated_flux_list[-1].value.max()*1.2)
+                plt.title(f"Calibrated spec {spec_number} - "+self.target_name+" field")
+                plt.ylabel("F$_{\lambda}$ "+f"[{calibrated_flux_list[-1].unit}]",fontsize=12)
                 plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
                 plt.legend()
                 
         
+            if save_spec:
+                output_directory = Path(output_directory)
+                np.savetxt(str(output_directory)+f"/spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
+
         if plot:
             plt.show()
 
-        return calibrated_flux
+        return calibrated_flux_list
 
 
 
