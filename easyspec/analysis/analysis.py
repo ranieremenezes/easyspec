@@ -98,7 +98,7 @@ class analysis:
 
         if plot:
             plt.figure(figsize=(12,5))
-            plt.plot(wavelengths, flux, color='orange')
+            plt.plot(wavelengths, flux, color='orange', label=target_name+" calibrated spectrum")
             plt.minorticks_on()
             plt.grid(which="both",linestyle=":")
             plt.xlim(wavelengths.value.min(),wavelengths.value.max())
@@ -129,21 +129,20 @@ class analysis:
         """
 
         continuum_baseline, continuum_std_deviation = self.continuum_fit(flux.value, wavelengths.value, continuum_regions, pl_order=pl_order) 
-        print("Continuum std deviation: ",continuum_std_deviation)
         peak_height = line_significance*continuum_std_deviation
         continuum_removed_flux = flux.value-continuum_baseline
         peak_position_index, peak_heights = scipy.signal.find_peaks(continuum_removed_flux,height=peak_height,distance = peak_distance, width = peak_width)
         peak_heights = peak_heights["peak_heights"]
-        print("peak heights: ", peak_heights)
-        print("peak positions: ",wavelengths[peak_position_index])
+        peak_heights = (peak_heights+continuum_baseline[peak_position_index])*flux.unit
+        wavelength_peak_positions = wavelengths[peak_position_index]
 
         if plot:
             plt.figure(figsize=(12,5))
             if len(peak_position_index) > 0:
-                for number, peak_wavelength in enumerate(wavelengths[peak_position_index].value):
-                    plt.text(peak_wavelength-25, peak_heights[number]+continuum_baseline[peak_position_index][number] + 3*continuum_std_deviation,str(round(peak_wavelength,3))+"$\AA$",rotation=90,fontsize=10)
+                for number, peak_wavelength in enumerate(wavelength_peak_positions.value):
+                    plt.text(peak_wavelength-25, peak_heights.value[number] + 5*continuum_std_deviation,str(round(peak_wavelength,3))+"$\AA$",rotation=90,fontsize=10)
             
-            plt.plot(wavelengths,continuum_baseline,label="PL continuum")
+            plt.plot(wavelengths,continuum_baseline,label="Power-law continuum")
 
             plt.plot(wavelengths, flux, color='orange')
             plt.plot(wavelengths, continuum_removed_flux, alpha=0.15, color='black', label="Continuum-subtracted spec")
@@ -156,4 +155,4 @@ class analysis:
             plt.legend()
             plt.show()
         
-        return continuum_baseline
+        return continuum_baseline, wavelength_peak_positions, peak_heights
