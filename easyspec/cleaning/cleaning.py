@@ -12,6 +12,8 @@ from astropy.nddata import CCDData
 from astropy import units as u
 import ccdproc as ccdp
 import os
+from scipy.signal import medfilt
+
 
 class cleaning:
 
@@ -505,7 +507,7 @@ class cleaning:
         return subdark_data_out
 
 
-    def norm_master_flat(self,masterflat,degree=5,header_hdu_entry=0,plots=True):
+    def norm_master_flat(self,masterflat, method = "polynomial", degree=5, smooth_window = 101, header_hdu_entry=0,plots=True):
 
         """
         Function to normalize the master flat.
@@ -514,8 +516,12 @@ class cleaning:
         ----------
         masterflat: array
             Array with master flat raw data.
+        method: string
+            Method to be adopted to fit the master flat profile (see plots for clarification). Options are "polynomial" or "median_filter".
         degree: int
-            Polynomial degree to be fitted to the median masterflat x-profile.
+            Polynomial degree to be fitted to the median masterflat x-profile. This parameter is useful only if method = "polynomial".
+        smooth_window: integer
+            Must be an odd number. This is the number of neighbouring pixels used to extract the flat field profile with a median filter.
         header_hdu_entry: int
             HDU extension where we can find the header. Please check your data before choosing this value.
         plots: bool
@@ -529,18 +535,27 @@ class cleaning:
             This function automatically saves a file named "norm_master_flat.fits" in the working directory.
         """
 
+        if smooth_window%2 == 0:
+            smooth_window = smooth_window - 1
+            print(f"The input parameter 'smooth_window' must be odd. We are resetting it to {smooth_window}.")
 
         yvals = np.median(masterflat, axis=0)
         xvals = np.arange(np.shape(masterflat)[1])
 
-        poly_model = odr.polynomial(degree)  # Using a polynomial model of order 'degree'
-        data = odr.Data(xvals, yvals)
-        odr_obj = odr.ODR(data, poly_model)
-        output = odr_obj.run()  # Running ODR fitting
-        poly = np.poly1d(output.beta[::-1])
-        poly_y = poly(xvals)
+        if method == "polynomial":
+            poly_model = odr.polynomial(degree)  # Using a polynomial model of order 'degree'
+            data = odr.Data(xvals, yvals)
+            odr_obj = odr.ODR(data, poly_model)
+            output = odr_obj.run()  # Running ODR fitting
+            poly = np.poly1d(output.beta[::-1])
+            poly_y = poly(xvals)
+            fit_matrix = np.ones(np.shape(masterflat))*poly_y
+        elif method == "median_filter":
+            smoothed_flat_profile = medfilt(yvals, smooth_window)
+            fit_matrix = np.ones(np.shape(masterflat))*smoothed_flat_profile
+        else:
+            raise RuntimeError("Invalid input value for 'method'. Options are 'polynomial' and 'median_filter'.")
 
-        fit_matrix = np.ones(np.shape(masterflat))*poly_y
         normalized_master_flat = masterflat/fit_matrix
 
         # Saving norm master flat:
@@ -560,11 +575,18 @@ class cleaning:
                 if i == 0:
                     plt.title("Master flat profile")
                     plt.plot(xvals, yvals, 'x', alpha=0.5,label="column-median data")
-                    plt.plot(xvals, poly_y, color='limegreen',label="ODR polynomial fit")
+                    if method == "polynomial":
+                        plt.plot(xvals, poly_y, color='limegreen',label="ODR polynomial fit")
+                    else:
+                        plt.plot(xvals, smoothed_flat_profile, color='limegreen',label="Median-filter flat profile")
                     plt.legend()
                 else:
-                    plt.title("Polynomial fit residuals")
-                    plt.plot(xvals, yvals - poly_y, color='limegreen')
+                    if method == "polynomial":
+                        plt.title("Polynomial fit residuals")
+                        plt.plot(xvals, yvals - poly_y, color='limegreen')
+                    else:
+                        plt.title("Median-filter residuals")
+                        plt.plot(xvals, yvals - smoothed_flat_profile, color='limegreen')
             
             
             plt.figure()

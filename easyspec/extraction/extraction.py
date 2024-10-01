@@ -324,7 +324,7 @@ class extraction:
         return fitted_polymodel_list
     
     
-    def extracting(self, target_spec_data, fitted_polymodel_list, master_lamp_data = None, trace_half_width = 7, shift_y_pixels = 30, diagnostic_plots = True, spec_plots = True):
+    def extracting(self, target_spec_data, fitted_polymodel_list, master_lamp_data = None, trace_half_width = 7, shift_y_pixels = 30, lamp_peak_height = None, peak_distance = None, diagnostic_plots = True, spec_plots = True):
 
         """
         This function takes the traces as input to extract one or more spectra from the image with a Gaussian-weighted model.
@@ -346,6 +346,10 @@ class extraction:
             The half-width of the trace. The spectra will be extracted within a region 2*trace_half_width around their corresponding traces.
         shift_y_pixels: integer
             Value used to shift the trace vertically by +-N pixels and repeat the extracting process to get the sky spectrum around each trace.
+        lamp_peak_height: float
+            The height of the peaks (in counts and with respect to zero) to be detected.
+        peak_distance: float
+            The minimum distance between peaks in pixels. Default is the length of the x-axis divided by 20.
         diagnostic_plots: boolean
             If True, easyspec will plot the spectral images overlaid with the target's spectral trace and corresponding sky traces.
         spec_plots: boolean
@@ -438,7 +442,11 @@ class extraction:
                 lamp_spectrum = np.array([np.average(lamp_image[int(yval)-trace_half_width:int(yval)+trace_half_width, xval],
                                         weights=model_trace_profile) for yval, xval in zip(trace_center, xvals)])
 
-                lamp_peak_positions, lamp_peak_heights = scipy.signal.find_peaks(lamp_spectrum,distance=int(len(xvals)/20),height=np.median(lamp_spectrum))
+                if lamp_peak_height is None:
+                    lamp_peak_height = np.median(lamp_spectrum)
+                if peak_distance is None:
+                    peak_distance = int(len(xvals)/20)
+                lamp_peak_positions, lamp_peak_heights = scipy.signal.find_peaks(lamp_spectrum,distance=peak_distance,height=lamp_peak_height)
                 lamp_spec_list.append(lamp_spectrum)
                 lamp_peak_positions_list.append(lamp_peak_positions)
                 lamp_peak_heights_list.append(lamp_peak_heights)
@@ -802,7 +810,7 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
             print("Input dataset not found in our library. Try using the function extraction.list_available_standards(dataset=None) to see the available datasets.")
 
 
-    def std_star_normalization(self, spec_atm_corrected_std, wavelengths_std, std_star_dataset, std_star_archive_file, smooth_window = 101, smooth_window_archive = 11, plots = True):
+    def std_star_normalization(self, spec_atm_corrected_std, wavelengths_std, std_star_dataset, std_star_archive_file, smooth_window = 101, exclude_regions = None, smooth_window_archive = 11, interpolation_order=1, plots = True):
 
         """
         This function normalizes the measured standard spectrum by its exposure time (read in the function extraction.import_data()) and
@@ -823,6 +831,8 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         smooth_window: integer
             Must be an odd number. This is the number of neighbouring wavelength bins used to extract the standard star continuum
             with a median filter.
+        exclude_regions: list
+            List of regions (in Angstroms) to be excluded from the measured standard star spectrum when extracting its continuum, e.g.: exclude_regions = [[4000,5000],[8000,8500]].
         smooth_window_archive: integer
             Must be an odd number. Same as above but for the archival spectrum.   
         plots: boolean
@@ -843,6 +853,11 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
             smooth_window = smooth_window - 1
             print(f"The input parameter 'smooth_window' must be odd. We are resetting it to {smooth_window}.")
 
+        if smooth_window_archive%2 == 0:
+            smooth_window_archive = smooth_window_archive - 1
+            print(f"The input parameter 'smooth_window_archive' must be odd. We are resetting it to {smooth_window_archive}.")
+
+        
         spec_atm_corrected_std = np.asarray(spec_atm_corrected_std)
         spec_atm_corrected_std = spec_atm_corrected_std/self.exposure_std_star  # Correcting for exposure
         smoothed_spec = medfilt(spec_atm_corrected_std, smooth_window)
@@ -854,8 +869,23 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         archival_flux = archival_flux.to(u.erg / u.cm**2 / u.s / u.AA, equivalencies=u.spectral_density(archival_wavelength))
         archival_flux_smoothed = medfilt(archival_flux, smooth_window_archive)
 
-        tck2 = interpolate.splrep(wavelengths_std.value, smoothed_spec,k=3)
-        tck = interpolate.splrep(archival_wavelength.value, archival_flux_smoothed,k=3)
+        tck = interpolate.splrep(archival_wavelength.value, archival_flux_smoothed,k=interpolation_order)
+        if exclude_regions is None:
+            tck2 = interpolate.splrep(wavelengths_std.value, smoothed_spec,k=interpolation_order)
+        else:
+            wavelengths_to_exclude = np.ones([len(wavelengths_std.value)])
+            if isinstance(exclude_regions[0],list):
+                for wavelength_region in exclude_regions:
+                    index = np.where((wavelengths_std.value > wavelength_region[0]) & (wavelengths_std.value < wavelength_region[1]))[0]
+                    wavelengths_to_exclude[index] = 0
+            elif isinstance(exclude_regions[0],float) or isinstance(exclude_regions[0],int):
+                index = np.where((wavelengths_std.value > exclude_regions[0]) & (wavelengths_std.value < exclude_regions[1]))[0]
+                wavelengths_to_exclude[index] = 0
+            else:
+                raise RuntimeError("Input value for exclude_regions is not correct. Please use one or more ranges of wavelength, like [3500,3700] or [[3800,3900],[5050,5180]].")
+            wavelengths_to_exclude = wavelengths_to_exclude.astype(bool)
+            tck2 = interpolate.splrep(wavelengths_std.value[wavelengths_to_exclude], smoothed_spec[wavelengths_to_exclude],k=interpolation_order)
+        
         archival_model = interpolate.splev(wavelengths_std.value, tck)
         measured_spec_continuum = interpolate.splev(wavelengths_std.value, tck2)
         measured_spec_continuum[measured_spec_continuum <= 0.0] = archival_model[measured_spec_continuum <= 0.0]
@@ -867,7 +897,7 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
             print(reference)
             plt.figure(figsize=(12,5)) 
             plt.plot(wavelengths_std, spec_atm_corrected_std, label="Measured std star spectrum")
-            plt.plot(wavelengths_std, smoothed_spec, label = "Std star continuum")
+            plt.plot(wavelengths_std, measured_spec_continuum, label = "Std star continuum")
             plt.xlabel(f"Wavelength [${wavelengths_std.unit}$]")
             plt.ylabel("Counts")
             plt.minorticks_on()
@@ -889,19 +919,19 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
             plt.plot(wavelengths_std, correction_factor ,color="C0",label="Archival/measured")
             plt.xlabel(f"Wavelength ({wavelengths_std.unit})")
             plt.ylabel("Correction factor")
-            plt.ylim(0,archival_flux.value.max()*1.5)
+            plt.ylim(0,np.median(correction_factor.value)*10)
             plt.minorticks_on()
             plt.title("Flux correction curve")
             plt.grid(which="both", linestyle=":")
             plt.legend()
 
             plt.figure(figsize=(12,5)) 
-            plt.plot(wavelengths_std, spec_atm_corrected_std*correction_factor,color="orange",label="Corrected-measured std star spec")
-            plt.plot(archival_wavelength, archival_flux,color="C0",label="Archival std star spec")
+            plt.plot(wavelengths_std, spec_atm_corrected_std*correction_factor,color="orange", alpha=0.8,label="Corrected-measured std star spec")
+            plt.plot(archival_wavelength, archival_flux,color="C0", alpha=0.8,label="Archival std star spec")
             plt.xlabel(f"Wavelength ({wavelengths_std.unit})")
             plt.ylabel(r"$F_{\lambda}$"+f"({archival_flux.unit})")
             plt.title("Corrected standard star spectrum")
-            plt.ylim(0,archival_flux.value.max()*1.5)
+            plt.ylim(0,archival_flux.value.max()*1.2)
             plt.minorticks_on()
             plt.grid(which="both", linestyle=":")
             plt.legend()
@@ -991,7 +1021,7 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         
             if save_spec:
                 output_directory = Path(output_directory)
-                np.savetxt(str(output_directory)+f"/spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
+                np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
 
         if plot:
             plt.show()
