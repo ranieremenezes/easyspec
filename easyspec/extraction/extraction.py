@@ -129,6 +129,8 @@ class extraction:
         else:
             print("No standard star file was found. Returning only the target image.")
             return self.target_spec_data
+    
+        self.wavelength_error_per_pixel_list = None  # To be filled with the function extraction.wavelength_calibration()
         
     def tracing(self, target_spec_data, method = "argmax", y_pixel_range = 15, xlims = None, poly_order = 2, trace_half_width = 7, peak_height = 100, distance = 50, Number_of_slices = 20, peak_dispersion_limit = 3, main_plot = True, plot_residuals = True):
 
@@ -587,7 +589,7 @@ class extraction:
             wavelengths_list.append(wavelengths)
 
             wavelength_error_per_pixel = np.sqrt(linfitter.fit_info['param_cov'][1][1])  # For polynomials with degree > 1, this error is only an approximation
-            wavelength_error_per_pixel_list.append(wavelength_error_per_pixel)
+            wavelength_error_per_pixel_list.append(wavelength_error_per_pixel*u.AA)
 
             wavelengths_fit_std = np.std(linfit_wlmodel(lamp_peak_positions)-corresponding_wavelengths)
             wavelengths_fit_std_list.append(wavelengths_fit_std)
@@ -621,6 +623,7 @@ class extraction:
         if diagnostic_plots:
             plt.show()
         
+        self.wavelength_error_per_pixel_list = wavelength_error_per_pixel_list
 
         return wavelengths_list, wavelengths_fit_std_list, wavelength_error_per_pixel_list
     
@@ -1021,7 +1024,11 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         
             if save_spec:
                 output_directory = Path(output_directory)
-                np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
+                if self.wavelength_error_per_pixel_list is None:
+                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
+                else:
+                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value, self.wavelength_error_per_pixel_list[-1].value*np.ones(len(wavelengths.value))], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom)")
+
 
         if plot:
             plt.show()
