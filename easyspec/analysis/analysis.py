@@ -415,7 +415,7 @@ class analysis:
         zerror_up = (q_84-q_50)/air_wavelength_line
         return z, zerror_down, zerror_up
 
-    def parameter_estimation(self, samples, model_name, air_wavelength_line=None, quantiles=[0.16, 0.5, 0.84], normalization = 1, parlabels=None, lambda_peak_names=None, line_names="", output_dir=".", savefile=True):
+    def parameter_estimation(self, samples, model_name, air_wavelength_line=None, quantiles=[0.16, 0.5, 0.84], normalization = 1, parlabels=None, line_names="", output_dir=".", savefile=True):
         
         """
         line_names: str or list of str
@@ -433,50 +433,24 @@ class analysis:
         
         """
         
+        if isinstance(parlabels[0],str):
+            parlabels = [parlabels]
+
         if model_name == "custom":
             if parlabels is None:
                 raise Exception("For a custom model, it is mandatory to input the list 'parlabels'.")
-            if air_wavelength_line is not None:   
-                if lambda_peak_names is None:
-                    raise Exception("For a custom model, if you want the redshift (i.e. if you give air_wavelength_line as an input), it is mandatory to input the list (or string) 'lambda_peak_names'")
-
-        # Checking the inputs lambda_peak_names and parlabels
-        if lambda_peak_names is not None:
-            if isinstance(lambda_peak_names,str):
-                lambda_peak_names = [lambda_peak_names]  # The final format of lambda_peak_names must be a list 
-            elif isinstance(lambda_peak_names,list):
-                if len(parlabels) != len(lambda_peak_names):
-                    raise Exception(f"For lambda_peak_names={lambda_peak_names}, parlabels needs to be a list containing {len(lambda_peak_names)} sublists. If e.g. npeaks=2, parlabels must be something like parlabels=[['a','b'],['c','d']]")
-            else:
-                raise Exception("Parameter lambda_peak_names should be a string or a list of strings.")
-        
-            if len(lambda_peak_names) == 1:
-                parlabels = [parlabels]  # The final format of parlabels must be a list of sublists
             
         output_dir = str(Path(output_dir))
         
-        if parlabels is None:
-            lambda_peak_names = ["lambda_peak"]
-            if model_name == "Voigt":
-                parlabels = [["lambda_peak", "Amplitude", "fwhm1", "fwhm2"]]
-            elif model_name == "Gaussian":
-                parlabels = [["lambda_peak", "Amplitude", "fwhm"]]
-            elif model_name == "Lorentz":
-                parlabels = [["lambda_peak", "Amplitude", "fwhm"]]
-            elif model_name == "doubleVoigt":
-                lambda_peak_names.append("lambda_peak2")
-                parlabels = [["lambda_peak", "Amplitude", "fwhm1", "fwhm2"], ["lambda_peak2", "Amplitude2", "fwhm1_2", "fwhm2_2"]]
-            elif model_name == "tripleVoigt":
-                lambda_peak_names.append("lambda_peak2")
-                lambda_peak_names.append("lambda_peak3")
-                parlabels = [["lambda_peak", "Amplitude", "fwhm1", "fwhm2"], ["lambda_peak2", "Amplitude2", "fwhm1_2", "fwhm2_2"], ["lambda_peak3", "Amplitude3", "fwhm1_3", "fwhm2_3"]]
-        else:
-            if not isinstance(parlabels,list):
-                raise Exception("Parameter parlabels must be a list.")
         
+        lambda_peak_names = ["Mean"]
+        if model_name[0:6] == "double":
+            lambda_peak_names.append("Mean2")
+        elif model_name[0:6] == "triple":
+            lambda_peak_names.append("Mean2")
+            lambda_peak_names.append("Mean3")
         
-
-                
+         
         # If air_wavelength_line is a number, we transform it into a list with a single element: 
         if air_wavelength_line is not None: 
             if isinstance(air_wavelength_line,float) or isinstance(air_wavelength_line,int):
@@ -510,13 +484,6 @@ class analysis:
             for j in range(ndim):  # must be done once per variable
                 q_16, q_50, q_84 = corner.quantile(samples[:,j+previous_j], quantiles)
                 dx_down, dx_up = q_50-q_16, q_84-q_50
-                if parlabels[i][j][0:9] == "Amplitude":  # If the variable is the amplitude, then we have to normalize the data
-                    par_values.append(q_50*normalization)
-                    par_values_errors.append([dx_down*normalization, dx_up*normalization])
-                else:
-                    par_values.append(q_50)
-                    par_values_errors.append([dx_down, dx_up])
-                par_names.append(parlabels[i][j])
                 # Computing the redshift of the line:
                 if parlabels[i][j] == lambda_peak_names[i] and air_wavelength_line is not None:
                     z, zerror_down, zerror_up = self.redshift_calculator(q_16,q_50,q_84,air_wavelength_line[i])
@@ -525,12 +492,26 @@ class analysis:
                     par_values.append(z)
                     par_values_errors.append([zerror_down, zerror_up])
                     par_names.append("redshift")
+                if parlabels[i][j][0:9] == "Amplitude":  # If the variable is the amplitude, then we have to normalize the data
+                    par_values.append(q_50*normalization)
+                    par_values_errors.append([dx_down*normalization, dx_up*normalization])
+                elif parlabels[i][j][0:3] == "std":  # For Gaussian fits, we convert the std to FWHM
+                    parlabels[i][j] = "fwhm_Gauss"+parlabels[i][j][3:]
+                    fwhm = q_50*2*np.sqrt(2 * np.log(2))
+                    fwhm_error_down = dx_down*2*np.sqrt(2 * np.log(2))
+                    fwhm_error_up = dx_up*2*np.sqrt(2 * np.log(2))
+                    par_values.append(fwhm)
+                    par_values_errors.append([fwhm_error_down, fwhm_error_up])
+                else:
+                    par_values.append(q_50)
+                    par_values_errors.append([dx_down, dx_up])
+                par_names.append(parlabels[i][j])
                 
                 if savefile:
                     if parlabels[i][j][0:9] == "Amplitude":
-                        f.write(f"{parlabels[i][j]}, {q_50*normalization}, {dx_down*normalization}, {dx_up*normalization}\n")
+                        f.write(f"{parlabels[i][j]}, {par_values[-1]}, {par_values_errors[-1][0]}, {par_values_errors[-1][1]}\n")
                     else:
-                        f.write(f"{parlabels[i][j]}, {q_50}, {dx_down}, {dx_up}\n")
+                        f.write(f"{parlabels[i][j]}, {par_values[-1]}, {par_values_errors[-1][0]}, {par_values_errors[-1][1]}\n")
             
             previous_j = j + previous_j + 1
             if savefile:
@@ -628,9 +609,13 @@ class analysis:
                 index_maximum_number_of_pars = n
 
         # Write header:
+        parameter_names = np.asarray(data_list[index_maximum_number_of_pars][:,0])
+        minimum_list_of_parameter_names = np.asarray(['z','Mean','Amplitude','fwhm_Lorentz','fwhm_Gauss'])
+        if len(parameter_names) < len(minimum_list_of_parameter_names):
+            parameter_names = minimum_list_of_parameter_names
         f.write("# Line name")
-        for parameter_name in data_list[index_maximum_number_of_pars][:,0]:
-            if parameter_name[0:4] == "lamb":
+        for parameter_name in parameter_names:
+            if parameter_name[0:4] == "Mean":
                 f.write(", "+parameter_name+" [Ang], "+parameter_name+"_error_down, "+parameter_name+"_error_up")
             elif parameter_name[0:4] == "Ampl":
                 f.write(", "+parameter_name+" (flux_dens - continuum) [erg cm-2 s-1 Ang-1], "+parameter_name+"_error_down, "+parameter_name+"_error_up")
@@ -646,13 +631,22 @@ class analysis:
         for i in range(len(data_list)):
 
             f.write("\n"+line_names[i])
-
             line_array = np.asarray(data_list[i])
-            if len(line_array) < maximum_number_of_pars:
-                placeholder = np.zeros([maximum_number_of_pars-len(line_array),4])
-                line_array = np.concatenate([line_array,placeholder])
-            for parameter in line_array:
-                f.write(", "+parameter[1]+", "+parameter[2]+", "+parameter[3])
+
+            for number,parameter in enumerate(line_array):
+                if parameter[0] in parameter_names:
+                    index = np.where(parameter_names == parameter[0])[0][0]
+                    if index == number:
+                        f.write(", "+parameter[1]+", "+parameter[2]+", "+parameter[3])
+                    else:
+                        f.write(", 0, 0, 0, "+parameter[1]+", "+parameter[2]+", "+parameter[3])
+                    
+                if parameter[0][0:12] == "fwhm_Lorentz":
+                    try:
+                        if line_array[number+1][0][0:10] != "fwhm_Gauss": # Here it could be different of anything. It is just a generic condition.
+                            f.write(", 0, 0, 0")
+                    except:
+                        f.write(", 0, 0, 0")
 
             if wavelength_systematic_error is not None:
                 f.write(f", {wavelength_systematic_error}, {wavelength_systematic_error/rest_frame_line_wavelengths[i]}")
@@ -690,7 +684,7 @@ class analysis:
         elif which_model == "Lorentz" or which_model == "lorentz":
             initial = np.array([observed_wavelength, peak_height, 10])
             priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150]])
-            labels = ["Mean", "Amplitude", "fwhm"]
+            labels = ["Mean", "Amplitude", "fwhm_Lorentz"]
             adopted_model = self.model_Lorentz
         elif which_model == "Voigt" or which_model == "voigt":
             initial = np.array([observed_wavelength, peak_height, 10, 10])
@@ -714,6 +708,8 @@ class analysis:
         """
         Plotar o espectro de novo + continuum_baseline + o resultado do MCMC + line_names
 
+        peak_heights: float, integer, list, or astropy.Quantity
+
         which_models: string or list of strings
 
         priors: list or list of lists
@@ -728,9 +724,22 @@ class analysis:
 
         if isinstance(wavelength_peak_positions, u.quantity.Quantity):
             wavelength_peak_positions = wavelength_peak_positions.value
+        
+        if isinstance(wavelength_peak_positions,float) or isinstance(wavelength_peak_positions,int):
+            wavelength_peak_positions = [wavelength_peak_positions]
 
         if isinstance(peak_heights, u.quantity.Quantity):
             peak_heights = peak_heights.value
+
+        if isinstance(peak_heights,float) or isinstance(peak_heights,int):
+            peak_heights = np.asarray([peak_heights])
+        elif isinstance(peak_heights,list):
+            peak_heights = np.asarray(peak_heights)
+        
+        if isinstance(line_std_deviation,float) or isinstance(line_std_deviation,int):
+            line_std_deviation = np.asarray([line_std_deviation])
+        elif isinstance(line_std_deviation,list):
+            line_std_deviation = np.asarray(line_std_deviation)
 
         if isinstance(rest_frame_line_wavelengths,float) or isinstance(rest_frame_line_wavelengths,int):
             rest_frame_line_wavelengths = [rest_frame_line_wavelengths]
@@ -753,7 +762,7 @@ class analysis:
 
         best_fit_model_list = []
         par_values_list, par_values_errors_list, par_names_list = [], [], []
-        for number, line in enumerate(rest_frame_line_wavelengths):
+        for number, _ in enumerate(rest_frame_line_wavelengths):
             if priors is None or priors[number] is None:
                 line_region_min = wavelength_peak_positions[number] - 100
                 if number > 0:
@@ -774,7 +783,6 @@ class analysis:
                 initial, _, labels, adopted_model = self.automatic_priors(which_models[number], wavelength_peak_positions[number], peak_heights[number], line_region_min, line_region_max)
                 local_priors = priors[number]
             
-
             x,y,yerr = self.data_window_selection(wavelengths.value, continuum_subtracted_flux, line_std_deviation[number]*np.ones(len(wavelengths.value)), line_region_min, line_region_max)
             data = (x, y, yerr)
             p0 = [np.array(initial) + 0.01 * np.random.randn(len(initial)) for i in range(MCMC_walkers)]  # p0 is the methodology of stepping from one place on a grid to the next.
@@ -782,15 +790,14 @@ class analysis:
             samples = sampler.flatchain
             theta_max = samples[np.argmax(sampler.flatlnprobability)]
 
-            par_values, par_values_errors, par_names = self.parameter_estimation(samples, which_models[number], air_wavelength_line = rest_frame_line_wavelengths[number], normalization=normalization, line_names=line_names[number], output_dir = output_dir, savefile=save_results)
+            par_values, par_values_errors, par_names = self.parameter_estimation(samples, which_models[number], air_wavelength_line = rest_frame_line_wavelengths[number], normalization=normalization, parlabels = list.copy(labels), line_names=line_names[number], output_dir = output_dir, savefile=save_results)
             par_values_list.append(par_values)
             par_values_errors_list.append(par_values_errors)
             par_names_list.append(par_names)
 
-
             best_fit_model = adopted_model(theta_max, x)
 
-            # Work in progress:
+            # Work in progress: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             best_fit_model_list.append(best_fit_model)
 
             if plot_MCMC:
@@ -808,13 +815,13 @@ class analysis:
 
                 self.quick_plot(x,y,model_name=which_models[number],sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=normalization, hair_color="grey",title=self.target_name+" - "+line_names[number], ylabel="F$_{\lambda}$ ["+f"{flux_density.unit}]")
 
-        # Work in progress:
-        redshifts = np.asarray(par_values_list)
-        average_redshift = np.average(redshifts[:,1])
-        std_redshift = np.std(redshifts[:,1])
+        # Work in progress: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        """redshifts = np.asarray(par_values_list, dtype=object) # The dtype option here is usefull because our par_values can have different sizes
+        average_redshift = np.average(redshifts[:,0])
+        std_redshift = np.std(redshifts[:,0])
         # Usar o redshift medio pra plotar as linhas do arquivo astro_lines.dat
         print("Average redshift: ",average_redshift)
-        print("Std dev: ",std_redshift)
+        print("Std dev: ",std_redshift)"""
         
         if plot_spec:
             pass
