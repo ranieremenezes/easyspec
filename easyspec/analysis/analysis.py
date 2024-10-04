@@ -13,7 +13,7 @@ import time
 import warnings
 from matplotlib.ticker import AutoMinorLocator
 from scipy import interpolate
-from easyspec.cleaning import cleaning
+from easyspec.extraction import extraction
 from astropy.modeling.polynomial import Polynomial1D
 from astropy.modeling.fitting import LinearLSQFitter, LevMarLSQFitter
 from astropy import units as u
@@ -24,6 +24,8 @@ import os
 
 OS_name = platform.system()
 plt.rcParams.update({'font.size': 12})
+libpath = Path(__file__).parent.resolve() / Path("lines")
+extraction = extraction()
 
 
 easyspec_analysis_version = "1.0.0"
@@ -102,7 +104,7 @@ class analysis:
 
         return continuum_selection, continuum_std_deviation
         
-    def load_calibrated_data(self, calibrated_spec_data, target_name = None, plot = True):
+    def load_calibrated_data(self, calibrated_spec_data, target_name = None, output_dir = "./",  plot = True):
 
         """
         
@@ -119,6 +121,8 @@ class analysis:
         target_spec_data: numpy.ndarray (float)
             Matrix containing the target spectral image.
         """
+
+        self.output_dir = str(Path(output_dir))
 
         if target_name is None:
             target_name = calibrated_spec_data.split(".")[-1]
@@ -142,7 +146,7 @@ class analysis:
 
         return wavelengths, flux_density, wavelength_systematic_error
 
-    def find_lines(self, wavelengths, flux_density, line_type="emission", line_significance_sigma = 5, peak_distance = 30, peak_width = 10, method = "median_filter", continuum_regions = None, pl_order=2, smooth_window=111, plot_lines = True, plot_regions = True):
+    def find_lines(self, wavelengths, flux_density, line_type="emission", line_significance_sigma = 5, peak_distance = 30, peak_width = 10, method = "median_filter", continuum_regions = None, pl_order=2, smooth_window=111, plot_lines = True, plot_regions = True, save_plot = False):
 
         """
         Use a line library like https://astronomy.nmsu.edu/drewski/tableofemissionlines.html, ou MELHOR: astroquery.nist
@@ -245,6 +249,9 @@ class analysis:
             plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
             plt.title(self.target_name)
             plt.legend()
+            plt.tight_layout()
+            if save_plot:
+                plt.savefig(self.output_dir+f"/{self.target_name}_line_wavelengths.pdf",bbox_inches='tight')
         
         if plot_lines or plot_regions:
             plt.show()
@@ -702,8 +709,8 @@ class analysis:
 
 
     def fit_lines(self, wavelengths, flux_density, continuum_baseline, wavelength_peak_positions, rest_frame_line_wavelengths, peak_heights, line_std_deviation,
-                  which_models, wavelength_systematic_error = None, line_names = None, priors = None, MCMC_walkers = 250, MCMC_iterations = 400, N_cores = 1, output_dir = "./",
-                  plot_spec = True, plot_MCMC = False, save_results = True):
+                  which_models, wavelength_systematic_error = None, line_names = None, overplot_archival_lines = ["H"], priors = None, MCMC_walkers = 250,
+                  MCMC_iterations = 400, N_cores = 1, plot_spec = True, plot_MCMC = False, save_results = True):
 
         """
         Plotar o espectro de novo + continuum_baseline + o resultado do MCMC + line_names
@@ -715,6 +722,9 @@ class analysis:
         priors: list or list of lists
             You can even do for a single line, e.g., let's suppose we are analysing 4 lines but want specific priors only for the third one: [None, None,[[4500,4600],[1,10],[2,15]], None]
 
+        overplot_archival_lines: list (strings)
+            List with the strings corresponding to different elements. E.g.: ["H","He"] will overplot all the Hydrogen and Helium lines redshifted based on the average
+            redshift of the lines given in wavelength_peak_positions. If you don't want to overplot lines, use overplot_archival_lines = None.
         Returns
         -------
 
@@ -790,7 +800,7 @@ class analysis:
             samples = sampler.flatchain
             theta_max = samples[np.argmax(sampler.flatlnprobability)]
 
-            par_values, par_values_errors, par_names = self.parameter_estimation(samples, which_models[number], air_wavelength_line = rest_frame_line_wavelengths[number], normalization=normalization, parlabels = list.copy(labels), line_names=line_names[number], output_dir = output_dir, savefile=save_results)
+            par_values, par_values_errors, par_names = self.parameter_estimation(samples, which_models[number], air_wavelength_line = rest_frame_line_wavelengths[number], normalization=normalization, parlabels = list.copy(labels), line_names=line_names[number], output_dir = self.output_dir, savefile=save_results)
             par_values_list.append(par_values)
             par_values_errors_list.append(par_values_errors)
             par_names_list.append(par_names)
@@ -798,7 +808,7 @@ class analysis:
             best_fit_model = adopted_model(theta_max, x)
 
             # Work in progress: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            best_fit_model_list.append(best_fit_model)
+            best_fit_model_list.append(best_fit_model) #Pad the rest with zeros and them sum them to the continuum to do the plot
 
             if plot_MCMC:
                 corner.corner(
@@ -815,22 +825,85 @@ class analysis:
 
                 self.quick_plot(x,y,model_name=which_models[number],sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=normalization, hair_color="grey",title=self.target_name+" - "+line_names[number], ylabel="F$_{\lambda}$ ["+f"{flux_density.unit}]")
 
-        # Work in progress: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        """redshifts = np.asarray(par_values_list, dtype=object) # The dtype option here is usefull because our par_values can have different sizes
+        redshifts = np.asarray(par_values_list, dtype=object) # The dtype option here is usefull because our par_values can have different sizes
         average_redshift = np.average(redshifts[:,0])
-        std_redshift = np.std(redshifts[:,0])
-        # Usar o redshift medio pra plotar as linhas do arquivo astro_lines.dat
-        print("Average redshift: ",average_redshift)
-        print("Std dev: ",std_redshift)"""
+        std_redshift = np.std(redshifts[:,0])        
         
         if plot_spec:
-            pass
+            if overplot_archival_lines is not None:
+                print("Archival lines are taken from NIST Atomic Spectra database: https://www.nist.gov/pml/atomic-spectra-database")
+                print("We adopt vacuum wavelengths for lines with wavelengths < 2000 Angstroms and air wavelengths for lines with wavelengths > 2000 Angstroms.")
+                print("If you use these lines in your research, please cite the NIST Atomic Spectra database appropriately.")
+                archival_lines = np.loadtxt(str(libpath)+"/astro_lines.dat",dtype=str,delimiter=",")
+                archival_wavelengths = archival_lines[:,0].astype(float)
+                archival_wavelengths = archival_wavelengths*average_redshift + archival_wavelengths # correcting for the redshift
+                archival_line_names = archival_lines[:,1]
+                index = np.where((archival_wavelengths > wavelengths.value.min()) & (archival_wavelengths < wavelengths.value.max()))[0]  # Index to select the lines within our wavelength range
+                archival_wavelengths = archival_wavelengths[index]
+                archival_line_names = archival_line_names[index]
+                index = []  # Index to select only the desired elements
+                for n,element in enumerate(archival_line_names):
+                    element_string = element.split("_")[0]
+                    if element_string[0] == "[":
+                        element_string = element_string[1:]
+                    if element_string in overplot_archival_lines:
+                        split_name = archival_line_names[n].split("_")
+                        if len(split_name) == 3:
+                            archival_line_names[n] = split_name[0]+" "+split_name[1]+fr"$\{split_name[2]}$"
+                        else:
+                            archival_line_names[n] = split_name[0]+split_name[1]
+                        index.append(n)
+                    
+                archival_wavelengths = archival_wavelengths[index]
+                archival_line_names = archival_line_names[index]
+
+
+            plt.figure(figsize=(12,5))
+            if overplot_archival_lines is not None:
+                for number, line in enumerate(archival_wavelengths):
+                    text_line_index = extraction.find_nearest(wavelengths.value, line)
+                    if archival_line_names[number][0:2] == "H " or archival_line_names[number][0:2] == "He":
+                        color = "C0"
+                        step = 1.1
+                    elif archival_line_names[number][0] == "O" or archival_line_names[number][0:2] == "[O":
+                        color = "C2"
+                        step = 1.22
+                    elif archival_line_names[number][0] == "N" or archival_line_names[number][0:2] == "[N":
+                        color = "C3"
+                        step = 1.4
+                    elif archival_line_names[number][0] == "S" or archival_line_names[number][0:2] == "[S":
+                        color = "C4"
+                        step = 1.6
+                    else:
+                        color = "black"
+                        step = 1.1
+                    plt.text(line-35, step*flux_density.value.max(), archival_line_names[number],rotation=90,fontsize=9,color=color)
+                    plt.vlines(line, flux_density.value[text_line_index], 0.98*step*flux_density.value.max(), color=color, linewidth=0.8,alpha=0.5)
+
+            plt.plot(wavelengths,continuum_baseline,label="Continuum")
+            plt.plot(wavelengths, flux_density, color='orange')
+            plt.minorticks_on()
+            plt.grid(which="both",linestyle=":")
+            plt.xlim(wavelengths.value.min(),wavelengths.value.max())
+            plt.ylim(0,flux_density.value.max()*2)
+            plt.ylabel("F$_{\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
+            plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
+            plt.title(self.target_name+" - $z_{av} = $"+f"{round(average_redshift,7)}, $\sigma_z = {round(std_redshift,7)}$")
+            plt.legend()
+            plt.tight_layout()
+            if save_results:
+                plt.savefig(self.output_dir+f"/{self.target_name}_spec.pdf",bbox_inches='tight')
+
+
 
         if save_results:
-            self.merge_fit_results(self.target_name,list_of_files=None, wavelength_systematic_error=wavelength_systematic_error.value, rest_frame_line_wavelengths = rest_frame_line_wavelengths,output_dir=output_dir)
-            list_of_files = glob.glob(output_dir+"/*_line_fit_results.csv")
+            self.merge_fit_results(self.target_name,list_of_files=None, wavelength_systematic_error=wavelength_systematic_error.value, rest_frame_line_wavelengths = rest_frame_line_wavelengths,output_dir=self.output_dir)
+            list_of_files = glob.glob(self.output_dir+"/*_line_fit_results.csv")
             for file in list_of_files:
                 os.remove(file)
+        
+        if plot_spec or plot_MCMC:
+            plt.show()
 
         return line_names, par_values_list, par_values_errors_list, par_names_list
     
@@ -843,11 +916,10 @@ We could compute this with our model, assuming our continuum is flat (has zero s
 
 EQW =  -absorption_fit(wavelengths.value[selection]).sum() / continuum_fit.intercept * u.nm
 
-Compute velocity dispersion
+Function to compute velocity dispersion, Integrated flux for each line, and EQW
 
 Double and triple lines
 
-Integrated flux for each line
-
+Plot archival spectral lines
 Fine tune for absorption lines! Ou ja ta de boa? Acho que sim. Bora testar.
 """
