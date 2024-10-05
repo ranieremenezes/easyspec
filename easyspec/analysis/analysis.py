@@ -205,13 +205,20 @@ class analysis:
                 peak_position_index = np.concatenate([peak_position_index, local_peak_position_index + index.min()])
                 line_significance = np.concatenate([line_significance,local_peak_heights["peak_heights"]/std_deviation])
                 line_std_deviation = np.concatenate([line_std_deviation, std_deviation*np.ones(len(local_peak_position_index))])
+                try:
+                    _ = peak_heights.max()
+                except:
+                    raise RuntimeError("No emission line was found. Make sure you set the input variable line_type='emission'.")
             elif line_type == "absorption":
                 local_peak_position_index, local_peak_heights = scipy.signal.find_peaks(-1*continuum_removed_flux,height=peak_height,distance = peak_distance, width = peak_width)
                 peak_heights = np.concatenate([peak_heights,-1*local_peak_heights["peak_heights"]])
                 peak_position_index = np.concatenate([peak_position_index, local_peak_position_index + index.min()])
                 line_significance = np.concatenate([line_significance,local_peak_heights["peak_heights"]/std_deviation])
                 line_std_deviation = np.concatenate([line_std_deviation, std_deviation*np.ones(len(local_peak_position_index))])
-                ylim_min = peak_heights.max()
+                try:
+                    ylim_min = peak_heights.max()
+                except:
+                    raise RuntimeError("No absorption line was found. Make sure you set the input variable line_type='absorption'.")
             else:
                 raise RuntimeError("The input options for the line_type variable are 'emission' or 'absorption'.")
         
@@ -226,10 +233,10 @@ class analysis:
             if len(peak_position_index) > 0:
                 if line_type == "emission":
                     for number, peak_wavelength in enumerate(wavelength_peak_positions.value):
-                        plt.text(peak_wavelength-35, peak_heights.value[number] + 0.05*peak_heights.value.max(), str(round(peak_wavelength,3))+"$\AA$",rotation=90,fontsize=10)
+                        plt.text(peak_wavelength, peak_heights.value[number] + 0.05*peak_heights.value.max(), str(round(peak_wavelength,3))+"$\AA$",rotation=90,fontsize=10, horizontalalignment="center", verticalalignment="bottom")
                 else:
                     for number, peak_wavelength in enumerate(wavelength_peak_positions.value):
-                        plt.text(peak_wavelength-35, peak_heights.value[number] - 0.05*peak_heights.value.min(),str(round(peak_wavelength,3))+"$\AA$",rotation=90,fontsize=10, horizontalalignment="left")
+                        plt.text(peak_wavelength, peak_heights.value[number] - 0.05*peak_heights.value.min(),str(round(peak_wavelength,3))+"$\AA$",rotation=90,fontsize=10, horizontalalignment="center", verticalalignment="top")
             
             if method != "median_filter":
                 plt.plot(wavelengths,continuum_baseline,label="Power-law continuum")
@@ -527,7 +534,7 @@ class analysis:
         return par_values, par_values_errors, par_names
 
 
-    def quick_plot(self, x,y,model_name, custom_function=None, sampler=None, best_fit_model=None, theta_max=None, normalization= 1, hair_color="grey", title="",xlabel="Observed $\lambda$ [$\AA$]",ylabel="F$_{\lambda}$ [erg cm$^{-2}$ s$^{-1}$ $\AA^{-1}$ ]",savefig=True):
+    def quick_plot(self, x,y,model_name, custom_function=None, sampler=None, best_fit_model=None, theta_max=None, normalization= 1, hair_color="grey", title="",xlabel="Observed $\lambda$ [$\AA$]",ylabel="F$_{\lambda}$ [erg cm$^{-2}$ s$^{-1}$ $\AA^{-1}$ ]",savefig=True, outputdir="./"):
         
         """
         theta_max: numpy.ndarray
@@ -581,7 +588,7 @@ class analysis:
                 plt.vlines(theta_max[0],y.min()-0.1*y.max(),10000, colors="k", linewidth=0.5)
         plt.legend()
         if savefig:
-            plt.savefig(title+"_line.png")
+            plt.savefig(outputdir+"/"+title+"_line.png")
         return
 
     def merge_fit_results(self, target_name,list_of_files=None, wavelength_systematic_error = None, rest_frame_line_wavelengths = None, output_dir="./"):
@@ -644,9 +651,9 @@ class analysis:
                 if parameter[0] in parameter_names:
                     index = np.where(parameter_names == parameter[0])[0][0]
                     if index == number:
-                        f.write(", "+parameter[1]+", "+parameter[2]+", "+parameter[3])
+                        f.write(", "+parameter[1]+", "+str(np.abs(float(parameter[2])))+", "+str(np.abs(float(parameter[3]))))
                     else:
-                        f.write(", 0, 0, 0, "+parameter[1]+", "+parameter[2]+", "+parameter[3])
+                        f.write(", 0, 0, 0, "+parameter[1]+", "+str(np.abs(float(parameter[2])))+", "+str(np.abs(float(parameter[3]))))
                     
                 if parameter[0][0:12] == "fwhm_Lorentz":
                     try:
@@ -765,14 +772,24 @@ class analysis:
             for number, _ in enumerate(rest_frame_line_wavelengths): 
                 line_names.append(f"line_{number}")
 
-        normalization = 10**round(np.log10(np.median(flux_density.value)))
-        continuum_subtracted_flux = (flux_density.value - continuum_baseline)/normalization
-        peak_heights = peak_heights/normalization
-        line_std_deviation = line_std_deviation/normalization
+
+        local_continuum_index = []
+        for wavelength in wavelength_peak_positions:
+            local_continuum_index.append(extraction.find_nearest(wavelengths.value, wavelength))
+        peak_heights = peak_heights - continuum_baseline[local_continuum_index]
+        normalization = 10**round(np.log10(np.median(flux_density.value - 0.9*continuum_baseline)))
 
         best_fit_model_list = []
         par_values_list, par_values_errors_list, par_names_list = [], [], []
-        for number, _ in enumerate(rest_frame_line_wavelengths):
+        for number, peak_height in enumerate(peak_heights):
+            invert_spectrum = 1  # For emission lines, the spectrum is multiplied by 1. For absorption lines, it is multiplied by -1
+            if peak_height < 0:
+                invert_spectrum = -1
+            local_normalization = invert_spectrum*normalization
+            continuum_subtracted_flux = (flux_density.value - continuum_baseline)/local_normalization
+            peak_height = peak_height/local_normalization
+            local_line_std_deviation = line_std_deviation[number]/local_normalization
+
             if priors is None or priors[number] is None:
                 line_region_min = wavelength_peak_positions[number] - 100
                 if number > 0:
@@ -787,20 +804,22 @@ class analysis:
                         line_region_max = mean_point
                 
 
-                initial, local_priors, labels, adopted_model = self.automatic_priors(which_models[number], wavelength_peak_positions[number], peak_heights[number], line_region_min, line_region_max)
+                initial, local_priors, labels, adopted_model = self.automatic_priors(which_models[number], wavelength_peak_positions[number], peak_height, line_region_min, line_region_max)
             else:
                 # Better define line_regions in this CASE!!!
-                initial, _, labels, adopted_model = self.automatic_priors(which_models[number], wavelength_peak_positions[number], peak_heights[number], line_region_min, line_region_max)
+                initial, _, labels, adopted_model = self.automatic_priors(which_models[number], wavelength_peak_positions[number], peak_height, line_region_min, line_region_max)
                 local_priors = priors[number]
             
-            x,y,yerr = self.data_window_selection(wavelengths.value, continuum_subtracted_flux, line_std_deviation[number]*np.ones(len(wavelengths.value)), line_region_min, line_region_max)
+            x,y,yerr = self.data_window_selection(wavelengths.value, continuum_subtracted_flux, local_line_std_deviation*np.ones(len(wavelengths.value)), line_region_min, line_region_max)
             data = (x, y, yerr)
             p0 = [np.array(initial) + 0.01 * np.random.randn(len(initial)) for i in range(MCMC_walkers)]  # p0 is the methodology of stepping from one place on a grid to the next.
             sampler, pos, prob, state = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, which_models[number], ncores=N_cores)
             samples = sampler.flatchain
             theta_max = samples[np.argmax(sampler.flatlnprobability)]
 
-            par_values, par_values_errors, par_names = self.parameter_estimation(samples, which_models[number], air_wavelength_line = rest_frame_line_wavelengths[number], normalization=normalization, parlabels = list.copy(labels), line_names=line_names[number], output_dir = self.output_dir, savefile=save_results)
+            par_values, par_values_errors, par_names = self.parameter_estimation(samples, which_models[number], air_wavelength_line = rest_frame_line_wavelengths[number],
+                                                                                 normalization=local_normalization, parlabels = list.copy(labels), line_names=line_names[number],
+                                                                                 output_dir = self.output_dir, savefile=save_results)
             par_values_list.append(par_values)
             par_values_errors_list.append(par_values_errors)
             par_names_list.append(par_names)
@@ -823,7 +842,8 @@ class analysis:
 
                 self.parameter_time_series(initial, sampler, labels)
 
-                self.quick_plot(x,y,model_name=which_models[number],sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=normalization, hair_color="grey",title=self.target_name+" - "+line_names[number], ylabel="F$_{\lambda}$ ["+f"{flux_density.unit}]")
+                self.quick_plot(x,y,model_name=which_models[number],sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=local_normalization,
+                                hair_color="grey",title=self.target_name+" - "+line_names[number], ylabel="F$_{\lambda}$ ["+f"{flux_density.unit}]", outputdir = self.output_dir)
 
         redshifts = np.asarray(par_values_list, dtype=object) # The dtype option here is usefull because our par_values can have different sizes
         average_redshift = np.average(redshifts[:,0])
@@ -877,7 +897,7 @@ class analysis:
                     else:
                         color = "black"
                         step = 1.1
-                    plt.text(line-35, step*flux_density.value.max(), archival_line_names[number],rotation=90,fontsize=9,color=color)
+                    plt.text(line-35, step*flux_density.value.max(), archival_line_names[number],rotation=90,fontsize=9,color=color, horizontalalignment="center")
                     plt.vlines(line, flux_density.value[text_line_index], 0.98*step*flux_density.value.max(), color=color, linewidth=0.8,alpha=0.5)
 
             plt.plot(wavelengths,continuum_baseline,label="Continuum")
@@ -897,7 +917,8 @@ class analysis:
 
 
         if save_results:
-            self.merge_fit_results(self.target_name,list_of_files=None, wavelength_systematic_error=wavelength_systematic_error.value, rest_frame_line_wavelengths = rest_frame_line_wavelengths,output_dir=self.output_dir)
+            self.merge_fit_results(self.target_name,list_of_files=None, wavelength_systematic_error=wavelength_systematic_error.value,
+                                   rest_frame_line_wavelengths = rest_frame_line_wavelengths,output_dir=self.output_dir)
             list_of_files = glob.glob(self.output_dir+"/*_line_fit_results.csv")
             for file in list_of_files:
                 os.remove(file)
@@ -920,6 +941,5 @@ Function to compute velocity dispersion, Integrated flux for each line, and EQW
 
 Double and triple lines
 
-Plot archival spectral lines
 Fine tune for absorption lines! Ou ja ta de boa? Acho que sim. Bora testar.
 """
