@@ -130,7 +130,7 @@ class extraction:
             print("No standard star file was found. Returning only the target image.")
             return self.target_spec_data
     
-        self.wavelength_error_per_pixel_list = None  # To be filled with the function extraction.wavelength_calibration()
+        self.wavelengths_fit_std_list = None  # To be filled with the function extraction.wavelength_calibration()
         
     def tracing(self, target_spec_data, method = "argmax", y_pixel_range = 15, xlims = None, poly_order = 2, trace_half_width = 7, peak_height = 100, distance = 50, Number_of_slices = 20, peak_dispersion_limit = 3, main_plot = True, plot_residuals = True):
 
@@ -532,7 +532,7 @@ class extraction:
             return spec_list, lamp_spec_list, lamp_peak_positions_list
 
 
-    def wavelength_calibration(self, lamp_peak_positions_list, corresponding_wavelengths, unit = "angstrom", poly_order = 2, diagnostic_plots = True):
+    def wavelength_calibration(self, lamp_peak_positions_list, corresponding_wavelengths, poly_order = 2, diagnostic_plots = True):
 
         """
         This function takes the list of lamp spectral peak positions (in pixels) and their corresponding wavelengths, and returns a list with
@@ -549,10 +549,8 @@ class extraction:
             This is one of the outputs from function extraction.extracting(). It contains the positions (in pixels) of all peaks in the lamp
             spectra with heights above the spectrum median. 
         corresponding_wavelengths: list
-            List with wavelengths corresponding to each peak given in lamp_peak_positions_list. Even if the peak positions are slightly different
+            List with wavelengths (in *Angstroms*) corresponding to each peak given in lamp_peak_positions_list. Even if the peak positions are slightly different
             for different traces, a single list with the corresponding wavelengths will do the job here.
-        unit: string
-            It can be any length unit accepted by astropy. Typically we use 'angstrom' or 'nanometer'.
         poly_order: integer
             The order of the polynomial used to find the wavelength solution.
         diagnostic_plots: boolean
@@ -564,9 +562,6 @@ class extraction:
             List with the wavelength solutions for each given spectrum.
         wavelengths_fit_std_list: list
             The standard deviation of the data points with respect to the wavelength solution for each given spectrum.
-        wavelength_error_per_pixel_list: list
-            The wavelength error per pixel for each given spectrum. This estimate is precise for a straight-line trace. For curved traces, it can
-            be used as a rough estimate of the error.
         """
 
         try:
@@ -575,21 +570,16 @@ class extraction:
             raise NameError("The variable self.image_shape does not exist. Please load your data with the function extraction.import_data() to avoid this issue.")
 
 
-        wavelengths_list, wavelengths_fit_std_list, wavelength_error_per_pixel_list = [], [], []
+        wavelengths_list, wavelengths_fit_std_list = [], []
         linfitter = LevMarLSQFitter()
         wlmodel = Polynomial1D(degree=poly_order)
 
         for number,lamp_peak_positions in enumerate(lamp_peak_positions_list):
             linfit_wlmodel = linfitter(model=wlmodel, x=lamp_peak_positions, y=corresponding_wavelengths)
             xrange = np.asarray(range(self.image_shape[1]))
-            lcls = locals()
-            exec( f"unit = u.{unit}", globals(), locals() )
-            unit = lcls["unit"]
+            unit = u.AA
             wavelengths = linfit_wlmodel(xrange) * unit
             wavelengths_list.append(wavelengths)
-
-            wavelength_error_per_pixel = np.sqrt(linfitter.fit_info['param_cov'][1][1])  # For polynomials with degree > 1, this error is only an approximation
-            wavelength_error_per_pixel_list.append(wavelength_error_per_pixel*u.AA)
 
             wavelengths_fit_std = np.std(linfit_wlmodel(lamp_peak_positions)-corresponding_wavelengths)
             wavelengths_fit_std_list.append(wavelengths_fit_std)
@@ -597,11 +587,10 @@ class extraction:
             if diagnostic_plots:
                 print(f"Spectrum {number}:")
                 print(f"Fit standard deviation = {wavelengths_fit_std} {str(unit)}")
-                print("Wavelength error per pixel (linear approximation): ", wavelength_error_per_pixel, f"{unit}/pixel")
 
                 plt.figure(figsize=(12,5))
                 plt.plot(lamp_peak_positions, corresponding_wavelengths, 'o')
-                plt.plot(xrange, wavelengths, '-',label=f"Wavelength solution\nError = {round(wavelength_error_per_pixel,5)} {unit}/pixel")
+                plt.plot(xrange, wavelengths, '-',label="Wavelength solution")
                 plt.ylabel(f"$\lambda(x)$ [{str(unit)}]")
                 plt.xlabel("x (pixels)")
                 plt.title(f"Wavelength solution - spectrum {number}")
@@ -623,9 +612,9 @@ class extraction:
         if diagnostic_plots:
             plt.show()
         
-        self.wavelength_error_per_pixel_list = wavelength_error_per_pixel_list
+        self.wavelengths_fit_std_list = wavelengths_fit_std_list
 
-        return wavelengths_list, wavelengths_fit_std_list, wavelength_error_per_pixel_list
+        return wavelengths_list, wavelengths_fit_std_list
     
     def extinction_correction(self, spec_list, wavelengths_list, observatory, data_type, custom_observatory = None, spline_order = 1, plots = True):
 
@@ -980,7 +969,7 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         Returns
         -------
         calibrated_flux_list: list
-            This is a list with the spectra calibrated in flux.
+            This is a list with the spectra calibrated in flux density.
         """
 
         if Rv is None:
@@ -1024,10 +1013,10 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         
             if save_spec:
                 output_directory = Path(output_directory)
-                if self.wavelength_error_per_pixel_list is None:
+                if self.wavelengths_fit_std_list is None:
                     np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
                 else:
-                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value, self.wavelength_error_per_pixel_list[-1].value*np.ones(len(wavelengths.value))], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom)")
+                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value, self.wavelengths_fit_std_list[-1]*np.ones(len(wavelengths.value))], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom)")
 
 
         if plot:

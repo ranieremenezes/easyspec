@@ -42,24 +42,30 @@ class analysis:
     def continuum_fit(self,flux, wavelengths, continuum_regions, method = "powerlaw", pl_order=2, smooth_window=111):
     
         """
-        This function fits the continuum emission with an spline or a power law. For a spline, it can also smooth the continuum if requested.
+        This function fits the continuum emission with an spline or a power law.
 
         Parameters
         ----------
         flux: array (float)
-            Array with the flux to be fitted and (if spline is chosen) smoothed. 
+            Array with the flux density to be fitted and (if spline is chosen) smoothed. 
         wavelengths: array (float)
             Wavelength must be in absolute values, i.e. without units.
-        continuum_regions: list of intervals (float)
+        continuum_regions: list (float)
             The continuum will be computed only within these wavelength regions and then extrapolated everywhere else. E.g.: continuum_regions = [[3000,6830],[6930,7500]].
-            If None, then all the wavelengths will be used.
+            If None, then all the wavelength range will be used.
+        method: string
+            This is the desired method to compute the continuum. Options are 'powerlaw' (or 'pl') and "median_filter".
+            The 'powerlaw' method is better in case you have large emission/absorption lines. The method "median_filter" is excellent
+            for extracting the continuum of a spectrum with narrow emission/absorption lines.
         pl_order: int
-            Polynomial order for the power law fit.
+            Polynomial order for the power law fit. Used only if input variable method="powerlaw" (or "pl").
+        smooth_window: int
+            This is the size of the smooth window for the "median_filter" method. This number must be odd.
 
         Returns
         -------
         continuum_selection: array (float)
-            Array with the continuum flux.
+            Array with the continuum flux density.
         continuum_std_deviation: float
             The standard deviation for the continuum.
         """
@@ -107,19 +113,26 @@ class analysis:
     def load_calibrated_data(self, calibrated_spec_data, target_name = None, output_dir = "./",  plot = True):
 
         """
-        
-        calibrated_spec_data: pode ser o endereco, uma lista de enderecos, ou os dados obtidos em extraction.
+        This function loads the spectral calibrated data. Preferentially, you should use the file 'TARGETNAME_spec_X.dat' generated
+        with easyfermi function 'extraction.target_flux_calibration()'.
 
         Parameters
         ----------
-        target_spec_file: string 
-            The path to the data '.fits' or '.fit' file containing the target spectrum.
-
+        calibrated_spec_data: string 
+            The path to the data '.dat' file containing the calibrated spectrum.
+        target_name: string
+            Optional. This name will be used in all subsequent plots.
+        output_dir: string
+            A string with the path to the output directory. 
+        plot: boolean
+            If True, the spectrum will be shown.  
 
         Returns
         -------
-        target_spec_data: numpy.ndarray (float)
-            Matrix containing the target spectral image.
+        wavelengths: numpy.ndarray (astropy.units Angstrom)
+            The wavelength solution for the given spectrum
+        flux_density: numpy.ndarray (astropy.units erg/cm2/s/A)
+            The calibrated spectrum in flux density.
         """
 
         self.output_dir = str(Path(output_dir))
@@ -144,30 +157,60 @@ class analysis:
             plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
             plt.show()
 
-        return wavelengths, flux_density, wavelength_systematic_error
+        self.wavelength_systematic_error = wavelength_systematic_error
 
-    def find_lines(self, wavelengths, flux_density, line_type="emission", line_significance_sigma = 5, peak_distance = 30, peak_width = 10, method = "median_filter", continuum_regions = None, pl_order=2, smooth_window=111, plot_lines = True, plot_regions = True, save_plot = False):
+        return wavelengths, flux_density
+
+    def find_lines(self, wavelengths, flux_density, line_significance_sigma = 5, peak_distance = 30, peak_width = 10, method = "median_filter", continuum_regions = None,
+                   pl_order=2, smooth_window=111, plot_lines = True, plot_regions = True, save_plot = False):
 
         """
-        Use a line library like https://astronomy.nmsu.edu/drewski/tableofemissionlines.html, ou MELHOR: astroquery.nist
-        
+        This function will find all emission/absorption lines with significance above 'line_significance_sigma' with respect to the local continuum.
 
         Parameters
         ----------
+        wavelengths: numpy.ndarray (astropy.units Angstrom)
+            The wavelength solution for the given spectrum.
+        flux_density: numpy.ndarray (astropy.units erg/cm2/s/A)
+            The calibrated spectrum in flux density.
         line_significance_sigma: float
             Defines how many standard deviations above the continuum the line peak must be in order to be detected.
+        peak_distance: float
+            The minimal distance (data bins, not in Angstroms) between peaks (>=1).
+        peak_width: float
+            Minimum required width of peaks in data bins. The number of data bins is equal to the number of pixels in the reduced spectral image.
+        method: string
+            This is the desired method to compute the continuum. Options are 'powerlaw' (or 'pl') and "median_filter".
+            The 'powerlaw' method is better in case you have large emission/absorption lines. The method "median_filter" is excellent
+            for extracting the continuum of a spectrum with narrow emission/absorption lines.
+        continuum_regions: list (float)
+            The continuum will be computed only within these wavelength regions and then extrapolated everywhere else. E.g.: continuum_regions = [[3000,6830],[6930,7500]].
+            If None, then all the wavelength range will be used.
+        pl_order: int
+            Polynomial order for the power law fit. Used only if input variable method="powerlaw" (or "pl").
+        smooth_window: int
+            This is the size of the smooth window for the "median_filter" method. This number must be odd.
+        plot_lines: boolean
+            If True, the spectrum and all detected lines will be shown.
+        plot_regions: boolean
+            If True, the spectrum will be plotted in multiple regions (assuming continuum_regions is not None). For each one of these regions,
+            the noise is independently estimated from the local continuum.
+        save_plot: boolean
+            If True, the spectrum plot will be saved in the output directory defined in analysis.load_calibrated_data().
 
         Returns
         -------
-        target_spec_data: numpy.ndarray (float)
-            Matrix containing the target spectral image.
-
+        continuum_baseline: numpy.ndarray (float)
+            An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A.
+        line_std_deviation: numpy.ndarray (float)
+            The standard deviation for the local continuum. Line significance is calculated with respect to this value.
+        wavelength_peak_positions: numpy.ndarray (astropy.units Angstrom)
+            The position of each peak in Angstroms.
+        peak_heights: numpy.ndarray (astropy.units erg/cm2/s/A)
+            The height of each peak in erg/cm2/s/A
         line_significance: array (floats)
             The line significance with respect to the local continuum standard deviation.
         """
-
-        if isinstance(continuum_regions[0],float) or isinstance(continuum_regions[0],int):
-            continuum_regions = [continuum_regions]
 
         continuum_baseline, continuum_std_deviation = self.continuum_fit(flux_density.value, wavelengths.value, method = method, continuum_regions = continuum_regions, pl_order = pl_order, smooth_window = smooth_window) 
         
@@ -175,6 +218,7 @@ class analysis:
         peak_position_index = np.asarray([])
         line_significance = np.asarray([])
         line_std_deviation = np.asarray([])
+        line_position = []
         if plot_regions:
             plt.figure(figsize=(12,4))
             plt.ylabel("F$_{\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
@@ -185,6 +229,7 @@ class analysis:
             plt.xlim(wavelengths.value.min(),wavelengths.value.max())
 
         # Below we do a loop over the values of standard deviation for the selected continuum regions. The line significance is estimated based on the standard deviation of the closest continuum region.
+        ylim_min = 0
         for number,std_deviation in enumerate(continuum_std_deviation):
             peak_height = line_significance_sigma*std_deviation
             if number == 0:
@@ -199,30 +244,30 @@ class analysis:
             continuum_removed_flux = flux_density.value[index]-continuum_baseline[index]
             if plot_regions:
                 plt.plot(wavelengths.value[index], continuum_removed_flux) 
-            if line_type == "emission":
-                local_peak_position_index, local_peak_heights = scipy.signal.find_peaks(continuum_removed_flux,height=peak_height,distance = peak_distance, width = peak_width)
-                peak_heights = np.concatenate([peak_heights,local_peak_heights["peak_heights"]])
-                peak_position_index = np.concatenate([peak_position_index, local_peak_position_index + index.min()])
-                line_significance = np.concatenate([line_significance,local_peak_heights["peak_heights"]/std_deviation])
-                line_std_deviation = np.concatenate([line_std_deviation, std_deviation*np.ones(len(local_peak_position_index))])
-                try:
-                    _ = peak_heights.max()
-                except:
-                    raise RuntimeError("No emission line was found. Make sure you set the input variable line_type='emission'.")
-            elif line_type == "absorption":
-                local_peak_position_index, local_peak_heights = scipy.signal.find_peaks(-1*continuum_removed_flux,height=peak_height,distance = peak_distance, width = peak_width)
-                peak_heights = np.concatenate([peak_heights,-1*local_peak_heights["peak_heights"]])
-                peak_position_index = np.concatenate([peak_position_index, local_peak_position_index + index.min()])
-                line_significance = np.concatenate([line_significance,local_peak_heights["peak_heights"]/std_deviation])
-                line_std_deviation = np.concatenate([line_std_deviation, std_deviation*np.ones(len(local_peak_position_index))])
-                try:
-                    ylim_min = peak_heights.max()
-                except:
-                    raise RuntimeError("No absorption line was found. Make sure you set the input variable line_type='absorption'.")
-            else:
-                raise RuntimeError("The input options for the line_type variable are 'emission' or 'absorption'.")
-        
-
+            # Emission lines:
+            local_peak_position_index, local_peak_heights = scipy.signal.find_peaks(continuum_removed_flux,height=peak_height,distance = peak_distance, width = peak_width)
+            peak_heights = np.concatenate([peak_heights,local_peak_heights["peak_heights"]])
+            peak_position_index = np.concatenate([peak_position_index, local_peak_position_index + index.min()])
+            line_significance = np.concatenate([line_significance,local_peak_heights["peak_heights"]/std_deviation])
+            line_std_deviation = np.concatenate([line_std_deviation, std_deviation*np.ones(len(local_peak_position_index))])
+            if len(local_peak_position_index) > 0:
+                emission_line_position = ["up"]*len(local_peak_position_index)
+                line_position = line_position + emission_line_position
+            # Absorption lines:
+            local_peak_position_index, local_peak_heights = scipy.signal.find_peaks(-1*continuum_removed_flux,height=peak_height,distance = peak_distance, width = peak_width)
+            peak_heights = np.concatenate([peak_heights,-1*local_peak_heights["peak_heights"]])
+            peak_position_index = np.concatenate([peak_position_index, local_peak_position_index + index.min()])
+            line_significance = np.concatenate([line_significance,local_peak_heights["peak_heights"]/std_deviation])
+            line_std_deviation = np.concatenate([line_std_deviation, std_deviation*np.ones(len(local_peak_position_index))])
+            if len(local_peak_position_index) > 0:
+                local_ylim_min = -1.1*local_peak_heights["peak_heights"].max()
+                if local_ylim_min < ylim_min:
+                    ylim_min = local_ylim_min
+                absorption_line_position = ["down"]*len(local_peak_position_index)
+                line_position = line_position + absorption_line_position
+            
+        if len(peak_position_index) == 0:
+            raise RuntimeError("No significant emission or absorption line was found. Maybe you can try playing with the input parameters 'line_significance_sigma' and 'peak_width'.")
         peak_position_index = peak_position_index.astype(int)
         peak_heights = (peak_heights+continuum_baseline[peak_position_index])*flux_density.unit
         wavelength_peak_positions = wavelengths[peak_position_index]
@@ -230,13 +275,14 @@ class analysis:
 
         if plot_lines:
             plt.figure(figsize=(12,5))
-            if len(peak_position_index) > 0:
-                if line_type == "emission":
-                    for number, peak_wavelength in enumerate(wavelength_peak_positions.value):
-                        plt.text(peak_wavelength, peak_heights.value[number] + 0.05*peak_heights.value.max(), str(round(peak_wavelength,3))+"$\AA$",rotation=90,fontsize=10, horizontalalignment="center", verticalalignment="bottom")
-                else:
-                    for number, peak_wavelength in enumerate(wavelength_peak_positions.value):
-                        plt.text(peak_wavelength, peak_heights.value[number] - 0.05*peak_heights.value.min(),str(round(peak_wavelength,3))+"$\AA$",rotation=90,fontsize=10, horizontalalignment="center", verticalalignment="top")
+            if len(peak_heights) > 0:
+                for number, peak_wavelength in enumerate(wavelength_peak_positions.value):
+                    if line_position[number] == "up":
+                        plt.text(peak_wavelength, peak_heights.value[number] + 0.05*peak_heights.value.max(), str(round(peak_wavelength,3))+"$\AA$", color="C0",rotation=90,fontsize=10, horizontalalignment="center", verticalalignment="bottom")
+                    else:
+                        text_height = np.mean(np.abs(peak_heights.value))
+                        plt.text(peak_wavelength, continuum_baseline[peak_position_index][number] + text_height,str(round(peak_wavelength,3))+"$\AA$", color="red",rotation=90,fontsize=10, horizontalalignment="center", verticalalignment="bottom")
+                        plt.vlines(peak_wavelength, peak_heights.value[number], continuum_baseline[peak_position_index][number] + 0.95*text_height,color="red")
             
             if method != "median_filter":
                 plt.plot(wavelengths,continuum_baseline,label="Power-law continuum")
@@ -248,10 +294,7 @@ class analysis:
             plt.minorticks_on()
             plt.grid(which="both",linestyle=":")
             plt.xlim(wavelengths.value.min(),wavelengths.value.max())
-            if line_type == "emission":
-                plt.ylim(0,flux_density.value.max()*1.4)
-            else:
-                plt.ylim(ylim_min,flux_density.value.max()*1.2)
+            plt.ylim(ylim_min,flux_density.value.max()*1.5)
             plt.ylabel("F$_{\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
             plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
             plt.title(self.target_name)
@@ -263,12 +306,33 @@ class analysis:
         if plot_lines or plot_regions:
             plt.show()
         
+        ordered_indexes = np.argsort(wavelength_peak_positions)
+        peak_heights = peak_heights[ordered_indexes]
+        wavelength_peak_positions = wavelength_peak_positions[ordered_indexes]
+        line_significance = line_significance[ordered_indexes]
+
         return continuum_baseline, line_std_deviation, wavelength_peak_positions, peak_heights, line_significance
     
 
 
 
-    def all_models(self, model_name, custom_function):
+    def all_models(self, model_name, custom_function=None):
+        """
+        This function is used to select a specific line model. E.g.: Gaussian, Lorentz, doubleLorentz, and so on.
+
+        Parameters
+        ----------
+        model_name: string
+            The name of the line model, e.g. "Gaussian".
+        custom_function: method
+            Optional. You can input a custom model here.
+
+        Returns
+        -------
+        models[model_name]: method
+            returns a function with the desired line model.
+        """
+        
         models = {"Gaussian" : self.model_Gauss, "Lorentz" : self.model_Lorentz, "Voigt" : self.model_Voigt, "doubleVoigt" : self.model_double_Voigt, "tripleVoigt": self.model_triple_Voigt, "custom" : custom_function}
         if model_name not in models.keys():
             raise Exception("Invalid model_name. Options are: Gaussian, Lorentz, Voigt, doubleVoigt, tripleVoigt, custom")
@@ -321,7 +385,6 @@ class analysis:
         
         return 0.0
         
-            
     def lnprob(self, theta, priors, x, y, yerr, model):
         lp = self.lnprior(theta, priors)
         if not np.isfinite(lp):
@@ -594,7 +657,7 @@ class analysis:
     def merge_fit_results(self, target_name,list_of_files=None, wavelength_systematic_error = None, rest_frame_line_wavelengths = None, output_dir="./"):
         
         """
-        This function merges the individual data files for each line into a single data file
+        This function merges the individual data files for each line into a single merged data file.
         """
         
         output_dir = str(Path(output_dir))
@@ -716,27 +779,74 @@ class analysis:
 
 
     def fit_lines(self, wavelengths, flux_density, continuum_baseline, wavelength_peak_positions, rest_frame_line_wavelengths, peak_heights, line_std_deviation,
-                  which_models, wavelength_systematic_error = None, line_names = None, overplot_archival_lines = ["H"], priors = None, MCMC_walkers = 250,
+                  which_models="Lorentz", line_names = None, overplot_archival_lines = ["H"], priors = None, MCMC_walkers = 250,
                   MCMC_iterations = 400, N_cores = 1, plot_spec = True, plot_MCMC = False, save_results = True):
 
         """
-        Plotar o espectro de novo + continuum_baseline + o resultado do MCMC + line_names
+        This function uses a Markov-chain Monte Carlo to estimate the line parameters and their errors.
 
-        peak_heights: float, integer, list, or astropy.Quantity
-
+        Parameters
+        ----------
+        wavelengths: numpy.ndarray (astropy.units Angstrom)
+            The wavelength solution for the given spectrum.
+        flux_density: numpy.ndarray (astropy.units erg/cm2/s/A)
+            The calibrated spectrum in flux density.
+        continuum_baseline: numpy.ndarray (float)
+            An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
+        wavelength_peak_positions: numpy.ndarray (astropy.units Angstrom)
+            The position of each peak in Angstroms found with the function analysis.find_lines().
+        peak_heights: numpy.ndarray (astropy.units Angstrom)
+            The height of each peak in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
+        line_std_deviation: numpy.ndarray (float)
+            The standard deviation for the local continuum. This variable is an output of the function analysis.find_lines().
         which_models: string or list of strings
-
-        priors: list or list of lists
-            You can even do for a single line, e.g., let's suppose we are analysing 4 lines but want specific priors only for the third one: [None, None,[[4500,4600],[1,10],[2,15]], None]
-
-        overplot_archival_lines: list (strings)
+            A list containing the models to be applied to each line, e.g.: if you are trying to model 2 lines, you can use which_models = ["Lorentz","Gaussian"].
+            If you wish to use the same model for all lines, you can use which_models = ["Gaussian","Gaussian"] or simply which_models = "Gaussian". Options are
+            "Gaussian", "Lorentz" and "Voigt".
+        line_names: list
+            Optional. A list with line names, e.g.: if you are trying to model 2 lines, you can use line_names = ["Hbeta","Halpha"].
+            If the names are not provided, easyspec will call the lines line_0, line_1... and so on.
+        overplot_archival_lines: list
             List with the strings corresponding to different elements. E.g.: ["H","He"] will overplot all the Hydrogen and Helium lines redshifted based on the average
-            redshift of the lines given in wavelength_peak_positions. If you don't want to overplot lines, use overplot_archival_lines = None.
+            redshift of the lines given in wavelength_peak_positions. If you don't want to overplot lines, use overplot_archival_lines = None. If you use too many lines
+            as input, they will very likely overlap in the plot. Be aware that this feature is meant only for guiding the user! There are several lines which are not
+            included in our database, but we tried to select the most commonly seen lines in galaxy, quasar and stellar spectra.
+        priors: list or list of lists
+            This parameter is complicated. It is better if you leave it as "None". This parameter controls the priors used in the MCMC in the estimation of the
+            line parameters. The initial parameters for the MCMC are always defined as wavelength_peak_positions (for the position of the line peak) and 
+            peak_heights (for the height of the peak). If priors = None, the priors are set to wavelength_peak_positions +- 100 Angstroms (or to half the distance
+            to the closest line if this line is closer than 100 Angstroms), 0.1*peak_heights up to 10*peak_heights (normalized based on the continuum),
+            and the std or fwhm are confined within 0.1 to 150. If you are e.g. analysing 4 lines with the Lorentz model and want to change the priors of the third
+            line, you can set priors = [None, None,[[7496,7696],[0.1, 150],[2,150]], None], where the list of three ranges here represents the allowed sampling
+            intervals, i.e. the position of the peak, the peak heigh in terms of the continuum level and the fwhm. For the Voigt model, the input variable would
+            be  priors = [None, None,[[7496,7696],[0.1, 150],[2,150],[1,150]], None]. Of course you can set up the ranges for all lines.
+        MCMC_walkers: int
+            This is the number of walkers for the MCMC.
+        MCMC_iterations: int
+            This is the number of iterations for the MCMC.
+        N_cores: int
+            This is the number of cores in case you want to run this analysis in parallel.
+        plot_spec: boolean
+            If True, a plot of the spectrum with the lines requested in the input variable overplot_archival_lines will be shown.
+        plot_MCMC: boolean
+            If True, a series of diagnostic plots for the MCMC will be shown, as the corner plot, the evolution of the parameters over time, and the line fitted to 
+            the data.
+        save_results: boolean
+            If True, the plots and fit information will be saved in the output directory defined in the function analysis.load_calibrated_data()
+            
         Returns
         -------
-
-        average_regshift: float
-
+        line_names: list
+            A list with the names of the lines. This is useful only if the input variable line_names is None.
+        par_values_list: list
+            This is a list containing sublists with the best-fit values for each line model.
+        par_values_errors_list: list
+            A list with the asymmetrical errors for each parameter listed in par_values_list.
+        par_names_list: list
+            A list with the names of all the parameters used in each line model.
+        XXXXXXX_lines.csv:
+            Optional. This file contains all the best-fit parameters for each line model and is saved in the output directory defined in the
+            function analysis.load_calibrated_data(). "XXXXXXX" here stands for the target's name.
         """
 
         if isinstance(wavelength_peak_positions, u.quantity.Quantity):
@@ -779,7 +889,6 @@ class analysis:
         peak_heights = peak_heights - continuum_baseline[local_continuum_index]
         normalization = 10**round(np.log10(np.median(flux_density.value - 0.9*continuum_baseline)))
 
-        best_fit_model_list = []
         par_values_list, par_values_errors_list, par_names_list = [], [], []
         for number, peak_height in enumerate(peak_heights):
             invert_spectrum = 1  # For emission lines, the spectrum is multiplied by 1. For absorption lines, it is multiplied by -1
@@ -802,13 +911,18 @@ class analysis:
                     mean_point = (wavelength_peak_positions[number] + wavelength_peak_positions[number+1])/2
                     if mean_point < line_region_max:
                         line_region_max = mean_point
-                
 
                 initial, local_priors, labels, adopted_model = self.automatic_priors(which_models[number], wavelength_peak_positions[number], peak_height, line_region_min, line_region_max)
             else:
-                # Better define line_regions in this CASE!!!
-                initial, _, labels, adopted_model = self.automatic_priors(which_models[number], wavelength_peak_positions[number], peak_height, line_region_min, line_region_max)
-                local_priors = priors[number]
+                initial, _, labels, adopted_model = self.automatic_priors(which_models[number], wavelength_peak_positions[number], peak_height, line_region_min=None, line_region_max=None)
+                local_priors = np.asarray(priors[number],dtype="object")
+                # In the case of a single-line analysis, if the user inputs priors=[[7500,7700],[0.1],[2,50]] instead of priors=[ [[7500,7700],[0.1],[2,50]] ], the analysis will work anyway.
+                if isinstance(local_priors[0],float) or isinstance(local_priors[0],int):
+                    local_priors = np.asarray(priors,dtype="object")
+                line_region_min = local_priors[0][0]
+                line_region_max = local_priors[0][1]
+            
+
             
             x,y,yerr = self.data_window_selection(wavelengths.value, continuum_subtracted_flux, local_line_std_deviation*np.ones(len(wavelengths.value)), line_region_min, line_region_max)
             data = (x, y, yerr)
@@ -825,9 +939,6 @@ class analysis:
             par_names_list.append(par_names)
 
             best_fit_model = adopted_model(theta_max, x)
-
-            # Work in progress: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            best_fit_model_list.append(best_fit_model) #Pad the rest with zeros and them sum them to the continuum to do the plot
 
             if plot_MCMC:
                 corner.corner(
@@ -877,7 +988,6 @@ class analysis:
                 archival_wavelengths = archival_wavelengths[index]
                 archival_line_names = archival_line_names[index]
 
-
             plt.figure(figsize=(12,5))
             if overplot_archival_lines is not None:
                 for number, line in enumerate(archival_wavelengths):
@@ -897,7 +1007,7 @@ class analysis:
                     else:
                         color = "black"
                         step = 1.1
-                    plt.text(line-35, step*flux_density.value.max(), archival_line_names[number],rotation=90,fontsize=9,color=color, horizontalalignment="center")
+                    plt.text(line, step*flux_density.value.max(), archival_line_names[number],rotation=90,fontsize=10,color=color, horizontalalignment="center", verticalalignment="bottom")
                     plt.vlines(line, flux_density.value[text_line_index], 0.98*step*flux_density.value.max(), color=color, linewidth=0.8,alpha=0.5)
 
             plt.plot(wavelengths,continuum_baseline,label="Continuum")
@@ -917,7 +1027,7 @@ class analysis:
 
 
         if save_results:
-            self.merge_fit_results(self.target_name,list_of_files=None, wavelength_systematic_error=wavelength_systematic_error.value,
+            self.merge_fit_results(self.target_name,list_of_files=None, wavelength_systematic_error=self.wavelength_systematic_error.value,
                                    rest_frame_line_wavelengths = rest_frame_line_wavelengths,output_dir=self.output_dir)
             list_of_files = glob.glob(self.output_dir+"/*_line_fit_results.csv")
             for file in list_of_files:
@@ -935,11 +1045,9 @@ integral as the absorption line, but goes all the way from the continuum level t
 
 We could compute this with our model, assuming our continuum is flat (has zero slope):
 
-EQW =  -absorption_fit(wavelengths.value[selection]).sum() / continuum_fit.intercept * u.nm
+EQW = -absorption_fit(wavelengths.value[selection]).sum() / continuum_fit.intercept * u.nm
 
-Function to compute velocity dispersion, Integrated flux for each line, and EQW
+Function to compute velocity dispersion, integrated flux for each line, and EQW.
 
-Double and triple lines
-
-Fine tune for absorption lines! Ou ja ta de boa? Acho que sim. Bora testar.
+Double and triple lines.
 """
