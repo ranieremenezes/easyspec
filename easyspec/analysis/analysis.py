@@ -21,6 +21,8 @@ from astropy.modeling.models import Linear1D
 from scipy.signal import medfilt
 import platform
 import os
+from scipy.integrate import quad
+from astropy.constants import c
 
 OS_name = platform.system()
 plt.rcParams.update({'font.size': 12})
@@ -447,14 +449,19 @@ class analysis:
         samples = sampler.flatchain
         adopted_model = self.all_models(model_name, custom_function)
         
+        x_plot = np.linspace(x.min(),x.max(),1000)
         for theta in samples[np.random.randint(len(samples), size=100)]:
-            plt.plot(x, adopted_model(theta, x)*normalization, color=color, zorder=0, alpha=0.1)  # plotting with parameters in the posterior destribution
+            plt.plot(x_plot, adopted_model(theta, x_plot)*normalization, color=color, zorder=0, alpha=0.1)  # plotting with parameters in the posterior destribution
 
         plt.ticklabel_format(style="sci", axis="x", scilimits=(0, 0))
         plt.grid(linestyle=":")
         plt.legend()
 
     def MCMC_spread(self, x, samples, model_name, nsamples=100, custom_function=None):
+
+        """
+        Function to compute the median MCMC model and its standard deviation.
+        """
         
         if model_name == "custom":
             if not callable(custom_function):
@@ -585,10 +592,11 @@ class analysis:
                 par_names.append(parlabels[i][j])
                 
                 if savefile:
-                    if parlabels[i][j][0:9] == "Amplitude":
+                    f.write(f"{parlabels[i][j]}, {par_values[-1]}, {par_values_errors[-1][0]}, {par_values_errors[-1][1]}\n")
+                    """if parlabels[i][j][0:9] == "Amplitude":
                         f.write(f"{parlabels[i][j]}, {par_values[-1]}, {par_values_errors[-1][0]}, {par_values_errors[-1][1]}\n")
                     else:
-                        f.write(f"{parlabels[i][j]}, {par_values[-1]}, {par_values_errors[-1][0]}, {par_values_errors[-1][1]}\n")
+                        f.write(f"{parlabels[i][j]}, {par_values[-1]}, {par_values_errors[-1][0]}, {par_values_errors[-1][1]}\n")"""
             
             previous_j = j + previous_j + 1
             if savefile:
@@ -626,7 +634,8 @@ class analysis:
         if sampler is not None:
             self.plotter(sampler,model_name,x,color=hair_color, custom_function=custom_function, normalization = normalization)
         if best_fit_model is not None:
-            plt.plot(x,best_fit_model*normalization, color="black", label="Highest Likelihood Model")
+            x_plot = np.linspace(x.min(),x.max(),len(best_fit_model))
+            plt.plot(x_plot,best_fit_model*normalization, color="black", label="Highest Likelihood Model")
         plt.xlabel(xlabel,fontsize=12)
         plt.ylabel(ylabel,fontsize=12)
         plt.title(title)
@@ -693,11 +702,11 @@ class analysis:
         f.write("# Line name")
         for parameter_name in parameter_names:
             if parameter_name[0:4] == "Mean":
-                f.write(", "+parameter_name+" [Ang], "+parameter_name+"_error_down, "+parameter_name+"_error_up")
+                f.write(", obs_"+parameter_name+" [Ang], obs_"+parameter_name+"_error_down, obs_"+parameter_name+"_error_up")
             elif parameter_name[0:4] == "Ampl":
-                f.write(", "+parameter_name+" (flux_dens - continuum) [erg cm-2 s-1 Ang-1], "+parameter_name+"_error_down, "+parameter_name+"_error_up")
+                f.write(", obs_"+parameter_name+" (flux_dens - continuum) [erg cm-2 s-1 Ang-1], obs_"+parameter_name+"_error_down, obs_"+parameter_name+"_error_up")
             elif parameter_name[0:4] == "fwhm":
-                f.write(", "+parameter_name+" [Ang], "+parameter_name+"_error_down, "+parameter_name+"_error_up")
+                f.write(", obs_"+parameter_name+" [Ang], obs_"+parameter_name+"_error_down, obs_"+parameter_name+"_error_up")
             else:
                 f.write(", "+parameter_name+", "+parameter_name+"_error_down, "+parameter_name+"_error_up")
         
@@ -720,7 +729,7 @@ class analysis:
                     
                 if parameter[0][0:12] == "fwhm_Lorentz":
                     try:
-                        if line_array[number+1][0][0:10] != "fwhm_Gauss": # Here it could be different of anything. It is just a generic condition.
+                        if line_array[number+1][0][0:10] != "fwhm_Gauss": # Here it could be different from anything. It is just a generic condition.
                             f.write(", 0, 0, 0")
                     except:
                         f.write(", 0, 0, 0")
@@ -889,7 +898,7 @@ class analysis:
         peak_heights = peak_heights - continuum_baseline[local_continuum_index]
         normalization = 10**round(np.log10(np.median(flux_density.value - 0.9*continuum_baseline)))
 
-        par_values_list, par_values_errors_list, par_names_list = [], [], []
+        par_values_list, par_values_errors_list, par_names_list, samples_list, line_windows = [], [], [], [], []
         for number, peak_height in enumerate(peak_heights):
             invert_spectrum = 1  # For emission lines, the spectrum is multiplied by 1. For absorption lines, it is multiplied by -1
             if peak_height < 0:
@@ -923,12 +932,13 @@ class analysis:
                 line_region_max = local_priors[0][1]
             
 
-            
+            line_windows.append([line_region_min, line_region_max])
             x,y,yerr = self.data_window_selection(wavelengths.value, continuum_subtracted_flux, local_line_std_deviation*np.ones(len(wavelengths.value)), line_region_min, line_region_max)
             data = (x, y, yerr)
             p0 = [np.array(initial) + 0.01 * np.random.randn(len(initial)) for i in range(MCMC_walkers)]  # p0 is the methodology of stepping from one place on a grid to the next.
             sampler, pos, prob, state = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, which_models[number], ncores=N_cores)
             samples = sampler.flatchain
+            samples_list.append(samples)
             theta_max = samples[np.argmax(sampler.flatlnprobability)]
 
             par_values, par_values_errors, par_names = self.parameter_estimation(samples, which_models[number], air_wavelength_line = rest_frame_line_wavelengths[number],
@@ -938,7 +948,8 @@ class analysis:
             par_values_errors_list.append(par_values_errors)
             par_names_list.append(par_names)
 
-            best_fit_model = adopted_model(theta_max, x)
+            x_best_fit = np.linspace(x.min(),x.max(),1000)
+            best_fit_model = adopted_model(theta_max, x_best_fit)
 
             if plot_MCMC:
                 corner.corner(
@@ -956,9 +967,12 @@ class analysis:
                 self.quick_plot(x,y,model_name=which_models[number],sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=local_normalization,
                                 hair_color="grey",title=self.target_name+" - "+line_names[number], ylabel="F$_{\lambda}$ ["+f"{flux_density.unit}]", outputdir = self.output_dir)
 
-        redshifts = np.asarray(par_values_list, dtype=object) # The dtype option here is usefull because our par_values can have different sizes
-        average_redshift = np.average(redshifts[:,0])
-        std_redshift = np.std(redshifts[:,0])        
+        redshifts = []
+        for parameters in par_values_list:
+            redshifts.append(parameters[0])
+        redshifts = np.asarray(redshifts)
+        average_redshift = np.average(redshifts)
+        std_redshift = np.std(redshifts)
         
         if plot_spec:
             if overplot_archival_lines is not None:
@@ -1036,18 +1050,242 @@ class analysis:
         if plot_spec or plot_MCMC:
             plt.show()
 
-        return line_names, par_values_list, par_values_errors_list, par_names_list
+        self.line_names = line_names
+
+        return line_names, par_values_list, par_values_errors_list, par_names_list, samples_list, line_windows
     
+    def line_dispersion_and_equiv_width(self, wavelengths_window, flux_density_window, continuum_baseline_window, line_name = None, plot = True):
+
+        """
+        
+        This function estimates the line dispersion (aka the rms width of the line) and the profile equivalent width. Both measures are independent
+        on the line model (i.e. Gaussian, Lorentz or Voigt) and dependent on the interpolated line profile.
+
+        Parameters
+        ----------
+        wavelengths_window: numpy.ndarray
+            The wavelength window for the given line.
+        flux_density_window: numpy.ndarray
+            The flux density window for the given line.
+        continuum_baseline_window: numpy.ndarray
+            An array with the continuum density flux window for the given line. Standard easyspec units are in erg/cm2/s/A.
+        line_name: string
+            The line name.
+        plot: boolean
+            If True, the line and corresponding centroid and dispersion will be showed.
+        
+        Returns
+        -------
+        line_dispersion: float
+            The line dispersion is well defined for arbitrary line profiles. See Eqs. 4 and 5 in Peterson et al. 2004 for some guidance.
+            You should avoid using the line dispersion in case of blended lines. The result here is given in the observed frame.
+        profile_equiv_width: float
+            This is a model-independent estimate of the equivalent width and can be used with arbitrary line profiles.
+            This is the integral of (Fc - F)/Fc over the wavelengths, where Fc is the continuum flux density and F is the interpolated flux density.
+            The result is given in the observed frame.
+        """
+
+        
+        def lambda_P(wavelengths_window,tck):
+            return interpolate.splev(wavelengths_window, tck)*wavelengths_window
+        
+        def lambda2_P(wavelengths_window,tck):
+            return interpolate.splev(wavelengths_window, tck)*(wavelengths_window-first_moment)**2
+        
+        def P(wavelengths_window,tck):
+            return interpolate.splev(wavelengths_window, tck)
+        
+        def equiv_width(wavelengths_window,tck2):
+            return interpolate.splev(wavelengths_window, tck2)
+        
+        tck = interpolate.splrep(wavelengths_window, (flux_density_window-continuum_baseline_window), k=1)
+        integrand_EQW = (continuum_baseline_window - flux_density_window)/continuum_baseline_window
+        tck2 = interpolate.splrep(wavelengths_window, integrand_EQW, k=1)        
+        
+        numerator = quad(lambda_P, wavelengths_window[0], wavelengths_window[-1],args=(tck,))[0]
+        denominator = quad(P, wavelengths_window[0], wavelengths_window[-1],args=(tck,))[0]
+
+        first_moment = numerator/denominator
+
+        
+        second_moment = quad(lambda2_P, wavelengths_window[0], wavelengths_window[-1],args=(tck,))[0]/denominator
+        line_dispersion = np.sqrt(second_moment)
+
+        profile_equiv_width = quad(equiv_width, wavelengths_window[0], wavelengths_window[-1],args=(tck2,))[0]
+
+        if plot:
+            plt.figure(figsize=(12,4))
+            plt.plot(wavelengths_window, interpolate.splev(wavelengths_window, tck), color = "C1")
+            plt.plot(wavelengths_window,np.zeros(len(wavelengths_window)),color="black")
+            plt.vlines(first_moment,0,(flux_density_window-continuum_baseline_window).max(),colors="C0",linestyles="solid",label="centroid")
+            plt.ylabel(r"Flux density - continuum [erg/cm$^2$/s/$\AA$]")
+            plt.xlabel(r"Observed $\lambda$ [$\AA$]")
+            plt.grid(which="both",linestyle="dotted")
+            #plt.axvspan(first_moment-line_dispersion,first_moment+line_dispersion, ymin=0, color="C0",alpha=0.3,label=r"$\sigma_{rms}$")
+            plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).max()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0",alpha=0.3,label=r"$\sigma_{rms}$")
+            plt.legend()
+            if line_name is not None:
+                plt.title(line_name+" - Model-independent estimate for $\sigma_{rms}$ (observed frame)")
+
+
+        return line_dispersion, profile_equiv_width
+
+
+    def error_propagation_voigt(self,FWHM_Lorentz,FWHM_Gauss,error_lorentz,error_gauss):
+
+        """
+        In this function we propagate the FWHM error for the Voigt model.
+
+        Parameters
+        ----------
+        FWHM_Lorentz: float
+            The Lorentzian component FWHM.
+        FWHM_Gauss: float
+            The Gaussian component FWHM.
+        error_lorentz: float
+            The associated error to the Lorentzian FWHM.
+        error_gauss: float
+            The associated error to the Gaussian FWHM.
+        
+        Returns
+        -------
+        fwhm_error_voigt: float
+            The propagated uncertainty in FWHM for the Voigt model.
+
+        """
+
+        fwhm_error_voigt = np.sqrt( (0.5346 + 0.5*0.2166*2*FWHM_Lorentz/np.sqrt(0.2166*FWHM_Lorentz**2 + FWHM_Gauss**2))*error_lorentz**2  + (FWHM_Gauss*error_gauss/np.sqrt(0.2166*FWHM_Lorentz**2 + FWHM_Gauss**2))**2 )
+
+        return fwhm_error_voigt
+
+
+
+
+    def line_physics(self, wavelengths, flux_density, continuum_baseline, par_values_list, par_values_errors_list, par_names_list, line_windows, plot = True, save_file = True):
+
+        """
+        Compute errors (fwhm and modeled disp_velocity are already done)
+
+        save file
+
+
+        
+        Modeled integrated flux is computed by taking the EQW and multiplying it by the continuum value at the line center.
+
+        Line dispersion: it is well defined for arbitrary line profiles. See Eqs. 4 and 5 in Peterson et al. 2004. This method is not very good in case of blended lines.
+        
+        """
+
+        try:
+            line_names = self.line_names
+        except:
+            line_names = [""]*len(par_values_list)
+
+        modeled_equiv_width_rest_frame = []
+        profile_equiv_width_rest_frame = []
+        profile_line_dispersion_rest_frame = []
+        modeled_integrated_flux = []
+        profile_integrated_flux = []
+        modeled_rest_frame_disp_velocity = []
+        profile_rest_frame_disp_velocity = []
+        modeled_rest_frame_fhwm = []
+        for number,line_parameters in enumerate(par_values_list):
+
+            # taking the redshift and local continuum:
+            z = line_parameters[0]
+            peak_position = line_parameters[1]
+            continuum_index = extraction.find_nearest(wavelengths.value, peak_position)
+
+            # Computing the equivalent width directly from the data:
+            window_indexes = np.where((wavelengths.value > line_windows[number][0]) & (wavelengths.value < line_windows[number][1]))[0]
+            flux_density_window = flux_density[window_indexes]
+            continuum_baseline_window = continuum_baseline[window_indexes]
+            wavelengths_window = wavelengths[window_indexes]
+
+            line_dispersion, profile_equiv_width = self.line_dispersion_and_equiv_width(wavelengths_window.value, flux_density_window.value, continuum_baseline_window, line_name = line_names[number], plot = plot)
+            profile_rest_frame_disp_velocity.append(c.to("km/s").value*line_dispersion/peak_position)
+            profile_integrated_flux.append(-profile_equiv_width*continuum_baseline[continuum_index])
+            line_dispersion = line_dispersion/(1+z)
+            profile_equiv_width = profile_equiv_width/(1+z)
+
+            profile_equiv_width_rest_frame.append(profile_equiv_width)
+            profile_line_dispersion_rest_frame.append(line_dispersion)
+            
+            # Computing the equivalent width from best-fit line models:
+            if len(line_parameters) == 5:
+                # Voigt case:
+                def integrand(x,theta):
+                    return -1*self.model_Voigt(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
+                
+                equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=line_parameters[1:])
+                FWHM_Voigt = 0.5346*line_parameters[3] + np.sqrt(0.2166*line_parameters[3]**2 + line_parameters[4]**2)
+                disp_velocity = c.to("km/s").value*FWHM_Voigt/(peak_position*2*np.sqrt(2 * np.log(2)))
+                fwhm_error_down = self.error_propagation_voigt(par_values_list[number][3],par_values_list[number][4],par_values_errors_list[number][3][0],par_values_errors_list[number][4][0])
+                fwhm_error_up = self.error_propagation_voigt(par_values_list[number][3],par_values_list[number][4],par_values_errors_list[number][3][1],par_values_errors_list[number][4][1])
+                disp_velocity_err_down = c.to("km/s").value*fwhm_error_down/(peak_position*2*np.sqrt(2 * np.log(2)))
+                disp_velocity_err_up = c.to("km/s").value*fwhm_error_up/(peak_position*2*np.sqrt(2 * np.log(2)))
+                fwhm_error_down = np.sqrt( (fwhm_error_down/(1+z))**2   +  (FWHM_Voigt*par_values_errors_list[number][0][0]/((1+z)**2))**2      )
+                fwhm_error_up = np.sqrt( (fwhm_error_up/(1+z))**2   +  (FWHM_Voigt*par_values_errors_list[number][0][1]/((1+z)**2))**2      )
+                fwhm_rest_frame = FWHM_Voigt/(1+z)
+                
+                
+            elif par_names_list[number][3] == 'fwhm_Lorentz':
+                # Lorentzian case:
+                def integrand(x,theta):
+                    return -1*self.model_Lorentz(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
+                
+                equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=line_parameters[1:])
+                disp_velocity = c.to("km/s").value*line_parameters[3]/(2*peak_position) # The dispersion velocity for a Lorentzian is the half of its FWHM.
+                disp_velocity_err_down = c.to("km/s").value*par_values_errors_list[number][3][0]/(peak_position*2)
+                disp_velocity_err_up = c.to("km/s").value*par_values_errors_list[number][3][1]/(peak_position*2)
+                fwhm_error_down = np.sqrt( (par_values_errors_list[number][3][0]/(1+z))**2   +  (line_parameters[3]*par_values_errors_list[number][0][0]/((1+z)**2))**2      )
+                fwhm_error_up = np.sqrt( (par_values_errors_list[number][3][1]/(1+z))**2   +  (line_parameters[3]*par_values_errors_list[number][0][1]/((1+z)**2))**2      )
+                fwhm_rest_frame = line_parameters[3]/(1+z)
+            else:
+                # Gaussian case:
+                def integrand(x,theta):
+                    return -1*self.model_Gauss(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
+                
+                gaussian_parameters = line_parameters[1:]
+                gaussian_parameters[2] = gaussian_parameters[2]/(2*np.sqrt(2 * np.log(2)))  # This is necessary because the last Gaussian parameter saved in par_values_list is the FWHM and not the standard deviation.
+                equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=gaussian_parameters)
+                disp_velocity = c.to("km/s").value*line_parameters[3]/(peak_position*2*np.sqrt(2 * np.log(2))) # The dispersion velocity for a Gaussian is its standard deviation given in velocity units.
+                disp_velocity_err_down = c.to("km/s").value*par_values_errors_list[number][3][0]/(peak_position*2*np.sqrt(2 * np.log(2)))
+                disp_velocity_err_up = c.to("km/s").value*par_values_errors_list[number][3][1]/(peak_position*2*np.sqrt(2 * np.log(2)))
+                fwhm_error_down = np.sqrt( (par_values_errors_list[number][3][0]/(1+z))**2   +  (line_parameters[3]*par_values_errors_list[number][0][0]/((1+z)**2))**2      )
+                fwhm_error_up = np.sqrt( (par_values_errors_list[number][3][1]/(1+z))**2   +  (line_parameters[3]*par_values_errors_list[number][0][1]/((1+z)**2))**2      )
+                fwhm_rest_frame = line_parameters[3]/(1+z)
+
+            modeled_rest_frame_disp_velocity.append([disp_velocity,disp_velocity_err_down,disp_velocity_err_up])  
+            modeled_rest_frame_fhwm.append([fwhm_rest_frame,fwhm_error_down,fwhm_error_up])
+            modeled_equiv_width_rest_frame.append(equivalent_width[0]/(1+z)) # We divide the measured equivalent width by 1+z to get the rest-frame equiv width.
+            modeled_integrated_flux.append(-equivalent_width[0]*continuum_baseline[continuum_index])
+            
+
+
+        modeled_rest_frame_fhwm = modeled_rest_frame_fhwm*u.AA
+        modeled_rest_frame_disp_velocity = modeled_rest_frame_disp_velocity*u.km/u.s
+        profile_rest_frame_disp_velocity = profile_rest_frame_disp_velocity*u.km/u.s
+        profile_equiv_width_rest_frame = profile_equiv_width_rest_frame*u.AA
+        profile_line_dispersion_rest_frame = profile_line_dispersion_rest_frame*u.AA
+        modeled_equiv_width_rest_frame = modeled_equiv_width_rest_frame*u.AA
+        modeled_integrated_flux = modeled_integrated_flux*u.erg/u.cm**2/u.s
+        profile_integrated_flux = profile_integrated_flux*u.erg/u.cm**2/u.s
+
+        if plot:
+            plt.show()
+        
+        
+        return profile_equiv_width_rest_frame, modeled_equiv_width_rest_frame, profile_integrated_flux, modeled_integrated_flux, profile_rest_frame_disp_velocity, modeled_rest_frame_disp_velocity, modeled_rest_frame_fhwm, profile_line_dispersion_rest_frame
+
+
+
 
 """
-If we were dealing with an absorption line, we could compute its equivalent width, which is defined to be the width of a rectangle that has the same
-integral as the absorption line, but goes all the way from the continuum level to zero: https://en.wikipedia.org/wiki/Equivalent_width
 
-We could compute this with our model, assuming our continuum is flat (has zero slope):
 
-EQW = -absorption_fit(wavelengths.value[selection]).sum() / continuum_fit.intercept * u.nm
+Double and triple lines. Eu posso adicionar um parametro tipo "blended_line_min_separation", dado em angstroms, tal que se os picos de duas ou mais linhas
+estiver a uma distancia menor que blended_line_min_separation, a linha eh considerada dupla ou tripla. Assim eh bom que nem preciso adicionar mais modelos de linha,
+tipo tripleVoigt.
 
-Function to compute velocity dispersion, integrated flux for each line, and EQW.
-
-Double and triple lines.
 """
