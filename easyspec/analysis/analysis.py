@@ -23,6 +23,8 @@ import platform
 import os
 from scipy.integrate import quad
 from astropy.constants import c
+from astropy.cosmology import FlatLambdaCDM
+
 
 OS_name = platform.system()
 plt.rcParams.update({'font.size': 12})
@@ -845,14 +847,16 @@ class analysis:
             
         Returns
         -------
-        line_names: list
-            A list with the names of the lines. This is useful only if the input variable line_names is None.
         par_values_list: list
             This is a list containing sublists with the best-fit values for each line model.
         par_values_errors_list: list
             A list with the asymmetrical errors for each parameter listed in par_values_list.
         par_names_list: list
             A list with the names of all the parameters used in each line model.
+        samples_list: list
+            A list containing the MCMC posterior distributions.
+        line_windows: list
+            A list containing the wavelength intervals around each line.
         XXXXXXX_lines.csv:
             Optional. This file contains all the best-fit parameters for each line model and is saved in the output directory defined in the
             function analysis.load_calibrated_data(). "XXXXXXX" here stands for the target's name.
@@ -1052,13 +1056,13 @@ class analysis:
 
         self.line_names = line_names
 
-        return line_names, par_values_list, par_values_errors_list, par_names_list, samples_list, line_windows
+        return par_values_list, par_values_errors_list, par_names_list, samples_list, line_windows
     
     def line_dispersion_and_equiv_width(self, wavelengths_window, flux_density_window, continuum_baseline_window, line_name = None, plot = True):
 
         """
         
-        This function estimates the line dispersion (aka the rms width of the line) and the profile equivalent width. Both measures are independent
+        This function estimates the line dispersion (aka the rms width of the line), the profile equivalent width, and the FWHM. All measures are independent
         on the line model (i.e. Gaussian, Lorentz or Voigt) and dependent on the interpolated line profile.
 
         Parameters
@@ -1083,6 +1087,14 @@ class analysis:
             This is a model-independent estimate of the equivalent width and can be used with arbitrary line profiles.
             This is the integral of (Fc - F)/Fc over the wavelengths, where Fc is the continuum flux density and F is the interpolated flux density.
             The result is given in the observed frame.
+        profile_FWHM: float
+            The model-independent FWHM.
+        line_disp_error: float
+            The error on the line dispersion computed with a Monte Carlo simulation.
+        equiv_width_error: float
+            The error on the equivalent width computed with a Monte Carlo simulation.
+        fwhm_error: float
+            The error on the FWHM computed with a Monte Carlo simulation.
         """
 
         
@@ -1097,7 +1109,7 @@ class analysis:
         
         def equiv_width(wavelengths_window,tck2):
             return interpolate.splev(wavelengths_window, tck2)
-        
+
         tck = interpolate.splrep(wavelengths_window, (flux_density_window-continuum_baseline_window), k=1)
         integrand_EQW = (continuum_baseline_window - flux_density_window)/continuum_baseline_window
         tck2 = interpolate.splrep(wavelengths_window, integrand_EQW, k=1)        
@@ -1113,6 +1125,46 @@ class analysis:
 
         profile_equiv_width = quad(equiv_width, wavelengths_window[0], wavelengths_window[-1],args=(tck2,))[0]
 
+        interpol_wavelenghts = np.linspace(wavelengths_window[0],wavelengths_window[-1],1000)
+        interpol_density_flux = interpolate.splev(interpol_wavelenghts, tck)
+        line_peak_value = interpol_density_flux.max()
+        max_index = extraction.find_nearest(interpol_density_flux, line_peak_value)
+        max_index_for_error = extraction.find_nearest((flux_density_window-continuum_baseline_window), line_peak_value)  # This is used in the loop a few lines below.
+        lambda_0_index = extraction.find_nearest(interpol_density_flux[0:max_index], line_peak_value/2)
+        lambda_1_index = extraction.find_nearest(interpol_density_flux[max_index:], line_peak_value/2) + max_index
+        """plt.figure()
+        plt.plot(interpol_wavelenghts[0:max_index], interpol_density_flux[0:max_index])
+        plt.plot(interpol_wavelenghts[max_index:], interpol_density_flux[max_index:])
+        plt.scatter(interpol_wavelenghts[lambda_0_index],interpol_density_flux[lambda_0_index])
+        plt.scatter(interpol_wavelenghts[lambda_1_index],interpol_density_flux[lambda_1_index])"""
+        profile_FWHM = np.abs(interpol_wavelenghts[lambda_1_index]-interpol_wavelenghts[lambda_0_index])
+        
+
+        # Error estimate:
+        equiv_width_error = []
+        line_disp_error = []
+        fwhm_error = []
+        median_profile = medfilt(flux_density_window-continuum_baseline_window, 7)
+        std_line = np.std((median_profile-P(wavelengths_window,tck))[:int(len(median_profile)/4)] + (median_profile-P(wavelengths_window,tck))[-int(len(median_profile)/4):])
+        for n in range(100):
+            noise = np.random.uniform(size=len(flux_density_window))*std_line
+            noisy_density_flux = flux_density_window + noise
+            integrand_EQW = (continuum_baseline_window - noisy_density_flux)/continuum_baseline_window
+            tck3 = interpolate.splrep(wavelengths_window, integrand_EQW, k=1)   
+            local_EQW = quad(equiv_width, wavelengths_window[0], wavelengths_window[-1],args=(tck3,))[0]
+            equiv_width_error.append(local_EQW)
+
+            tck4 = interpolate.splrep(wavelengths_window, (noisy_density_flux - continuum_baseline_window), k=1)
+            line_disp_error.append(np.sqrt(quad(lambda2_P, wavelengths_window[0], wavelengths_window[-1],args=(tck4,))[0]/denominator))
+
+            lambda_0_index = extraction.find_nearest((noisy_density_flux[0:max_index_for_error]-continuum_baseline_window[0:max_index_for_error]), line_peak_value/2)
+            lambda_1_index = extraction.find_nearest((noisy_density_flux[max_index_for_error:]-continuum_baseline_window[max_index_for_error:]), line_peak_value/2) + max_index_for_error
+            fwhm_error.append(np.abs(wavelengths_window[lambda_1_index]-wavelengths_window[lambda_0_index]))
+
+        equiv_width_error = np.std(np.asarray(equiv_width_error))
+        line_disp_error = np.std(np.asarray(line_disp_error))
+        fwhm_error = np.std(np.asarray(fwhm_error))
+
         if plot:
             plt.figure(figsize=(12,4))
             plt.plot(wavelengths_window, interpolate.splev(wavelengths_window, tck), color = "C1")
@@ -1122,19 +1174,19 @@ class analysis:
             plt.xlabel(r"Observed $\lambda$ [$\AA$]")
             plt.grid(which="both",linestyle="dotted")
             #plt.axvspan(first_moment-line_dispersion,first_moment+line_dispersion, ymin=0, color="C0",alpha=0.3,label=r"$\sigma_{rms}$")
-            plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).max()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0",alpha=0.3,label=r"$\sigma_{rms}$")
+            plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).max()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0", alpha=0.3, label=r"$\sigma_{rms}$")
             plt.legend()
             if line_name is not None:
                 plt.title(line_name+" - Model-independent estimate for $\sigma_{rms}$ (observed frame)")
 
 
-        return line_dispersion, profile_equiv_width
+        return line_dispersion, profile_equiv_width, profile_FWHM, line_disp_error, equiv_width_error, fwhm_error
 
 
     def error_propagation_voigt(self,FWHM_Lorentz,FWHM_Gauss,error_lorentz,error_gauss):
 
         """
-        In this function we propagate the FWHM error for the Voigt model.
+        In this function we propagate the FWHM error for the Voigt model assuming independent variables.
 
         Parameters
         ----------
@@ -1159,21 +1211,104 @@ class analysis:
         return fwhm_error_voigt
 
 
+    def equiv_width_error(self,integrand,line_window,line_parameters,line_par_errors):
 
+        """
+        In this function we estimate the modeled equivalent width error for a line based on a Monte Carlo simulation.
+
+        Parameters
+        ----------
+        integrand: function
+            The function to be integrated. See the details here: https://en.wikipedia.org/wiki/Equivalent_width
+        line_window: list
+            A list containing the wavelength limits around the line.
+        line_parameters: list
+            A list with the line best-fit parameters obtained with the MCMC method.
+        line_par_errors: list
+            A list with the asymmetrical parameter errors.
+        
+        Returns
+        -------
+        EQW_error_down: float
+            The equivalent width lower error for a modeled line.
+        EQW_error_up: float
+            The equivalent width upper error for a modeled line.
+        """
+
+
+        line_par_errors = np.asarray(line_par_errors)
+        EQW_error_down = []
+        EQW_error_up = []
+        for n in range(100):
+            parameters_down = line_parameters + np.random.uniform(size=len(line_parameters))*line_par_errors[:,0]
+            parameters_up = line_parameters + np.random.uniform(size=len(line_parameters))*line_par_errors[:,1]
+            EQW_error_down.append(quad(integrand,line_window[0],line_window[1],args=parameters_down)[0])
+            EQW_error_up.append(quad(integrand,line_window[0],line_window[1],args=parameters_up)[0])
+
+        EQW_error_down = np.std(np.asarray(EQW_error_down))
+        EQW_error_up = np.std(np.asarray(EQW_error_up))
+
+        return EQW_error_down, EQW_error_up
+        
 
     def line_physics(self, wavelengths, flux_density, continuum_baseline, par_values_list, par_values_errors_list, par_names_list, line_windows, plot = True, save_file = True):
 
         """
-        Compute errors (fwhm and modeled disp_velocity are already done)
+        In this function we compute several physical properties for the fitted lines.
 
-        save file
+        OBS 1: For the Voigt model, we assume independent variables when propagating the FWHM error. If this is not the case (you can check this in the MCMC
+        corner plots), we recommend that you use the Gaussian or Lorentzian models.
 
+        OBS 2: The integrated flux is computed by taking the equivalent width and multiplying it by the continuum value at the line center.
+
+        OBS 3: The line dispersion is well defined for arbitrary line profiles. See e.g. Eqs. 4 and 5 in Peterson et al. 2004. This method is not recommended in case of blended lines.
 
         
-        Modeled integrated flux is computed by taking the EQW and multiplying it by the continuum value at the line center.
+        Parameters
+        ----------
+        wavelengths: numpy.ndarray (astropy.units Angstrom)
+            The wavelength solution for the given spectrum.
+        flux_density: numpy.ndarray (astropy.units erg/cm2/s/A)
+            The calibrated spectrum in flux density.
+        continuum_baseline: numpy.ndarray (float)
+            An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
+        par_values_list: list
+            This is a list containing sublists with the best-fit values for each line model.
+        par_values_errors_list: list
+            A list with the asymmetrical errors for each parameter listed in par_values_list.
+        par_names_list: list
+            A list with the names of all the parameters used in each line model.
+        line_windows: list
+            A list containing the wavelength intervals around each line.
+        plot: boolean
+            If True, the line and corresponding centroid and dispersion will be showed.
+        save_file: boolean
+            If True, the results of this function will be saved in a .csv file in the output directory defined at analysis.load_calibrated_data().
 
-        Line dispersion: it is well defined for arbitrary line profiles. See Eqs. 4 and 5 in Peterson et al. 2004. This method is not very good in case of blended lines.
-        
+        Returns
+        -------
+        profile_equiv_width_rest_frame: list (astropy.units Angstrom)
+            A list with the equivalent widths (and respective errors) for each line and their respective errors in the rest frame. The values here are obtained with the
+            interpolation of the line profile and are therefore independent on the line model (i.e. Gaussian, Lorentzian or Voigt).
+        modeled_equiv_width_rest_frame: list (astropy.units Angstrom)
+            A list with the model-dependent equivalent widths (and respective errors) for each line and their respective errors in the rest frame.
+        profile_integrated_flux: list (astropy.units erg/cm2/s)
+            A list with the model-independent line fluxes and their respective errors.
+        modeled_integrated_flux: list (astropy.units erg/cm2/s)
+            A list with the model-dependent line fluxes and their respective errors.
+        profile_rest_frame_disp_velocity: list (astropy.units km/s)
+            A list with the model-independent dispersion velocities and their respective errors in the rest frame.
+        modeled_rest_frame_disp_velocity: list (astropy.units km/s)
+            A list with the model-dependent dispersion velocities and their respective errors in the rest frame.
+        profile_line_dispersion_rest_frame: list (astropy.units Angstrom)
+            A list with the line dispersions (from the line second moments) and their respective errors in the rest frame.
+        profile_rest_frame_fwhm: list (astropy.units Angstrom)
+            A list with the model-independent line FWHMs and their respective errors in the rest frame.  
+        modeled_rest_frame_fhwm: list (astropy.units Angstrom)
+            A list with the model-dependent line FWHMs and their respective errors in the rest frame.        
+        XXXXXXX_line_physics.csv
+            Optional. This file contains all physics parameters for each modeled line and is saved in the output directory defined in the
+            function analysis.load_calibrated_data(). "XXXXXXX" here stands for the target's name.
         """
 
         try:
@@ -1189,6 +1324,7 @@ class analysis:
         modeled_rest_frame_disp_velocity = []
         profile_rest_frame_disp_velocity = []
         modeled_rest_frame_fhwm = []
+        profile_fwhm = []
         for number,line_parameters in enumerate(par_values_list):
 
             # taking the redshift and local continuum:
@@ -1202,14 +1338,24 @@ class analysis:
             continuum_baseline_window = continuum_baseline[window_indexes]
             wavelengths_window = wavelengths[window_indexes]
 
-            line_dispersion, profile_equiv_width = self.line_dispersion_and_equiv_width(wavelengths_window.value, flux_density_window.value, continuum_baseline_window, line_name = line_names[number], plot = plot)
-            profile_rest_frame_disp_velocity.append(c.to("km/s").value*line_dispersion/peak_position)
-            profile_integrated_flux.append(-profile_equiv_width*continuum_baseline[continuum_index])
+            line_dispersion, profile_equiv_width, profile_FWHM, line_disp_error, equiv_width_error, fwhm_error = self.line_dispersion_and_equiv_width(wavelengths_window.value, flux_density_window.value, continuum_baseline_window, line_name = line_names[number], plot = plot)
+            profile_disp_vel_error_down = c.to("km/s").value*np.sqrt(  line_disp_error*2/(peak_position**2) + (line_dispersion*par_values_errors_list[number][1][0]/(peak_position**2))**2 )
+            profile_disp_vel_error_up = c.to("km/s").value*np.sqrt(  line_disp_error*2/(peak_position**2) + (line_dispersion*par_values_errors_list[number][1][1]/(peak_position**2))**2 )
+            profile_rest_frame_disp_velocity.append([c.to("km/s").value*line_dispersion/peak_position, profile_disp_vel_error_down, profile_disp_vel_error_up])
+            profile_integrated_flux.append([-profile_equiv_width*continuum_baseline[continuum_index], equiv_width_error*continuum_baseline[continuum_index], equiv_width_error*continuum_baseline[continuum_index]])
+            line_dispersion_err_down = np.sqrt( (line_disp_error/(1+z))**2   +   (line_dispersion*par_values_errors_list[number][0][0]/((1+z)**2))**2   )
+            line_dispersion_err_up = np.sqrt( (line_disp_error/(1+z))**2   +   (line_dispersion*par_values_errors_list[number][0][1]/((1+z)**2))**2   )
             line_dispersion = line_dispersion/(1+z)
+            profile_equiv_width_err_down = np.sqrt( (equiv_width_error/(1+z))**2   +  (profile_equiv_width*par_values_errors_list[number][0][0]/((1+z)**2))**2      )
+            profile_equiv_width_err_up = np.sqrt( (equiv_width_error/(1+z))**2   +  (profile_equiv_width*par_values_errors_list[number][0][1]/((1+z)**2))**2      )
             profile_equiv_width = profile_equiv_width/(1+z)
+            profile_FWHM_error_down = np.sqrt( (fwhm_error/(1+z))**2   +  (profile_FWHM*par_values_errors_list[number][0][0]/((1+z)**2))**2      )
+            profile_FWHM_error_up = np.sqrt( (fwhm_error/(1+z))**2   +  (profile_FWHM*par_values_errors_list[number][0][1]/((1+z)**2))**2      )
+            profile_FWHM = profile_FWHM/(1+z)
 
-            profile_equiv_width_rest_frame.append(profile_equiv_width)
-            profile_line_dispersion_rest_frame.append(line_dispersion)
+            profile_equiv_width_rest_frame.append([profile_equiv_width,profile_equiv_width_err_down, profile_equiv_width_err_up])
+            profile_line_dispersion_rest_frame.append([line_dispersion,line_dispersion_err_down, line_dispersion_err_up])
+            profile_fwhm.append([profile_FWHM, profile_FWHM_error_down, profile_FWHM_error_up])
             
             # Computing the equivalent width from best-fit line models:
             if len(line_parameters) == 5:
@@ -1218,6 +1364,7 @@ class analysis:
                     return -1*self.model_Voigt(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
                 
                 equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=line_parameters[1:])
+                EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],line_parameters[1:],par_values_errors_list[number][1:])
                 FWHM_Voigt = 0.5346*line_parameters[3] + np.sqrt(0.2166*line_parameters[3]**2 + line_parameters[4]**2)
                 disp_velocity = c.to("km/s").value*FWHM_Voigt/(peak_position*2*np.sqrt(2 * np.log(2)))
                 fwhm_error_down = self.error_propagation_voigt(par_values_list[number][3],par_values_list[number][4],par_values_errors_list[number][3][0],par_values_errors_list[number][4][0])
@@ -1235,6 +1382,7 @@ class analysis:
                     return -1*self.model_Lorentz(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
                 
                 equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=line_parameters[1:])
+                EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],line_parameters[1:],par_values_errors_list[number][1:])
                 disp_velocity = c.to("km/s").value*line_parameters[3]/(2*peak_position) # The dispersion velocity for a Lorentzian is the half of its FWHM.
                 disp_velocity_err_down = c.to("km/s").value*par_values_errors_list[number][3][0]/(peak_position*2)
                 disp_velocity_err_up = c.to("km/s").value*par_values_errors_list[number][3][1]/(peak_position*2)
@@ -1249,6 +1397,9 @@ class analysis:
                 gaussian_parameters = line_parameters[1:]
                 gaussian_parameters[2] = gaussian_parameters[2]/(2*np.sqrt(2 * np.log(2)))  # This is necessary because the last Gaussian parameter saved in par_values_list is the FWHM and not the standard deviation.
                 equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=gaussian_parameters)
+                gaussian_parameters_errors = par_values_errors_list[number][1:]
+                gaussian_parameters_errors[2] = gaussian_parameters_errors[2]/(2*np.sqrt(2 * np.log(2)))
+                EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],gaussian_parameters,gaussian_parameters_errors)
                 disp_velocity = c.to("km/s").value*line_parameters[3]/(peak_position*2*np.sqrt(2 * np.log(2))) # The dispersion velocity for a Gaussian is its standard deviation given in velocity units.
                 disp_velocity_err_down = c.to("km/s").value*par_values_errors_list[number][3][0]/(peak_position*2*np.sqrt(2 * np.log(2)))
                 disp_velocity_err_up = c.to("km/s").value*par_values_errors_list[number][3][1]/(peak_position*2*np.sqrt(2 * np.log(2)))
@@ -1256,12 +1407,13 @@ class analysis:
                 fwhm_error_up = np.sqrt( (par_values_errors_list[number][3][1]/(1+z))**2   +  (line_parameters[3]*par_values_errors_list[number][0][1]/((1+z)**2))**2      )
                 fwhm_rest_frame = line_parameters[3]/(1+z)
 
+            modeled_integrated_flux.append([-equivalent_width[0]*continuum_baseline[continuum_index], EQW_error_down*continuum_baseline[continuum_index] , EQW_error_up*continuum_baseline[continuum_index]])
+            EQW_error_down = np.sqrt( (EQW_error_down/(1+z))**2   +  (equivalent_width[0]*par_values_errors_list[number][0][0]/((1+z)**2))**2      )
+            EQW_error_up = np.sqrt( (EQW_error_up/(1+z))**2   +  (equivalent_width[0]*par_values_errors_list[number][0][0]/((1+z)**2))**2      )
             modeled_rest_frame_disp_velocity.append([disp_velocity,disp_velocity_err_down,disp_velocity_err_up])  
             modeled_rest_frame_fhwm.append([fwhm_rest_frame,fwhm_error_down,fwhm_error_up])
-            modeled_equiv_width_rest_frame.append(equivalent_width[0]/(1+z)) # We divide the measured equivalent width by 1+z to get the rest-frame equiv width.
-            modeled_integrated_flux.append(-equivalent_width[0]*continuum_baseline[continuum_index])
+            modeled_equiv_width_rest_frame.append([equivalent_width[0]/(1+z), EQW_error_down, EQW_error_up]) # We divide the measured equivalent width by 1+z to get the rest-frame equiv width.
             
-
 
         modeled_rest_frame_fhwm = modeled_rest_frame_fhwm*u.AA
         modeled_rest_frame_disp_velocity = modeled_rest_frame_disp_velocity*u.km/u.s
@@ -1271,18 +1423,141 @@ class analysis:
         modeled_equiv_width_rest_frame = modeled_equiv_width_rest_frame*u.AA
         modeled_integrated_flux = modeled_integrated_flux*u.erg/u.cm**2/u.s
         profile_integrated_flux = profile_integrated_flux*u.erg/u.cm**2/u.s
+        profile_rest_frame_fwhm = profile_fwhm*u.AA
 
         if plot:
             plt.show()
+
+        if save_file:
+            f = open(f'{self.output_dir}/'+self.target_name+"_line_physics.csv","w")
+            f.write("Line name, profile_equiv_width_rest_frame [Angstrom], err_down, err_up,")
+            f.write("modeled_equiv_width_rest_frame [Angstrom], err_down, err_up,")
+            f.write("profile_integrated_flux [erg/cm2/s], err_down, err_up,")
+            f.write("modeled_integrated_flux [erg/cm2/s], err_down, err_up,")
+            f.write("profile_rest_frame_disp_velocity [km/s], err_down, err_up,")
+            f.write("modeled_rest_frame_disp_velocity [km/s], err_down, err_up,")
+            f.write("profile_line_dispersion_rest_frame [Angstrom], err_down, err_up,")
+            f.write("profile_rest_frame_fwhm [Angstrom], err_down, err_up,")
+            f.write("modeled_rest_frame_fhwm [Angstrom], err_down, err_up\n")
+            for number in range(len(profile_equiv_width_rest_frame)):
+                f.write(self.line_names[number])
+                f.write(","+str(profile_equiv_width_rest_frame[number][0].value)+","+str(profile_equiv_width_rest_frame[number][1].value)+","+str(profile_equiv_width_rest_frame[number][2].value))
+                f.write(","+str(modeled_equiv_width_rest_frame[number][0].value)+","+str(modeled_equiv_width_rest_frame[number][1].value)+","+str(modeled_equiv_width_rest_frame[number][2].value))
+                f.write(","+str(profile_integrated_flux[number][0].value)+","+str(profile_integrated_flux[number][1].value)+","+str(profile_integrated_flux[number][2].value))
+                f.write(","+str(modeled_integrated_flux[number][0].value)+","+str(modeled_integrated_flux[number][1].value)+","+str(modeled_integrated_flux[number][2].value))
+                f.write(","+str(profile_rest_frame_disp_velocity[number][0].value)+","+str(profile_rest_frame_disp_velocity[number][1].value)+","+str(profile_rest_frame_disp_velocity[number][2].value))
+                f.write(","+str(modeled_rest_frame_disp_velocity[number][0].value)+","+str(modeled_rest_frame_disp_velocity[number][1].value)+","+str(modeled_rest_frame_disp_velocity[number][2].value))
+                f.write(","+str(profile_line_dispersion_rest_frame[number][0].value)+","+str(profile_line_dispersion_rest_frame[number][1].value)+","+str(profile_line_dispersion_rest_frame[number][2].value))
+                f.write(","+str(profile_rest_frame_fwhm[number][0].value)+","+str(profile_rest_frame_fwhm[number][1].value)+","+str(profile_rest_frame_fwhm[number][2].value))
+                f.write(","+str(modeled_rest_frame_fhwm[number][0].value)+","+str(modeled_rest_frame_fhwm[number][1].value)+","+str(modeled_rest_frame_fhwm[number][2].value))
+                f.write("\n")
+            f.close()
         
         
-        return profile_equiv_width_rest_frame, modeled_equiv_width_rest_frame, profile_integrated_flux, modeled_integrated_flux, profile_rest_frame_disp_velocity, modeled_rest_frame_disp_velocity, modeled_rest_frame_fhwm, profile_line_dispersion_rest_frame
+        return profile_equiv_width_rest_frame, modeled_equiv_width_rest_frame, profile_integrated_flux, modeled_integrated_flux, profile_rest_frame_disp_velocity, modeled_rest_frame_disp_velocity, profile_line_dispersion_rest_frame, profile_rest_frame_fwhm, modeled_rest_frame_fhwm
 
 
+    def BH_mass_Hbeta_VP2006(self, wavelengths, continuum_baseline, FWHM_Hbeta, par_values_Hbeta, integrated_flux_Hbeta, H0=70):
 
+        """
+        This function estimates the black hole mass based on Vestergaard & Peterson, 2006, ApJ, 641, "DETERMINING CENTRAL BLACK HOLE MASSES IN DISTANT ACTIVE
+        GALAXIES AND QUASARS. II. IMPROVED OPTICAL AND UV SCALING RELATIONSHIPS". As stated in this work, here we assume a cosmology with H0 = 70 km/s/Mpc, Omega_Lambda = 0.7,
+        and Omega_matter = 0.3, although we allow the user to change the value of the Hubble constant (H0).
+
+        We assume a systematic error of 0.43 dex for the estimated black hole masses. This value is reported in Vestergaard & Peterson, 2006. Since this error is
+        much higher than the errors in FWHM and integrated flux, we simply ignore the measured errors in these parameters.
+
+        Parameters
+        ----------
+        wavelengths: numpy.ndarray (astropy.units Angstrom)
+            The wavelength solution for the given spectrum.
+        continuum_baseline: numpy.ndarray (float)
+            An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
+        FWHM_Hbeta: float (astropy.units Angstrom)
+            The FWHM for the Hbeta line in Angstrom units.
+        par_values_Hbeta: list
+            The list with the best fit values for the Hbeta line. This information is contained in the variable "par_values_list" returned from the function
+            analysis.fit_lines().
+        integrated_flux_Hbeta: float (astropy.units Angstrom)
+            The integrated flux for the Hbeta line in erg/cm2/s units.
+        H0: float
+            This is the Hubble constant value. Default is 70 km/s/Mpc.
+
+        Returns
+        -------
+        log10_BH_mass_continuum: float
+            The black hole mass in log10 scale and its correspondin error in dex computed based on Eq. 5 from Vestergaard & Peterson, 2006, ApJ, 641.
+        log10_BH_mass_line_lum: float
+            The black hole mass in log10 scale and its correspondin error in dex computed based on Eq. 6 from Vestergaard & Peterson, 2006, ApJ, 641.
+        """
+
+        systematic_error = 0.43 # dex. Result from Vestergaard & Peterson, 2006.
+        z = par_values_Hbeta[0]
+        FWHM_Hbeta_velocity = c.to("km/s").value*FWHM_Hbeta.value*(1+z)/par_values_Hbeta[1]
+
+        cosmo = FlatLambdaCDM(H0=H0, Om0=0.3, Tcmb0 = 2.7) # Omega lambda is implicitly 0.7
+        Distance = cosmo.luminosity_distance(z).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
+        Lum_Hbeta = integrated_flux_Hbeta.value*4*np.pi*(Distance**2)
+
+        continuum_index = extraction.find_nearest(wavelengths.value, 5100*(1+z))
+        Lum_5100 = continuum_baseline[continuum_index]*wavelengths.value[continuum_index]*4*np.pi*(Distance**2)
+
+        log10_BH_mass_continuum = np.log10( ((FWHM_Hbeta_velocity/1000)**2) * np.sqrt((Lum_5100/(10**44))) ) + 6.91
+
+        log10_BH_mass_line_lum = np.log10(  ((FWHM_Hbeta_velocity/1000)**2) * ((Lum_Hbeta/(10**42)))**0.63 ) + 6.67
+
+        log10_BH_mass_continuum = [log10_BH_mass_continuum,systematic_error]
+        log10_BH_mass_line_lum = [log10_BH_mass_line_lum,systematic_error]
+        return log10_BH_mass_continuum, log10_BH_mass_line_lum
+
+
+    def BH_mass_CIV_VP2006(self, wavelengths, continuum_baseline, FWHM_CIV, par_values_CIV, H0=70):
+
+        """
+        This function estimates the black hole mass based on Vestergaard & Peterson, 2006, ApJ, 641, "DETERMINING CENTRAL BLACK HOLE MASSES IN DISTANT ACTIVE
+        GALAXIES AND QUASARS. II. IMPROVED OPTICAL AND UV SCALING RELATIONSHIPS". As stated in this work, here we assume a cosmology with H0 = 70 km/s/Mpc, Omega_Lambda = 0.7,
+        and Omega_matter = 0.3, although we allow the user to change the value of the Hubble constant (H0).
+
+        We assume a systematic error of 0.36 dex for the estimated black hole masses. This value is reported in Vestergaard & Peterson, 2006. Since this error is
+        much higher than the errors in FWHM and integrated flux, we simply ignore the measured errors in these parameters.
+
+        Parameters
+        ----------
+        wavelengths: numpy.ndarray (astropy.units Angstrom)
+            The wavelength solution for the given spectrum.
+        continuum_baseline: numpy.ndarray (float)
+            An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
+        FWHM_CIV: float (astropy.units Angstrom)
+            The FWHM for the CIV line in Angstrom units.
+        par_values_CIV: list
+            The list with the best fit values for the CIV line. This information is contained in the variable "par_values_list" returned from the function
+            analysis.fit_lines().
+        H0: float
+            This is the Hubble constant value. Default is 70 km/s/Mpc.
+
+        Returns
+        -------
+        log10_BH_mass_CIV: float
+            The black hole mass in log10 scale and its correspondin error in dex computed based on Eq. 8 from Vestergaard & Peterson, 2006, ApJ, 641.
+        """
+
+        systematic_error_FWHM = 0.36 # dex. Result from Vestergaard & Peterson, 2006.
+        z = par_values_CIV[0]
+        FWHM_CIV_velocity = c.to("km/s").value*FWHM_CIV.value*(1+z)/par_values_CIV[1]
+
+        cosmo = FlatLambdaCDM(H0=H0, Om0=0.3, Tcmb0 = 2.7) # Omega lambda is implicitly 0.7
+        Distance = cosmo.luminosity_distance(z).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
+
+        continuum_index = extraction.find_nearest(wavelengths.value, 1350*(1+z))
+        Lum_1350 = continuum_baseline[continuum_index]*wavelengths.value[continuum_index]*4*np.pi*(Distance**2)
+
+        log10_BH_mass_CIV = np.log10( ((FWHM_CIV_velocity/1000)**2) * (Lum_1350/(10**44))**0.53 ) + 6.66
+
+        log10_BH_mass_CIV = [log10_BH_mass_CIV,systematic_error_FWHM]
+        return log10_BH_mass_CIV
 
 """
-
+Documentacao
 
 Double and triple lines. Eu posso adicionar um parametro tipo "blended_line_min_separation", dado em angstroms, tal que se os picos de duas ou mais linhas
 estiver a uma distancia menor que blended_line_min_separation, a linha eh considerada dupla ou tripla. Assim eh bom que nem preciso adicionar mais modelos de linha,
