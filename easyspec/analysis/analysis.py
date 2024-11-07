@@ -337,29 +337,36 @@ class analysis:
             returns a function with the desired line model.
         """
         
-        models = {"Gaussian" : self.model_Gauss, "Lorentz" : self.model_Lorentz, "Voigt" : self.model_Voigt, "doubleVoigt" : self.model_double_Voigt, "tripleVoigt": self.model_triple_Voigt, "custom" : custom_function}
+        models = {"Gaussian" : self.model_Gauss, "Lorentz" : self.model_Lorentz, "Voigt" : self.model_Voigt,
+                  "GaussianGaussian": self.model_Gauss_Gauss,"GaussianGaussianGaussian" : self.model_Gauss_Gauss_Gauss,
+                  "LorentzGaussianGaussian": self.model_Lorentz_Gauss_Gauss,"custom" : custom_function}
         if model_name not in models.keys():
             raise Exception("Invalid model_name. Options are: Gaussian, Lorentz, Voigt, doubleVoigt, tripleVoigt, custom")
         return models[model_name]
 
-    def model_double_Voigt(self, theta,x):
-        x_0, amplitude_L, fwhm_G, fwhm_L, x_2, amplitude2_L, fwhm2_G, fwhm2_L = theta
-        a = Voigt1D(x_0, amplitude_L, fwhm_L, fwhm_G) + Voigt1D(x_2, amplitude2_L, fwhm2_L, fwhm2_G)
+    def model_Gauss(self, theta,x):
+        mean, amplitude, std = theta
+        a = Gaussian1D(amplitude, mean, std)
         return a(x)
 
-    def model_triple_Voigt(self, theta,x):
-        x_0, amplitude_L, fwhm_G, fwhm_L, x_2, amplitude2_L, fwhm2_G, fwhm2_L, x_3, amplitude3_L, fwhm3_G, fwhm3_L = theta
-        a = Voigt1D(x_0, amplitude_L, fwhm_L, fwhm_G) + Voigt1D(x_2, amplitude2_L, fwhm2_L, fwhm2_G) + Voigt1D(x_3, amplitude3_L, fwhm3_L, fwhm3_G)
+    def model_Gauss_Gauss(self,theta,x):
+        mean, amplitude, std, mean2, amplitude2, std2 = theta
+        a = Gaussian1D(amplitude, mean, std) + Gaussian1D(amplitude2, mean2, std2)
+        return a(x)
+    
+    def model_Gauss_Gauss_Gauss(self,theta,x):
+        mean, amplitude, std, mean2, amplitude2, std2, mean3, amplitude3, std3 = theta
+        a = Gaussian1D(amplitude=amplitude, mean=mean, stddev=std) + Gaussian1D(amplitude=amplitude2, mean=mean2, stddev=std2) + Gaussian1D(amplitude=amplitude3, mean=mean3, stddev=std3)
+        return a(x)
+
+    def model_Lorentz_Gauss_Gauss(self,theta,x):
+        mean_L, amplitude_L, fwhm_L, mean, amplitude, std, mean2, amplitude2, std2 = theta
+        a = Lorentz1D(amplitude_L, mean_L, fwhm_L) + Gaussian1D(amplitude, mean, std) + Gaussian1D(amplitude2, mean2, std2)
         return a(x)
 
     def model_Voigt(self, theta,x):
         x_0, amplitude_L, fwhm_G, fwhm_L = theta
         a = Voigt1D(x_0, amplitude_L, fwhm_L, fwhm_G)
-        return a(x)
-
-    def model_Gauss(self, theta,x):
-        mean, amplitude, std = theta
-        a = Gaussian1D(amplitude, mean, std)
         return a(x)
 
     def model_Lorentz(self, theta,x):
@@ -439,17 +446,10 @@ class analysis:
         return sampler, pos, prob, state
     
 
-    def plotter(self, sampler, model_name, x, color="grey", custom_function=None, normalization = 1):
-    
-        if model_name == "custom":
-            if not callable(custom_function):
-                raise Exception("Parameter custom_function is not callable. This parameter must be a function to work properly.")
-        else:
-            if custom_function is not None:
-                custom_function = None
+    def plotter(self, sampler, model_name, x, color="grey", normalization = 1):
                 
         samples = sampler.flatchain
-        adopted_model = self.all_models(model_name, custom_function)
+        adopted_model = self.all_models(model_name, custom_function=None)
         
         x_plot = np.linspace(x.min(),x.max(),1000)
         for theta in samples[np.random.randint(len(samples), size=100)]:
@@ -514,8 +514,8 @@ class analysis:
         lambda_peak_names: str or list of str
         Name or list of names of the parameters corresponting to the line peaks. E.g.: for a Gaussian, the parameter that tell us where
         the line peak is located is the Gaussian mean. E.g. 2: if your model consists of two Gaussians with 
-        parlabels = [["mean", "Amplitude", "fwhm"],["mean2", "Amplitude2", "fwhm2"]], then
-        lambda_peak_names = ["mean","mean2"]
+        parlabels = [["mean", "Amplitude", "fwhm"],["mean", "Amplitude", "fwhm"]], then
+        lambda_peak_names = ["mean","mean"]
         
         """
         
@@ -528,14 +528,6 @@ class analysis:
             
         output_dir = str(Path(output_dir))
         
-        
-        lambda_peak_names = ["Mean"]
-        if model_name[0:6] == "double":
-            lambda_peak_names.append("Mean2")
-        elif model_name[0:6] == "triple":
-            lambda_peak_names.append("Mean2")
-            lambda_peak_names.append("Mean3")
-        
          
         # If air_wavelength_line is a number, we transform it into a list with a single element: 
         if air_wavelength_line is not None: 
@@ -546,6 +538,8 @@ class analysis:
             else:
                 raise Exception("The input value for air_wavelength_line must be a float, an integer, a list, or a numpy array.")
         
+        lambda_peak_names = ["Mean"]*len(air_wavelength_line)
+
         # Checking line_names:
         if isinstance(line_names,str):
                 line_names = [line_names]
@@ -555,6 +549,9 @@ class analysis:
             raise Exception("The input value for line_names must be a string, a list, or a numpy array.")
         
         previous_j = 0
+        par_values = []
+        par_values_errors = []
+        par_names = []
         for i in range(len(lambda_peak_names)):
             if savefile:
                 if model_name == "custom":
@@ -562,10 +559,8 @@ class analysis:
                 else:
                     f = open(f'{output_dir}/{self.target_name}_{line_names[i]}_line_fit_results.csv','w')
                 f.write("# Parameter name, value, error_down, error_up\n")
-            par_values = []
-            par_values_errors = []
-            par_names = []
             ndim = len(parlabels[i])  # number of dimensions/parameters
+            parlabels[i] = list(parlabels[i])
 
             for j in range(ndim):  # must be done once per variable
                 q_16, q_50, q_84 = corner.quantile(samples[:,j+previous_j], quantiles)
@@ -582,7 +577,7 @@ class analysis:
                     par_values.append(q_50*normalization)
                     par_values_errors.append([dx_down*normalization, dx_up*normalization])
                 elif parlabels[i][j][0:3] == "std":  # For Gaussian fits, we convert the std to FWHM
-                    parlabels[i][j] = "fwhm_Gauss"+parlabels[i][j][3:]
+                    parlabels[i][j] = "fwhm_Gauss"
                     fwhm = q_50*2*np.sqrt(2 * np.log(2))
                     fwhm_error_down = dx_down*2*np.sqrt(2 * np.log(2))
                     fwhm_error_up = dx_up*2*np.sqrt(2 * np.log(2))
@@ -595,10 +590,6 @@ class analysis:
                 
                 if savefile:
                     f.write(f"{parlabels[i][j]}, {par_values[-1]}, {par_values_errors[-1][0]}, {par_values_errors[-1][1]}\n")
-                    """if parlabels[i][j][0:9] == "Amplitude":
-                        f.write(f"{parlabels[i][j]}, {par_values[-1]}, {par_values_errors[-1][0]}, {par_values_errors[-1][1]}\n")
-                    else:
-                        f.write(f"{parlabels[i][j]}, {par_values[-1]}, {par_values_errors[-1][0]}, {par_values_errors[-1][1]}\n")"""
             
             previous_j = j + previous_j + 1
             if savefile:
@@ -607,7 +598,7 @@ class analysis:
         return par_values, par_values_errors, par_names
 
 
-    def quick_plot(self, x,y,model_name, custom_function=None, sampler=None, best_fit_model=None, theta_max=None, normalization= 1, hair_color="grey", title="",xlabel="Observed $\lambda$ [$\AA$]",ylabel="F$_{\lambda}$ [erg cm$^{-2}$ s$^{-1}$ $\AA^{-1}$ ]",savefig=True, outputdir="./"):
+    def quick_plot(self, x,y,model_name, parlabels, sampler=None, best_fit_model=None, theta_max=None, normalization= 1, hair_color="grey", title="",xlabel="Observed $\lambda$ [$\AA$]",ylabel="F$_{\lambda}$ [erg cm$^{-2}$ s$^{-1}$ $\AA^{-1}$ ]",savefig=True, outputdir="./"):
         
         """
         theta_max: numpy.ndarray
@@ -616,13 +607,6 @@ class analysis:
         
         
         """
-        
-        if model_name == "custom":
-            if not callable(custom_function):
-                raise Exception("Parameter custom_function is not callable. This parameter must be a function to work properly.")
-        else:
-            if custom_function is not None:
-                custom_function = None
                 
         f = plt.figure(figsize=(10,8))
         ax = f.add_subplot(1,1,1)
@@ -632,12 +616,12 @@ class analysis:
         ax.tick_params(which='minor', length=2.5, direction='in',bottom=True, top=True, left=True, right=True)
         ax.tick_params(bottom=True, top=True, left=True, right=True)
         
-        plt.plot(x,y*normalization,color="orange", label="data after cont. subtraction")
+        plt.plot(x,y*normalization,color="orange", label="Data after cont. subtraction")
         if sampler is not None:
-            self.plotter(sampler,model_name,x,color=hair_color, custom_function=custom_function, normalization = normalization)
+            self.plotter(sampler,model_name,x,color=hair_color, normalization = normalization)
         if best_fit_model is not None:
             x_plot = np.linspace(x.min(),x.max(),len(best_fit_model))
-            plt.plot(x_plot,best_fit_model*normalization, color="black", label="Highest Likelihood Model")
+            plt.plot(x_plot,best_fit_model*normalization, color="black", label="Highest likelihood model")
         plt.xlabel(xlabel,fontsize=12)
         plt.ylabel(ylabel,fontsize=12)
         plt.title(title)
@@ -645,27 +629,18 @@ class analysis:
         plt.ticklabel_format(scilimits=(-5, 8))
         plt.ylim((y.min()-0.1*y.max())*normalization,1.1*y.max()*normalization)
         
-        if theta_max is not None:
-            if model_name == "doubleVoigt":
-                plt.plot(x,self.model_Voigt(theta_max[0:4],x)*normalization, color="k", linestyle=":", label="Voigt components") 
-                plt.plot(x,self.model_Voigt(theta_max[4:],x)*normalization, color="k", linestyle=":")
-                plt.vlines(theta_max[0],y.min()-0.1*y.max(),10000, colors="k", linewidth=0.5)
-                plt.vlines(theta_max[4],y.min()-0.1*y.max(),10000, colors="k", linewidth=0.5)
-            elif model_name == "tripleVoigt":
-                plt.plot(x,self.model_Voigt(theta_max[0:4],x)*normalization, color="k", linestyle=":", label="Voigt components")
-                plt.plot(x,self.model_Voigt(theta_max[4:8],x)*normalization, color="k", linestyle=":")
-                plt.plot(x,self.model_Voigt(theta_max[8:],x)*normalization, color="k", linestyle=":")
-                plt.vlines(theta_max[0],y.min()-0.1*y.max(),10000, colors="k", linewidth=0.5)
-                plt.vlines(theta_max[4],y.min()-0.1*y.max(),10000, colors="k", linewidth=0.5)
-                plt.vlines(theta_max[8],y.min()-0.1*y.max(),10000, colors="k", linewidth=0.5)
-            elif model_name != "custom":
-                plt.vlines(theta_max[0],y.min()-0.1*y.max(),10000, colors="k", linewidth=0.5)
+        if isinstance(parlabels,list):
+            parlabels = np.asarray(parlabels)
+        peak_indexes = np.where(parlabels=="Mean")[0]
+
+        for i in peak_indexes:
+            plt.vlines(theta_max[i],y.min()-0.1*y.max(),10000, colors="k", linewidth=0.5)
         plt.legend()
         if savefig:
             plt.savefig(outputdir+"/"+title+"_line.png")
         return
 
-    def merge_fit_results(self, target_name,list_of_files=None, wavelength_systematic_error = None, rest_frame_line_wavelengths = None, output_dir="./"):
+    def merge_fit_results(self, target_name,list_of_files=None, wavelength_systematic_error = None, output_dir="./"):
         
         """
         This function merges the individual data files for each line into a single merged data file.
@@ -695,6 +670,8 @@ class analysis:
             if len(line_data) > maximum_number_of_pars:
                 maximum_number_of_pars = len(line_data)
                 index_maximum_number_of_pars = n
+        
+        
 
         # Write header:
         parameter_names = np.asarray(data_list[index_maximum_number_of_pars][:,0])
@@ -713,7 +690,7 @@ class analysis:
                 f.write(", "+parameter_name+", "+parameter_name+"_error_down, "+parameter_name+"_error_up")
         
         if wavelength_systematic_error is not None:
-            f.write(", Systematic wavelength error [Ang], Systematic z error")
+            f.write(", Systematic wavelength error [Ang]")
 
         # Writing down the parameters and filling the empty spaces with zeros:
         for i in range(len(data_list)):
@@ -737,7 +714,7 @@ class analysis:
                         f.write(", 0, 0, 0")
 
             if wavelength_systematic_error is not None:
-                f.write(f", {wavelength_systematic_error}, {wavelength_systematic_error/rest_frame_line_wavelengths[i]}")
+                f.write(f", {wavelength_systematic_error}")
 
         f.close()
         return
@@ -780,17 +757,13 @@ class analysis:
             labels = ["Mean", "Amplitude", "fwhm_Lorentz", "fwhm_Gauss"]
             adopted_model = self.model_Voigt
 
-        """if which_model == "doubleVoigt":
-            labels = ["Mean", "Amplitude", "fwhm_L", "fwhm_G", "Mean2", "Amplitude2", "fwhm2_L", "fwhm2_G"]
-        elif which_model == "tripleVoigt":
-            labels = ["Mean", "Amplitude", "fwhm_L", "fwhm_G", "Mean2", "Amplitude2", "fwhm2_L", "fwhm2_G", "Mean3", "Amplitude3", "fwhm3_L", "fwhm3_G"]"""
-
+        
         return initial, priors, labels, adopted_model
 
 
 
     def fit_lines(self, wavelengths, flux_density, continuum_baseline, wavelength_peak_positions, rest_frame_line_wavelengths, peak_heights, line_std_deviation,
-                  which_models="Lorentz", line_names = None, overplot_archival_lines = ["H"], priors = None, MCMC_walkers = 250,
+                  blended_line_min_separation = 50, which_models="Lorentz", line_names = None, overplot_archival_lines = ["H"], priors = None, MCMC_walkers = 250,
                   MCMC_iterations = 400, N_cores = 1, plot_spec = True, plot_MCMC = False, save_results = True):
 
         """
@@ -806,10 +779,14 @@ class analysis:
             An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
         wavelength_peak_positions: numpy.ndarray (astropy.units Angstrom)
             The position of each peak in Angstroms found with the function analysis.find_lines().
+        rest_frame_line_wavelengths: list
+            A list with the rest frame wavelength values for each one of the input lines.
         peak_heights: numpy.ndarray (astropy.units Angstrom)
             The height of each peak in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
         line_std_deviation: numpy.ndarray (float)
             The standard deviation for the local continuum. This variable is an output of the function analysis.find_lines().
+        blended_line_min_separation: float
+            The minimum separation between blended line peaks in Angstrom. If the line peaks are closer than this value, a blended model will be adopted.
         which_models: string or list of strings
             A list containing the models to be applied to each line, e.g.: if you are trying to model 2 lines, you can use which_models = ["Lorentz","Gaussian"].
             If you wish to use the same model for all lines, you can use which_models = ["Gaussian","Gaussian"] or simply which_models = "Gaussian". Options are
@@ -889,12 +866,14 @@ class analysis:
         elif isinstance(which_models,list):
             if len(which_models) != len(rest_frame_line_wavelengths) or len(which_models) != len(wavelength_peak_positions):
                 raise RuntimeError("Input variables 'which_models', 'rest_frame_line_wavelengths', and 'wavelength_peak_positions' must have the same size.")
+        copy_which_models = list(np.copy(which_models))
 
         if line_names is None:
             line_names = []
             for number, _ in enumerate(rest_frame_line_wavelengths): 
                 line_names.append(f"line_{number}")
 
+        self.line_names = line_names
 
         local_continuum_index = []
         for wavelength in wavelength_peak_positions:
@@ -902,7 +881,19 @@ class analysis:
         peak_heights = peak_heights - continuum_baseline[local_continuum_index]
         normalization = 10**round(np.log10(np.median(flux_density.value - 0.9*continuum_baseline)))
 
+        # Here we identify the blended lines:
+        peak_distances = np.diff(wavelength_peak_positions)
+        blended_line = [False]  # The first line will never be blended with a precedent line
+        for distance in peak_distances:
+            if distance < blended_line_min_separation:
+                blended_line.append(True)
+            else:
+                blended_line.append(False)
+        
+        blended_line.append(False)  # We append a last element to the blended_line list to guarantee that our list can go up to number+1 and the last line can be fitted.
+
         par_values_list, par_values_errors_list, par_names_list, samples_list, line_windows = [], [], [], [], []
+        line_region_min_cache, initial_cache, p0_cache, priors_cache, labels_cache = [], [], [], [], []
         for number, peak_height in enumerate(peak_heights):
             invert_spectrum = 1  # For emission lines, the spectrum is multiplied by 1. For absorption lines, it is multiplied by -1
             if peak_height < 0:
@@ -918,6 +909,7 @@ class analysis:
                     mean_point = (wavelength_peak_positions[number-1] + wavelength_peak_positions[number])/2
                     if mean_point > line_region_min:
                         line_region_min = mean_point
+                line_region_min_cache.append(line_region_min)
 
                 line_region_max = wavelength_peak_positions[number] + 100
                 if number < (len(rest_frame_line_wavelengths)-1):
@@ -925,9 +917,9 @@ class analysis:
                     if mean_point < line_region_max:
                         line_region_max = mean_point
 
-                initial, local_priors, labels, adopted_model = self.automatic_priors(which_models[number], wavelength_peak_positions[number], peak_height, line_region_min, line_region_max)
+                initial, local_priors, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, line_region_min, line_region_max)
             else:
-                initial, _, labels, adopted_model = self.automatic_priors(which_models[number], wavelength_peak_positions[number], peak_height, line_region_min=None, line_region_max=None)
+                initial, _, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, line_region_min=None, line_region_max=None)
                 local_priors = np.asarray(priors[number],dtype="object")
                 # In the case of a single-line analysis, if the user inputs priors=[[7500,7700],[0.1],[2,50]] instead of priors=[ [[7500,7700],[0.1],[2,50]] ], the analysis will work anyway.
                 if isinstance(local_priors[0],float) or isinstance(local_priors[0],int):
@@ -935,41 +927,151 @@ class analysis:
                 line_region_min = local_priors[0][0]
                 line_region_max = local_priors[0][1]
             
+            # Reseting wavelength windows for blended lines:
+            if number < (len(rest_frame_line_wavelengths)-1):
+                counter = 0
+                for i in blended_line[number+1:]:
+                    if i is False:
+                        break
+                    else:
+                        counter = counter + 1
+                        
+                line_region_max = wavelength_peak_positions[number+counter] + 100
+                if (number+counter) < (len(rest_frame_line_wavelengths)-1):
+                    mean_point = (wavelength_peak_positions[number+counter] + wavelength_peak_positions[number+counter+1])/2
+                    if mean_point < line_region_max:
+                        line_region_max = mean_point
+
+            if blended_line[number] is True:
+                counter = 1
+                for i in np.flip(blended_line[:number]):
+                    if bool(i) is True:
+                        counter = counter + 1
+                    else:
+                        break
+                line_region_min = line_region_min_cache[-counter-1]
+
 
             line_windows.append([line_region_min, line_region_max])
             x,y,yerr = self.data_window_selection(wavelengths.value, continuum_subtracted_flux, local_line_std_deviation*np.ones(len(wavelengths.value)), line_region_min, line_region_max)
             data = (x, y, yerr)
             p0 = [np.array(initial) + 0.01 * np.random.randn(len(initial)) for i in range(MCMC_walkers)]  # p0 is the methodology of stepping from one place on a grid to the next.
-            sampler, pos, prob, state = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, which_models[number], ncores=N_cores)
-            samples = sampler.flatchain
-            samples_list.append(samples)
-            theta_max = samples[np.argmax(sampler.flatlnprobability)]
+            initial_cache.append(initial)
+            p0_cache.append(p0)
+            priors_cache.append(local_priors)
+            labels_cache.append(labels)
+            
+            
+            if blended_line[number] is False:
+                blended_line_names = []
+                blended_rest_frame_line_wavelengths = []
+                blended_labels = []
+                if blended_line[number+1] is False:
+                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number], ncores=N_cores)
+                    samples = sampler.flatchain
+                    samples_list.append(samples)
+                    theta_max = samples[np.argmax(sampler.flatlnprobability)]
 
-            par_values, par_values_errors, par_names = self.parameter_estimation(samples, which_models[number], air_wavelength_line = rest_frame_line_wavelengths[number],
-                                                                                 normalization=local_normalization, parlabels = list.copy(labels), line_names=line_names[number],
-                                                                                 output_dir = self.output_dir, savefile=save_results)
-            par_values_list.append(par_values)
-            par_values_errors_list.append(par_values_errors)
-            par_names_list.append(par_names)
+                    par_values, par_values_errors, par_names = self.parameter_estimation(samples, copy_which_models[number], air_wavelength_line = rest_frame_line_wavelengths[number],
+                                                                                        normalization=local_normalization, parlabels = list.copy(labels), line_names=line_names[number],
+                                                                                        output_dir = self.output_dir, savefile=save_results)
+                    par_values_list.append(par_values)
+                    par_values_errors_list.append(par_values_errors)
+                    par_names_list.append(par_names)
 
-            x_best_fit = np.linspace(x.min(),x.max(),1000)
-            best_fit_model = adopted_model(theta_max, x_best_fit)
+                    x_best_fit = np.linspace(x.min(),x.max(),1000)
+                    best_fit_model = adopted_model(theta_max, x_best_fit)
 
-            if plot_MCMC:
-                corner.corner(
-                    samples,
-                    show_titles=True,
-                    labels=labels,
-                    plot_datapoints=True,
-                    quantiles=[0.16, 0.5, 0.84],
-                )
-                plt.suptitle(line_names[number]+"\n(normalized amplitude)", x=0.7)
+                    if plot_MCMC:
+                        corner.corner(
+                            samples,
+                            show_titles=True,
+                            labels=labels,
+                            plot_datapoints=True,
+                            quantiles=[0.16, 0.5, 0.84],
+                        )
+                        plt.suptitle(line_names[number]+"\n(normalized amplitude)", x=0.7)
 
 
-                self.parameter_time_series(initial, sampler, labels)
+                        self.parameter_time_series(initial, sampler, labels)
 
-                self.quick_plot(x,y,model_name=which_models[number],sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=local_normalization,
-                                hair_color="grey",title=self.target_name+" - "+line_names[number], ylabel="F$_{\lambda}$ ["+f"{flux_density.unit}]", outputdir = self.output_dir)
+                        self.quick_plot(x,y,model_name=copy_which_models[number], parlabels=labels, sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=local_normalization,
+                                        hair_color="grey",title=self.target_name+" - "+line_names[number], ylabel="F$_{\lambda} - F_{continuum}$ ["+f"{flux_density.unit}]", outputdir = self.output_dir)
+
+                else:
+                    blended_line_names.append(line_names[number])
+                    blended_rest_frame_line_wavelengths.append(rest_frame_line_wavelengths[number])
+                    blended_labels.append(labels_cache[number])
+                    continue  # If the next line is blended, we skip this step of the loop
+
+            elif blended_line[number] is True:
+                copy_which_models[number] = copy_which_models[number-1] + copy_which_models[number]
+                initial_cache[number] = np.concatenate([initial_cache[number-1], initial_cache[number]])
+                p0_cache[number] = np.concatenate([p0_cache[number-1], p0_cache[number]],axis=1)
+                priors_cache[number] = np.concatenate([priors_cache[number-1], priors_cache[number]])
+                blended_labels.append(labels_cache[number]) # = np.concatenate([[labels_cache[number-1]], [labels_cache[number]]])
+                blended_rest_frame_line_wavelengths.append(rest_frame_line_wavelengths[number])
+                blended_line_names.append(line_names[number])
+
+
+                if blended_line[number+1] is False:
+                    p0 =  p0_cache[number]
+                    initial = initial_cache[number]
+                    local_priors = priors_cache[number]
+                    labels = blended_labels #list(labels_cache[number])
+
+                    
+
+                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number], ncores=N_cores)
+                    samples = sampler.flatchain
+                    samples_list.append(samples)
+                    theta_max = samples[np.argmax(sampler.flatlnprobability)]
+
+                    par_values, par_values_errors, par_names = self.parameter_estimation(samples, copy_which_models[number], air_wavelength_line = blended_rest_frame_line_wavelengths,
+                                                                                        normalization=local_normalization, parlabels = list.copy(labels), line_names=blended_line_names,
+                                                                                        output_dir = self.output_dir, savefile=save_results)
+
+                    
+                    par_names.append("redshift")  # This is just to facilitate the loop below.
+                    redshift_index = np.where(np.asarray(par_names)=="redshift")[0]
+                    for i in range(len(redshift_index)-1):
+                        par_values_list.append(par_values[redshift_index[i]:redshift_index[i+1]])
+                        par_values_errors_list.append(par_values_errors[redshift_index[i]:redshift_index[i+1]])
+                        par_names_list.append(par_names[redshift_index[i]:redshift_index[i+1]])
+
+                    x_best_fit = np.linspace(x.min(),x.max(),1000)
+                    adopted_model = self.all_models(copy_which_models[number])
+                    best_fit_model = adopted_model(theta_max, x_best_fit)
+
+
+                    labels_corner = np.asarray([])
+                    line_names_corner = ""
+                    for i,j in zip(labels,blended_line_names):
+                        labels_corner = np.concatenate([labels_corner,i])
+                        line_names_corner = line_names_corner+"+"+j
+                    if plot_MCMC:
+                        corner.corner(
+                            samples,
+                            show_titles=True,
+                            labels=labels_corner,
+                            plot_datapoints=True,
+                            quantiles=[0.16, 0.5, 0.84],
+                        )
+                        plt.suptitle(line_names_corner+"\n(normalized amplitude)", x=0.7)
+
+
+                        self.parameter_time_series(initial, sampler, labels_corner)
+
+                        self.quick_plot(x,y,model_name=copy_which_models[number], parlabels = labels_corner,sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=local_normalization,
+                                        hair_color="grey",title=self.target_name+" - "+line_names_corner, ylabel="F$_{\lambda} - F_{continuum}$ ["+f"{flux_density.unit}]", outputdir = self.output_dir)
+                else:
+                    continue
+                
+
+
+
+
+
 
         redshifts = []
         for parameters in par_values_list:
@@ -1045,16 +1147,13 @@ class analysis:
 
 
         if save_results:
-            self.merge_fit_results(self.target_name,list_of_files=None, wavelength_systematic_error=self.wavelength_systematic_error.value,
-                                   rest_frame_line_wavelengths = rest_frame_line_wavelengths,output_dir=self.output_dir)
+            self.merge_fit_results(self.target_name,list_of_files=None, wavelength_systematic_error=self.wavelength_systematic_error.value,output_dir=self.output_dir)
             list_of_files = glob.glob(self.output_dir+"/*_line_fit_results.csv")
             for file in list_of_files:
                 os.remove(file)
         
         if plot_spec or plot_MCMC:
             plt.show()
-
-        self.line_names = line_names
 
         return par_values_list, par_values_errors_list, par_names_list, samples_list, line_windows
     
@@ -1097,6 +1196,7 @@ class analysis:
             The error on the FWHM computed with a Monte Carlo simulation.
         """
 
+        warnings.filterwarnings('ignore')
         
         def lambda_P(wavelengths_window,tck):
             return interpolate.splev(wavelengths_window, tck)*wavelengths_window
@@ -1174,7 +1274,7 @@ class analysis:
             plt.xlabel(r"Observed $\lambda$ [$\AA$]")
             plt.grid(which="both",linestyle="dotted")
             #plt.axvspan(first_moment-line_dispersion,first_moment+line_dispersion, ymin=0, color="C0",alpha=0.3,label=r"$\sigma_{rms}$")
-            plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).max()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0", alpha=0.3, label=r"$\sigma_{rms}$")
+            plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).max()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0", alpha=0.3, label=r"$\lambda_0 \pm \sigma_{rms}$")
             plt.legend()
             if line_name is not None:
                 plt.title(line_name+" - Model-independent estimate for $\sigma_{rms}$ (observed frame)")
@@ -1559,8 +1659,6 @@ class analysis:
 """
 Documentacao
 
-Double and triple lines. Eu posso adicionar um parametro tipo "blended_line_min_separation", dado em angstroms, tal que se os picos de duas ou mais linhas
-estiver a uma distancia menor que blended_line_min_separation, a linha eh considerada dupla ou tripla. Assim eh bom que nem preciso adicionar mais modelos de linha,
-tipo tripleVoigt.
+Mais modelos de linhas duplas e triplas!!
 
 """
