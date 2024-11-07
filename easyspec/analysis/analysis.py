@@ -1157,7 +1157,7 @@ class analysis:
 
         return par_values_list, par_values_errors_list, par_names_list, samples_list, line_windows
     
-    def line_dispersion_and_equiv_width(self, wavelengths_window, flux_density_window, continuum_baseline_window, line_name = None, plot = True):
+    def line_dispersion_and_equiv_width(self, wavelengths_window, flux_density_window, continuum_baseline_window, line_std_deviation, line_name = None, plot = True):
 
         """
         
@@ -1172,6 +1172,8 @@ class analysis:
             The flux density window for the given line.
         continuum_baseline_window: numpy.ndarray
             An array with the continuum density flux window for the given line. Standard easyspec units are in erg/cm2/s/A.
+        line_std_deviation: numpy.ndarray (float)
+            The standard deviation for the local continuum. This variable is an output of the function analysis.find_lines().
         line_name: string
             The line name.
         plot: boolean
@@ -1212,31 +1214,53 @@ class analysis:
 
         tck = interpolate.splrep(wavelengths_window, (flux_density_window-continuum_baseline_window), k=1)
         integrand_EQW = (continuum_baseline_window - flux_density_window)/continuum_baseline_window
-        tck2 = interpolate.splrep(wavelengths_window, integrand_EQW, k=1)        
+        tck2 = interpolate.splrep(wavelengths_window, integrand_EQW, k=1) 
         
-        numerator = quad(lambda_P, wavelengths_window[0], wavelengths_window[-1],args=(tck,))[0]
-        denominator = quad(P, wavelengths_window[0], wavelengths_window[-1],args=(tck,))[0]
+        # Pegar os limites usando o modulo de P, pro caso de linhas de absorcao.
+        line_function = interpolate.splev(wavelengths_window, tck)
+        line_function_positive = np.sqrt(line_function**2)  # We square the profile and take the squareroot such that we can also work with absorption lines
+        line_peak = line_function_positive.max()
+        index_peak = np.where(line_function_positive == line_peak)[0][0]
+        integration_limit_0 = 0
+        for n,flux_bin in enumerate(np.flip(line_function_positive[:index_peak])):
+            if flux_bin > 2*line_std_deviation:
+                integration_limit_0 = wavelengths_window[index_peak-n]
+            else:
+                break
+        integration_limit_1 = 0
+        for n,flux_bin in enumerate(line_function_positive[index_peak:]):
+            if flux_bin > 2*line_std_deviation:
+                integration_limit_1 = wavelengths_window[index_peak+n]
+            else:
+                break
+        numerator = quad(lambda_P, integration_limit_0, integration_limit_1,args=(tck,))[0]
+        denominator = quad(P, integration_limit_0, integration_limit_1,args=(tck,))[0]
 
         first_moment = numerator/denominator
 
+        plot_x_axis = np.linspace(integration_limit_0, integration_limit_1,500)
+        """plt.figure()
+        plt.plot(plot_x_axis,interpolate.splev(plot_x_axis, tck))
+        plt.grid(which="both")
+        plt.figure()
+        plt.plot(plot_x_axis,interpolate.splev(plot_x_axis, tck)*plot_x_axis) 
+        plt.grid(which="both")
+        plt.figure()
+        plt.plot(plot_x_axis,interpolate.splev(plot_x_axis, tck)*(plot_x_axis-first_moment)**2)  
+        plt.grid(which="both")"""
         
-        second_moment = quad(lambda2_P, wavelengths_window[0], wavelengths_window[-1],args=(tck,))[0]/denominator
+        second_moment = quad(lambda2_P, integration_limit_0, integration_limit_1,args=(tck,))[0]/denominator
         line_dispersion = np.sqrt(second_moment)
 
-        profile_equiv_width = quad(equiv_width, wavelengths_window[0], wavelengths_window[-1],args=(tck2,))[0]
+        profile_equiv_width = quad(equiv_width, integration_limit_0, integration_limit_1,args=(tck2,))[0]
 
-        interpol_wavelenghts = np.linspace(wavelengths_window[0],wavelengths_window[-1],1000)
+        interpol_wavelenghts = np.linspace(integration_limit_0,integration_limit_1,1000)
         interpol_density_flux = interpolate.splev(interpol_wavelenghts, tck)
         line_peak_value = interpol_density_flux.max()
         max_index = extraction.find_nearest(interpol_density_flux, line_peak_value)
         max_index_for_error = extraction.find_nearest((flux_density_window-continuum_baseline_window), line_peak_value)  # This is used in the loop a few lines below.
         lambda_0_index = extraction.find_nearest(interpol_density_flux[0:max_index], line_peak_value/2)
         lambda_1_index = extraction.find_nearest(interpol_density_flux[max_index:], line_peak_value/2) + max_index
-        """plt.figure()
-        plt.plot(interpol_wavelenghts[0:max_index], interpol_density_flux[0:max_index])
-        plt.plot(interpol_wavelenghts[max_index:], interpol_density_flux[max_index:])
-        plt.scatter(interpol_wavelenghts[lambda_0_index],interpol_density_flux[lambda_0_index])
-        plt.scatter(interpol_wavelenghts[lambda_1_index],interpol_density_flux[lambda_1_index])"""
         profile_FWHM = np.abs(interpol_wavelenghts[lambda_1_index]-interpol_wavelenghts[lambda_0_index])
         
 
@@ -1251,15 +1275,15 @@ class analysis:
             noisy_density_flux = flux_density_window + noise
             integrand_EQW = (continuum_baseline_window - noisy_density_flux)/continuum_baseline_window
             tck3 = interpolate.splrep(wavelengths_window, integrand_EQW, k=1)   
-            local_EQW = quad(equiv_width, wavelengths_window[0], wavelengths_window[-1],args=(tck3,))[0]
+            local_EQW = quad(equiv_width, integration_limit_0, integration_limit_1,args=(tck3,))[0]
             equiv_width_error.append(local_EQW)
 
             tck4 = interpolate.splrep(wavelengths_window, (noisy_density_flux - continuum_baseline_window), k=1)
-            line_disp_error.append(np.sqrt(quad(lambda2_P, wavelengths_window[0], wavelengths_window[-1],args=(tck4,))[0]/denominator))
+            line_disp_error.append(np.sqrt(quad(lambda2_P, integration_limit_0, integration_limit_1,args=(tck4,))[0]/denominator))
 
-            lambda_0_index = extraction.find_nearest((noisy_density_flux[0:max_index_for_error]-continuum_baseline_window[0:max_index_for_error]), line_peak_value/2)
-            lambda_1_index = extraction.find_nearest((noisy_density_flux[max_index_for_error:]-continuum_baseline_window[max_index_for_error:]), line_peak_value/2) + max_index_for_error
-            fwhm_error.append(np.abs(wavelengths_window[lambda_1_index]-wavelengths_window[lambda_0_index]))
+            lambda_0_index_error = extraction.find_nearest((noisy_density_flux[0:max_index_for_error]-continuum_baseline_window[0:max_index_for_error]), line_peak_value/2)
+            lambda_1_index_error = extraction.find_nearest((noisy_density_flux[max_index_for_error:]-continuum_baseline_window[max_index_for_error:]), line_peak_value/2) + max_index_for_error
+            fwhm_error.append(np.abs(wavelengths_window[lambda_1_index_error]-wavelengths_window[lambda_0_index_error]))
 
         equiv_width_error = np.std(np.asarray(equiv_width_error))
         line_disp_error = np.std(np.asarray(line_disp_error))
@@ -1267,14 +1291,20 @@ class analysis:
 
         if plot:
             plt.figure(figsize=(12,4))
+            _, ax = plt.subplots(figsize=(12,4))
             plt.plot(wavelengths_window, interpolate.splev(wavelengths_window, tck), color = "C1")
             plt.plot(wavelengths_window,np.zeros(len(wavelengths_window)),color="black")
-            plt.vlines(first_moment,0,(flux_density_window-continuum_baseline_window).max(),colors="C0",linestyles="solid",label="centroid")
+            plt.vlines(first_moment,0,(flux_density_window-continuum_baseline_window).max(),colors="C0",linestyles=":",label="centroid")
             plt.ylabel(r"Flux density - continuum [erg/cm$^2$/s/$\AA$]")
             plt.xlabel(r"Observed $\lambda$ [$\AA$]")
             plt.grid(which="both",linestyle="dotted")
-            #plt.axvspan(first_moment-line_dispersion,first_moment+line_dispersion, ymin=0, color="C0",alpha=0.3,label=r"$\sigma_{rms}$")
             plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).max()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0", alpha=0.3, label=r"$\lambda_0 \pm \sigma_{rms}$")
+            plt.scatter(interpol_wavelenghts[lambda_0_index],interpol_density_flux[lambda_0_index],color="black")
+            plt.scatter(interpol_wavelenghts[lambda_1_index],interpol_density_flux[lambda_1_index],color="black")
+            plt.plot([interpol_wavelenghts[lambda_0_index],interpol_wavelenghts[lambda_1_index]],[interpol_density_flux.max()/2,interpol_density_flux.max()/2],color="black")
+            plt.text((interpol_wavelenghts[lambda_0_index]+interpol_wavelenghts[lambda_1_index])/2,1.05*interpol_density_flux.max()/2,"FWHM",horizontalalignment='center',)
+            plt.text(0.05,0.8,"Not intended for\nblended lines!",color="red",transform = ax.transAxes)
+            
             plt.legend()
             if line_name is not None:
                 plt.title(line_name+" - Model-independent estimate for $\sigma_{rms}$ (observed frame)")
@@ -1351,7 +1381,7 @@ class analysis:
         return EQW_error_down, EQW_error_up
         
 
-    def line_physics(self, wavelengths, flux_density, continuum_baseline, par_values_list, par_values_errors_list, par_names_list, line_windows, plot = True, save_file = True):
+    def line_physics(self, wavelengths, flux_density, continuum_baseline, par_values_list, par_values_errors_list, par_names_list, line_windows, line_std_deviation, plot = True, save_file = True):
 
         """
         In this function we compute several physical properties for the fitted lines.
@@ -1380,6 +1410,8 @@ class analysis:
             A list with the names of all the parameters used in each line model.
         line_windows: list
             A list containing the wavelength intervals around each line.
+        line_std_deviation: numpy.ndarray (float)
+            The standard deviation for the local continuum. This variable is an output of the function analysis.find_lines().
         plot: boolean
             If True, the line and corresponding centroid and dispersion will be showed.
         save_file: boolean
@@ -1438,7 +1470,7 @@ class analysis:
             continuum_baseline_window = continuum_baseline[window_indexes]
             wavelengths_window = wavelengths[window_indexes]
 
-            line_dispersion, profile_equiv_width, profile_FWHM, line_disp_error, equiv_width_error, fwhm_error = self.line_dispersion_and_equiv_width(wavelengths_window.value, flux_density_window.value, continuum_baseline_window, line_name = line_names[number], plot = plot)
+            line_dispersion, profile_equiv_width, profile_FWHM, line_disp_error, equiv_width_error, fwhm_error = self.line_dispersion_and_equiv_width(wavelengths_window.value, flux_density_window.value, continuum_baseline_window, line_std_deviation = line_std_deviation[number], line_name = line_names[number], plot = plot)
             profile_disp_vel_error_down = c.to("km/s").value*np.sqrt(  line_disp_error*2/(peak_position**2) + (line_dispersion*par_values_errors_list[number][1][0]/(peak_position**2))**2 )
             profile_disp_vel_error_up = c.to("km/s").value*np.sqrt(  line_disp_error*2/(peak_position**2) + (line_dispersion*par_values_errors_list[number][1][1]/(peak_position**2))**2 )
             profile_rest_frame_disp_velocity.append([c.to("km/s").value*line_dispersion/peak_position, profile_disp_vel_error_down, profile_disp_vel_error_up])
@@ -1660,5 +1692,9 @@ class analysis:
 Documentacao
 
 Mais modelos de linhas duplas e triplas!!
+
+condicao no fit_lines() para que todas as linhas tenham um nome diferente, e.g.: line_names = ["Hbeta", "[OIII]","[OIII]2"]#["[O II]", "[OIII]", "Halpha"]
+
+Massa dos buracos negros do paper de Shen 2011.
 
 """
