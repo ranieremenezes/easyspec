@@ -570,7 +570,7 @@ class analysis:
         """
         This function checks if the input parameters satisfy the prior conditions.
         """
-        
+
         for i in range(len(theta)):
             if priors[i][0] < theta[i] < priors[i][1]:
                 continue
@@ -798,7 +798,7 @@ class analysis:
         ax.tick_params(which='major', length=5, direction='in')
         ax.tick_params(which='minor', length=2.5, direction='in',bottom=True, top=True, left=True, right=True)
         ax.tick_params(bottom=True, top=True, left=True, right=True)
-        
+
         plt.plot(x,y*normalization,color="orange", label="Data after cont. subtraction")
         if sampler is not None:
             self.plotter(sampler,model_name,x,color=hair_color, normalization = normalization)
@@ -810,7 +810,10 @@ class analysis:
         plt.title(title)
         plt.grid(which="both", linestyle=":")
         plt.ticklabel_format(scilimits=(-5, 8))
-        plt.ylim((y.min()-0.1*y.max())*normalization,1.1*y.max()*normalization)
+        if normalization < 0:
+            plt.ylim(1.1*y.max()*normalization,(y.min()-0.1*y.max())*normalization)
+        else:
+            plt.ylim((y.min()-0.1*y.max())*normalization,1.1*y.max()*normalization)
         
         if isinstance(parlabels,list):
             parlabels = np.asarray(parlabels)
@@ -950,17 +953,26 @@ class analysis:
         
         if which_model == "Gaussian" or which_model == "gaussian":
             initial = np.array([observed_wavelength, peak_height, 10])
-            priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150]])
+            if peak_height > 0:  # This step is necessay because the priors must always go fro mthe smallest value up to the largest.
+                priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150]])
+            else:
+                priors = np.array([[line_region_min,line_region_max],[10*peak_height,0.1*peak_height],[0.1,150]])
             labels = ["Mean", "Amplitude", "std"]
             adopted_model = self.model_Gauss
         elif which_model == "Lorentz" or which_model == "lorentz":
             initial = np.array([observed_wavelength, peak_height, 10])
-            priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150]])
+            if peak_height > 0:
+                priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150]])
+            else:
+                priors = np.array([[line_region_min,line_region_max],[10*peak_height,0.1*peak_height],[0.1,150]])
             labels = ["Mean", "Amplitude", "fwhm_Lorentz"]
             adopted_model = self.model_Lorentz
         elif which_model == "Voigt" or which_model == "voigt":
             initial = np.array([observed_wavelength, peak_height, 10, 10])
-            priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150],[0.1,150]])
+            if peak_height > 0:
+                priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150],[0.1,150]])
+            else:
+                priors = np.array([[line_region_min,line_region_max],[10*peak_height,0.1*peak_height],[0.1,150],[0.1,150]])
             labels = ["Mean", "Amplitude", "fwhm_Lorentz", "fwhm_Gauss"]
             adopted_model = self.model_Voigt
 
@@ -1090,7 +1102,7 @@ class analysis:
         for wavelength in wavelength_peak_positions:
             local_continuum_index.append(extraction.find_nearest(wavelengths.value, wavelength))
         peak_heights = peak_heights - continuum_baseline[local_continuum_index]
-        normalization = 10**round(np.log10(np.median(flux_density.value - 0.9*continuum_baseline)))
+        local_normalization = 10**round(np.log10(np.median(flux_density.value - 0.9*continuum_baseline)))
 
         # Here we identify the blended lines:
         peak_distances = np.diff(wavelength_peak_positions)
@@ -1106,10 +1118,6 @@ class analysis:
         par_values_list, par_values_errors_list, par_names_list, samples_list, line_windows = [], [], [], [], []
         line_region_min_cache, initial_cache, p0_cache, priors_cache, labels_cache = [], [], [], [], []
         for number, peak_height in enumerate(peak_heights):
-            invert_spectrum = 1  # For emission lines, the spectrum is multiplied by 1. For absorption lines, it is multiplied by -1
-            if peak_height < 0:
-                invert_spectrum = -1
-            local_normalization = invert_spectrum*normalization
             continuum_subtracted_flux = (flux_density.value - continuum_baseline)/local_normalization
             peak_height = peak_height/local_normalization
             local_line_std_deviation = line_std_deviation[number]/local_normalization
@@ -1165,13 +1173,13 @@ class analysis:
 
             line_windows.append([line_region_min, line_region_max])
             x,y,yerr = self.data_window_selection(wavelengths.value, continuum_subtracted_flux, local_line_std_deviation*np.ones(len(wavelengths.value)), line_region_min, line_region_max)
+            
             data = (x, y, yerr)
             p0 = [np.array(initial) + 0.01 * np.random.randn(len(initial)) for i in range(MCMC_walkers)]  # p0 is the methodology of stepping from one place on a grid to the next.
             initial_cache.append(initial)
             p0_cache.append(p0)
             priors_cache.append(local_priors)
             labels_cache.append(labels)
-            
             
             if blended_line[number] is False:
                 blended_line_names = []
@@ -1908,6 +1916,4 @@ Documentacao
 
 Massa dos buracos negros do paper de Shen 2011.
 
-O fit serve para linhas de absorcao?
-E se eu misturar absorcao com emissao?
 """
