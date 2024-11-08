@@ -338,10 +338,26 @@ class analysis:
         """
         
         models = {"Gaussian" : self.model_Gauss, "Lorentz" : self.model_Lorentz, "Voigt" : self.model_Voigt,
-                  "GaussianGaussian": self.model_Gauss_Gauss,"GaussianGaussianGaussian" : self.model_Gauss_Gauss_Gauss,
-                  "LorentzGaussianGaussian": self.model_Lorentz_Gauss_Gauss,"custom" : custom_function}
+                  "GaussianGaussian": self.model_Gauss_Gauss, "GaussianLorentz" : self.model_Gauss_Lorentz,
+                  "GaussianVoigt" : self.model_Gauss_Voigt, "GaussianGaussianGaussian" : self.model_Gauss_Gauss_Gauss,
+                  "GaussianLorentzGaussian" : self.model_Gauss_Lorentz_Gauss, "GaussianGaussianLorentz" : self.model_Gauss_Gauss_Lorentz,
+                  "GaussianLorentzLorentz" : self.model_Gauss_Lorentz_Lorentz , "GaussianVoigtVoigt" : self.model_Gauss_Voigt_Voigt,
+                  "GaussianVoigtLorentz" : self.model_Gauss_Voigt_Lorentz, "GaussianLorentzVoigt" : self.model_Gauss_Lorentz_Voigt,
+                  "GaussianGaussianVoigt" : self.model_Gauss_Gauss_Voigt, "GaussianVoigtGaussian" : self.model_Gauss_Voigt_Gauss,
+                  "LorentzLorentz" : self.model_Lorentz_Lorentz, "LorentzGaussian" : self.model_Lorentz_Gauss,
+                  "LorentzVoigt" : self.model_Lorentz_Voigt, "LorentzGaussianGaussian": self.model_Lorentz_Gauss_Gauss,
+                  "LorentzLorentzLorentz" : self.model_Lorentz_Lorentz_Lorentz, "LorentzVoigtVoigt" : self.model_Lorentz_Voigt_Voigt,
+                  "LorentzLorentzGaussian" : self.model_Lorentz_Lorentz_Gauss, "LorentzGaussianLorentz" : self.model_Lorentz_Gauss_Lorentz,
+                  "LorentzVoigtLorentz" : self.model_Lorentz_Voigt_Lorentz, "LorentzLorentzVoigt" : self.model_Lorentz_Lorentz_Voigt,
+                  "LorentzGaussianVoigt" : self.model_Lorentz_Gauss_Voigt, "LorentzVoigtGaussian" : self.model_Lorentz_Voigt_Gauss,
+                  "VoigtVoigt" : self.model_Voigt_Voigt, "VoigtGaussian" : self.model_Voigt_Gauss, "VoigtLorentz" : self.model_Voigt_Lorentz,
+                  "VoigtGaussianGaussian" : self.model_Voigt_Gauss_Gauss, "VoigtLorentzLorentz" : self.model_Voigt_Lorentz_Lorentz,
+                  "VoigtVoigtVoigt" : self.model_Voigt_Voigt_Voigt, "VoigtLorentzGaussian" : self.model_Voigt_Lorentz_Gauss,
+                  "VoigtGaussianLorentz" : self.model_Voigt_Gauss_Lorentz, "VoigtVoigtLorentz" : self.model_Voigt_Voigt_Lorentz,
+                  "VoigtLorentzVoigt" : self.model_Voigt_Lorentz_Voigt, "VoigtGaussianVoigt" : self.model_Voigt_Gauss_Voigt,
+                  "VoigtVoigtGaussian" : self.model_Voigt_Voigt_Gauss, "custom" : custom_function}
         if model_name not in models.keys():
-            raise Exception("Invalid model_name. Options are: Gaussian, Lorentz, Voigt, doubleVoigt, tripleVoigt, custom")
+            raise Exception(f"Invalid model_name '{model_name}'. Valid names are Gaussian, Lorentz, Voigt, or combinations of these names, such as 'LorentzGaussian'.")
         return models[model_name]
 
     def model_Gauss(self, theta,x):
@@ -353,26 +369,193 @@ class analysis:
         mean, amplitude, std, mean2, amplitude2, std2 = theta
         a = Gaussian1D(amplitude, mean, std) + Gaussian1D(amplitude2, mean2, std2)
         return a(x)
+
+    def model_Gauss_Lorentz(self,theta,x):
+        mean, amplitude, std, mean_L, amplitude_L, fwhm_L = theta
+        a = Gaussian1D(amplitude, mean, std) + Lorentz1D(amplitude_L, mean_L, fwhm_L)
+        return a(x)
+    
+    def model_Gauss_Voigt(self,theta,x):
+        mean, amplitude, std, x_0, amplitude_L, fwhm_G, fwhm_L = theta
+        a = Gaussian1D(amplitude, mean, std) + Voigt1D(x_0, amplitude_L, fwhm_L, fwhm_G)
+        return a(x)
     
     def model_Gauss_Gauss_Gauss(self,theta,x):
         mean, amplitude, std, mean2, amplitude2, std2, mean3, amplitude3, std3 = theta
         a = Gaussian1D(amplitude=amplitude, mean=mean, stddev=std) + Gaussian1D(amplitude=amplitude2, mean=mean2, stddev=std2) + Gaussian1D(amplitude=amplitude3, mean=mean3, stddev=std3)
         return a(x)
 
-    def model_Lorentz_Gauss_Gauss(self,theta,x):
-        mean_L, amplitude_L, fwhm_L, mean, amplitude, std, mean2, amplitude2, std2 = theta
-        a = Lorentz1D(amplitude_L, mean_L, fwhm_L) + Gaussian1D(amplitude, mean, std) + Gaussian1D(amplitude2, mean2, std2)
+    def model_Gauss_Lorentz_Gauss(self,theta,x):
+        mean, amplitude, std, mean_L, amplitude_L, fwhm_L, mean2, amplitude2, std2 = theta
+        a = Gaussian1D(amplitude, mean, std) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Gaussian1D(amplitude2, mean2, std2)
         return a(x)
 
-    def model_Voigt(self, theta,x):
-        x_0, amplitude_L, fwhm_G, fwhm_L = theta
-        a = Voigt1D(x_0, amplitude_L, fwhm_L, fwhm_G)
+    def model_Gauss_Gauss_Lorentz(self,theta,x):
+        mean, amplitude, std, mean2, amplitude2, std2, mean_L, amplitude_L, fwhm_L = theta
+        a = Gaussian1D(amplitude, mean, std) + Gaussian1D(amplitude2, mean2, std2) + Lorentz1D(amplitude_L, mean_L, fwhm_L)
+        return a(x)
+
+    def model_Gauss_Lorentz_Lorentz(self,theta,x):
+        mean, amplitude, std, mean_L, amplitude_L, fwhm_L, mean_L2, amplitude_L2, fwhm_L2 = theta
+        a = Gaussian1D(amplitude, mean, std) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Lorentz1D(amplitude_L2, mean_L2, fwhm_L2)
+        return a(x)
+    
+    def model_Gauss_Voigt_Voigt(self,theta,x):
+        mean, amplitude, std, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, x_02, amplitude_Voigt2, fwhm_G2, fwhm_L_Voigt2 = theta
+        a = Gaussian1D(amplitude, mean, std) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Voigt1D(x_02, amplitude_Voigt2, fwhm_L_Voigt2, fwhm_G2)
+        return a(x)
+    
+    def model_Gauss_Voigt_Lorentz(self,theta,x):
+        mean, amplitude, std, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, mean_L, amplitude_L, fwhm_L = theta
+        a = Gaussian1D(amplitude, mean, std) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Lorentz1D(amplitude_L, mean_L, fwhm_L)
+        return a(x)
+
+    def model_Gauss_Lorentz_Voigt(self,theta,x):
+        mean, amplitude, std, mean_L, amplitude_L, fwhm_L, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt = theta
+        a = Gaussian1D(amplitude, mean, std) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G)
+        return a(x)
+    
+    def model_Gauss_Gauss_Voigt(self,theta,x):
+        mean, amplitude, std, mean2, amplitude2, std2, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt = theta
+        a = Gaussian1D(amplitude, mean, std) + Gaussian1D(amplitude2, mean2, std2) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G)
+        return a(x)
+    
+    def model_Gauss_Voigt_Gauss(self,theta,x):
+        mean, amplitude, std, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, mean2, amplitude2, std2 = theta
+        a = Gaussian1D(amplitude, mean, std) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Gaussian1D(amplitude2, mean2, std2)
         return a(x)
 
     def model_Lorentz(self, theta,x):
         mean, amplitude, fwhm = theta
         a = Lorentz1D(amplitude, mean, fwhm)
         return a(x)
+
+    def model_Lorentz_Lorentz(self, theta,x):
+        mean, amplitude, fwhm, mean2, amplitude2, fwhm2 = theta
+        a = Lorentz1D(amplitude, mean, fwhm) + Lorentz1D(amplitude2, mean2, fwhm2)
+        return a(x)
+    
+    def model_Lorentz_Gauss(self, theta,x):
+        mean, amplitude, fwhm, mean2, amplitude2, std = theta
+        a = Lorentz1D(amplitude, mean, fwhm) + Gaussian1D(amplitude2, mean2, std)
+        return a(x)
+
+    def model_Lorentz_Voigt(self, theta,x):
+        mean, amplitude, fwhm, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt = theta
+        a = Lorentz1D(amplitude, mean, fwhm) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G)
+        return a(x)
+    
+    def model_Lorentz_Gauss_Gauss(self,theta,x):
+        mean_L, amplitude_L, fwhm_L, mean, amplitude, std, mean2, amplitude2, std2 = theta
+        a = Lorentz1D(amplitude_L, mean_L, fwhm_L) + Gaussian1D(amplitude, mean, std) + Gaussian1D(amplitude2, mean2, std2)
+        return a(x)
+    
+    def model_Lorentz_Lorentz_Lorentz(self,theta,x):
+        mean_L0, amplitude_L0, fwhm_L0, mean_L, amplitude_L, fwhm_L, mean_L2, amplitude_L2, fwhm_L2 = theta
+        a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Lorentz1D(amplitude_L2, mean_L2, fwhm_L2)
+        return a(x)
+    
+    def model_Lorentz_Voigt_Voigt(self,theta,x):
+        mean_L0, amplitude_L0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, x_02, amplitude_Voigt2, fwhm_G2, fwhm_L_Voigt2 = theta
+        a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Voigt1D(x_02, amplitude_Voigt2, fwhm_L_Voigt2, fwhm_G2)
+        return a(x)
+
+    def model_Lorentz_Lorentz_Gauss(self,theta,x):
+        mean_L0, amplitude_L0, fwhm_L0, mean_L, amplitude_L, fwhm_L, mean2, amplitude2, std2 = theta
+        a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Gaussian1D(amplitude2, mean2, std2)
+        return a(x)
+
+    def model_Lorentz_Gauss_Lorentz(self,theta,x):
+        mean_L0, amplitude_L0, fwhm_L0, mean2, amplitude2, std2, mean_L, amplitude_L, fwhm_L = theta
+        a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Gaussian1D(amplitude2, mean2, std2) + Lorentz1D(amplitude_L, mean_L, fwhm_L)
+        return a(x)
+    
+    def model_Lorentz_Voigt_Lorentz(self,theta,x):
+        mean_L0, amplitude_L0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, mean_L, amplitude_L, fwhm_L = theta
+        a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Lorentz1D(amplitude_L, mean_L, fwhm_L)
+        return a(x)
+
+    def model_Lorentz_Lorentz_Voigt(self,theta,x):
+        mean_L0, amplitude_L0, fwhm_L0, mean_L, amplitude_L, fwhm_L, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt = theta
+        a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G)
+        return a(x)
+    
+    def model_Lorentz_Gauss_Voigt(self,theta,x):
+        mean_L0, amplitude_L0, fwhm_L0, mean2, amplitude2, std2, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt = theta
+        a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Gaussian1D(amplitude2, mean2, std2) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G)
+        return a(x)
+    
+    def model_Lorentz_Voigt_Gauss(self,theta,x):
+        mean_L0, amplitude_L0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, mean2, amplitude2, std2 = theta
+        a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Gaussian1D(amplitude2, mean2, std2)
+        return a(x)
+
+    def model_Voigt(self, theta,x):
+        x_0, amplitude_L, fwhm_G, fwhm_L = theta
+        a = Voigt1D(x_0, amplitude_L, fwhm_L, fwhm_G)
+        return a(x)
+    
+    def model_Voigt_Voigt(self, theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, x_0, amplitude_L, fwhm_G, fwhm_L = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Voigt1D(x_0, amplitude_L, fwhm_L, fwhm_G)
+        return a(x)
+
+    def model_Voigt_Gauss(self, theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, mean2, amplitude2, std2 = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Gaussian1D(amplitude2, mean2, std2)
+        return a(x)
+    
+    def model_Voigt_Lorentz(self, theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, mean_L, amplitude_L, fwhm_L = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Lorentz1D(amplitude_L, mean_L, fwhm_L)
+        return a(x)
+
+    def model_Voigt_Gauss_Gauss(self,theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, mean, amplitude, std, mean2, amplitude2, std2 = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Gaussian1D(amplitude, mean, std) + Gaussian1D(amplitude2, mean2, std2)
+        return a(x)
+    
+    def model_Voigt_Lorentz_Lorentz(self,theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, mean_L, amplitude_L, fwhm_L, mean_L2, amplitude_L2, fwhm_L2 = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Lorentz1D(amplitude_L2, mean_L2, fwhm_L2)
+        return a(x)
+    
+    def model_Voigt_Voigt_Voigt(self,theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, x_02, amplitude_Voigt2, fwhm_G2, fwhm_L_Voigt2 = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Voigt1D(x_02, amplitude_Voigt2, fwhm_L_Voigt2, fwhm_G2)
+        return a(x)
+
+    def model_Voigt_Lorentz_Gauss(self,theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, mean_L, amplitude_L, fwhm_L, mean2, amplitude2, std2 = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Gaussian1D(amplitude2, mean2, std2)
+        return a(x)
+
+    def model_Voigt_Gauss_Lorentz(self,theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, mean2, amplitude2, std2, mean_L, amplitude_L, fwhm_L = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Gaussian1D(amplitude2, mean2, std2) + Lorentz1D(amplitude_L, mean_L, fwhm_L)
+        return a(x)
+    
+    def model_Voigt_Voigt_Lorentz(self,theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, mean_L, amplitude_L, fwhm_L = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Lorentz1D(amplitude_L, mean_L, fwhm_L)
+        return a(x)
+
+    def model_Voigt_Lorentz_Voigt(self,theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, mean_L, amplitude_L, fwhm_L, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G)
+        return a(x)
+    
+    def model_Voigt_Gauss_Voigt(self,theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, mean2, amplitude2, std2, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Gaussian1D(amplitude2, mean2, std2) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G)
+        return a(x)
+    
+    def model_Voigt_Voigt_Gauss(self,theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, mean2, amplitude2, std2 = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Gaussian1D(amplitude2, mean2, std2)
+        return a(x)
+
+    
 
     def lnlike(self, theta, x, y, yerr, model):
         
@@ -738,7 +921,31 @@ class analysis:
     def automatic_priors(self, which_model, observed_wavelength, peak_height, line_region_min, line_region_max):
 
         """
+        In this function we automatically set the priors, initial parameter values and select the line model.
+
+        Parameters
+        ----------
+        which_models: string
+            The models to be applied to the line. Options are "Gaussian", "Lorentz" and "Voigt".
+        observed_wavelength: float
+            The wavelength corresponding to the peak position.
+        peak_height: flaot
+            The height of the peak with respect to the continuum emission.
+        line_region_min: float
+            The starting wavelength around the studied line. 
+        line_region_max: float
+            The final wavelength around the studied line. 
         
+        Returns
+        -------
+        initial: numpy.array
+            An array with the automatic initial parameter values for the MCMC.
+        priors: numpy.array
+            An array containing three or four lists of two elements, i.e. one list for each parameter given in 'initial'.
+        labels: list
+            A list with the names of each parameter.
+        adopted_model: method
+            A function with the adopted model, i.e., a "Gaussian", "Lorentz" or "Voigt".
         """
         
         if which_model == "Gaussian" or which_model == "gaussian":
@@ -838,6 +1045,10 @@ class analysis:
             Optional. This file contains all the best-fit parameters for each line model and is saved in the output directory defined in the
             function analysis.load_calibrated_data(). "XXXXXXX" here stands for the target's name.
         """
+
+        # If we have repeated line names, raise an error:
+        if len(line_names) != len(set(line_names)):
+            raise RuntimeError("There are duplicated line names given as the input variable 'line_names'. Please give a unique name for every single line.")
 
         if isinstance(wavelength_peak_positions, u.quantity.Quantity):
             wavelength_peak_positions = wavelength_peak_positions.value
@@ -1048,7 +1259,10 @@ class analysis:
                     line_names_corner = ""
                     for i,j in zip(labels,blended_line_names):
                         labels_corner = np.concatenate([labels_corner,i])
-                        line_names_corner = line_names_corner+"+"+j
+                        if line_names_corner == "":
+                            line_names_corner = line_names_corner+j
+                        else:
+                            line_names_corner = line_names_corner+"+"+j
                     if plot_MCMC:
                         corner.corner(
                             samples,
@@ -1238,8 +1452,9 @@ class analysis:
 
         first_moment = numerator/denominator
 
+        """
         plot_x_axis = np.linspace(integration_limit_0, integration_limit_1,500)
-        """plt.figure()
+        plt.figure()
         plt.plot(plot_x_axis,interpolate.splev(plot_x_axis, tck))
         plt.grid(which="both")
         plt.figure()
@@ -1691,10 +1906,8 @@ class analysis:
 """
 Documentacao
 
-Mais modelos de linhas duplas e triplas!!
-
-condicao no fit_lines() para que todas as linhas tenham um nome diferente, e.g.: line_names = ["Hbeta", "[OIII]","[OIII]2"]#["[O II]", "[OIII]", "Halpha"]
-
 Massa dos buracos negros do paper de Shen 2011.
 
+O fit serve para linhas de absorcao?
+E se eu misturar absorcao com emissao?
 """
