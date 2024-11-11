@@ -1,11 +1,9 @@
 import numpy as np
-from math import factorial
 import scipy
 from astropy.modeling.models import Gaussian1D, Voigt1D, Lorentz1D
 import matplotlib.pyplot as plt
 import emcee
 import corner
-from scipy import stats
 import glob
 from pathlib import Path
 from multiprocessing import Pool
@@ -14,10 +12,7 @@ import warnings
 from matplotlib.ticker import AutoMinorLocator
 from scipy import interpolate
 from easyspec.extraction import extraction
-from astropy.modeling.polynomial import Polynomial1D
-from astropy.modeling.fitting import LinearLSQFitter, LevMarLSQFitter
 from astropy import units as u
-from astropy.modeling.models import Linear1D
 from scipy.signal import medfilt
 import platform
 import os

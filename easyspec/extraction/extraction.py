@@ -12,6 +12,7 @@ from astropy.modeling.fitting import LinearLSQFitter, LevMarLSQFitter
 from astropy import units as u
 from scipy.signal import medfilt
 from dust_extinction.parameter_averages import F99
+import warnings
 
 plt.rcParams.update({'font.size': 12})
 
@@ -349,9 +350,9 @@ class extraction:
         shift_y_pixels: integer
             Value used to shift the trace vertically by +-N pixels and repeat the extracting process to get the sky spectrum around each trace.
         lamp_peak_height: float
-            The height of the peaks (in counts and with respect to zero) to be detected.
+            The height of the lamp peaks (in counts and with respect to zero) to be detected.
         peak_distance: float
-            The minimum distance between peaks in pixels. Default is the length of the x-axis divided by 20.
+            The minimum distance between lamp peaks in pixels. Default is the length of the x-axis divided by 20.
         diagnostic_plots: boolean
             If True, easyspec will plot the spectral images overlaid with the target's spectral trace and corresponding sky traces.
         spec_plots: boolean
@@ -569,6 +570,7 @@ class extraction:
         except:
             raise NameError("The variable self.image_shape does not exist. Please load your data with the function extraction.import_data() to avoid this issue.")
 
+        warnings.filterwarnings('ignore')
 
         wavelengths_list, wavelengths_fit_std_list = [], []
         linfitter = LevMarLSQFitter()
@@ -826,7 +828,9 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         exclude_regions: list
             List of regions (in Angstroms) to be excluded from the measured standard star spectrum when extracting its continuum, e.g.: exclude_regions = [[4000,5000],[8000,8500]].
         smooth_window_archive: integer
-            Must be an odd number. Same as above but for the archival spectrum.   
+            Must be an odd number. Same as above but for the archival spectrum.
+        interpolation_order:
+            The interpolation order for the spline.
         plots: boolean
             If True, easyspec will plot several diagnostic plots showing the step-by-step of the flux calibration solution.
         
