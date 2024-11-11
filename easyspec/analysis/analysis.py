@@ -1438,7 +1438,6 @@ class analysis:
         integrand_EQW = (continuum_baseline_window - flux_density_window)/continuum_baseline_window
         tck2 = interpolate.splrep(wavelengths_window, integrand_EQW, k=1) 
         
-        # Pegar os limites usando o modulo de P, pro caso de linhas de absorcao.
         line_function = interpolate.splev(wavelengths_window, tck)
         line_function_positive = np.sqrt(line_function**2)  # We square the profile and take the squareroot such that we can also work with absorption lines
         line_peak = line_function_positive.max()
@@ -1446,31 +1445,25 @@ class analysis:
         integration_limit_0 = 0
         for n,flux_bin in enumerate(np.flip(line_function_positive[:index_peak])):
             if flux_bin > 2*line_std_deviation:
-                integration_limit_0 = wavelengths_window[index_peak-n]
+                try:
+                    integration_limit_0 = wavelengths_window[index_peak-n-2]
+                except:
+                    break
             else:
                 break
         integration_limit_1 = 0
         for n,flux_bin in enumerate(line_function_positive[index_peak:]):
             if flux_bin > 2*line_std_deviation:
-                integration_limit_1 = wavelengths_window[index_peak+n]
+                try:
+                    integration_limit_1 = wavelengths_window[index_peak+n+2]
+                except:
+                    break
             else:
                 break
         numerator = quad(lambda_P, integration_limit_0, integration_limit_1,args=(tck,))[0]
         denominator = quad(P, integration_limit_0, integration_limit_1,args=(tck,))[0]
 
         first_moment = numerator/denominator
-
-        """
-        plot_x_axis = np.linspace(integration_limit_0, integration_limit_1,500)
-        plt.figure()
-        plt.plot(plot_x_axis,interpolate.splev(plot_x_axis, tck))
-        plt.grid(which="both")
-        plt.figure()
-        plt.plot(plot_x_axis,interpolate.splev(plot_x_axis, tck)*plot_x_axis) 
-        plt.grid(which="both")
-        plt.figure()
-        plt.plot(plot_x_axis,interpolate.splev(plot_x_axis, tck)*(plot_x_axis-first_moment)**2)  
-        plt.grid(which="both")"""
         
         second_moment = quad(lambda2_P, integration_limit_0, integration_limit_1,args=(tck,))[0]/denominator
         line_dispersion = np.sqrt(second_moment)
@@ -1479,7 +1472,10 @@ class analysis:
 
         interpol_wavelenghts = np.linspace(integration_limit_0,integration_limit_1,1000)
         interpol_density_flux = interpolate.splev(interpol_wavelenghts, tck)
-        line_peak_value = interpol_density_flux.max()
+        if numerator > 0:
+            line_peak_value = interpol_density_flux.max()
+        else:
+            line_peak_value = interpol_density_flux.min()
         max_index = extraction.find_nearest(interpol_density_flux, line_peak_value)
         max_index_for_error = extraction.find_nearest((flux_density_window-continuum_baseline_window), line_peak_value)  # This is used in the loop a few lines below.
         lambda_0_index = extraction.find_nearest(interpol_density_flux[0:max_index], line_peak_value/2)
@@ -1517,15 +1513,22 @@ class analysis:
             _, ax = plt.subplots(figsize=(12,4))
             plt.plot(wavelengths_window, interpolate.splev(wavelengths_window, tck), color = "C1")
             plt.plot(wavelengths_window,np.zeros(len(wavelengths_window)),color="black")
-            plt.vlines(first_moment,0,(flux_density_window-continuum_baseline_window).max(),colors="C0",linestyles=":",label="centroid")
             plt.ylabel(r"Flux density - continuum [erg/cm$^2$/s/$\AA$]")
             plt.xlabel(r"Observed $\lambda$ [$\AA$]")
             plt.grid(which="both",linestyle="dotted")
-            plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).max()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0", alpha=0.3, label=r"$\lambda_0 \pm \sigma_{rms}$")
+            if numerator > 0:
+                plt.vlines(first_moment,0,(flux_density_window-continuum_baseline_window).max(),colors="C0",linestyles=":",label="centroid")
+                plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).max()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0", alpha=0.3, label=r"$\lambda_0 \pm \sigma_{rms}$")
+                plt.plot([interpol_wavelenghts[lambda_0_index],interpol_wavelenghts[lambda_1_index]],[interpol_density_flux.max()/2,interpol_density_flux.max()/2],color="black")
+                plt.text((interpol_wavelenghts[lambda_0_index]+interpol_wavelenghts[lambda_1_index])/2,1.05*interpol_density_flux.max()/2,"FWHM",horizontalalignment='center',)
+            else:
+                plt.vlines(first_moment,0,(flux_density_window-continuum_baseline_window).min(),colors="C0",linestyles=":",label="centroid")
+                plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).min()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0", alpha=0.3, label=r"$\lambda_0 \pm \sigma_{rms}$")
+                plt.plot([interpol_wavelenghts[lambda_0_index],interpol_wavelenghts[lambda_1_index]],[interpol_density_flux.min()/2,interpol_density_flux.min()/2],color="black")
+                plt.text((interpol_wavelenghts[lambda_0_index]+interpol_wavelenghts[lambda_1_index])/2,0.90*interpol_density_flux.min()/2,"FWHM",horizontalalignment='center',)
+            
             plt.scatter(interpol_wavelenghts[lambda_0_index],interpol_density_flux[lambda_0_index],color="black")
             plt.scatter(interpol_wavelenghts[lambda_1_index],interpol_density_flux[lambda_1_index],color="black")
-            plt.plot([interpol_wavelenghts[lambda_0_index],interpol_wavelenghts[lambda_1_index]],[interpol_density_flux.max()/2,interpol_density_flux.max()/2],color="black")
-            plt.text((interpol_wavelenghts[lambda_0_index]+interpol_wavelenghts[lambda_1_index])/2,1.05*interpol_density_flux.max()/2,"FWHM",horizontalalignment='center',)
             plt.text(0.05,0.8,"Not intended for\nblended lines!",color="red",transform = ax.transAxes)
             
             plt.legend()
@@ -1841,9 +1844,9 @@ class analysis:
         Returns
         -------
         log10_BH_mass_continuum: float
-            The black hole mass in log10 scale and its correspondin error in dex computed based on Eq. 5 from Vestergaard & Peterson, 2006, ApJ, 641.
+            The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 5 from Vestergaard & Peterson, 2006, ApJ, 641.
         log10_BH_mass_line_lum: float
-            The black hole mass in log10 scale and its correspondin error in dex computed based on Eq. 6 from Vestergaard & Peterson, 2006, ApJ, 641.
+            The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 6 from Vestergaard & Peterson, 2006, ApJ, 641.
         """
 
         systematic_error = 0.43 # dex. Result from Vestergaard & Peterson, 2006.
@@ -1869,9 +1872,10 @@ class analysis:
     def BH_mass_CIV_VP2006(self, wavelengths, continuum_baseline, FWHM_CIV, par_values_CIV, H0=70):
 
         """
-        This function estimates the black hole mass based on Vestergaard & Peterson, 2006, ApJ, 641, "DETERMINING CENTRAL BLACK HOLE MASSES IN DISTANT ACTIVE
-        GALAXIES AND QUASARS. II. IMPROVED OPTICAL AND UV SCALING RELATIONSHIPS". As stated in this work, here we assume a cosmology with H0 = 70 km/s/Mpc, Omega_Lambda = 0.7,
-        and Omega_matter = 0.3, although we allow the user to change the value of the Hubble constant (H0).
+        This function estimates the black hole mass based on Vestergaard & Peterson, 2006, ApJ, 641, "DETERMINING CENTRAL BLACK HOLE
+        MASSES IN DISTANT ACTIVE GALAXIES AND QUASARS. II. IMPROVED OPTICAL AND UV SCALING RELATIONSHIPS". As stated in this work,
+        here we assume a cosmology with H0 = 70 km/s/Mpc, Omega_Lambda = 0.7, and Omega_matter = 0.3, although we allow the user to
+        change the value of the Hubble constant (H0).
 
         We assume a systematic error of 0.36 dex for the estimated black hole masses. This value is reported in Vestergaard & Peterson, 2006. Since this error is
         much higher than the errors in FWHM and integrated flux, we simply ignore the measured errors in these parameters.
@@ -1893,7 +1897,7 @@ class analysis:
         Returns
         -------
         log10_BH_mass_CIV: float
-            The black hole mass in log10 scale and its correspondin error in dex computed based on Eq. 8 from Vestergaard & Peterson, 2006, ApJ, 641.
+            The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 8 from Vestergaard & Peterson, 2006, ApJ, 641.
         """
 
         systematic_error_FWHM = 0.36 # dex. Result from Vestergaard & Peterson, 2006.
@@ -1911,9 +1915,102 @@ class analysis:
         log10_BH_mass_CIV = [log10_BH_mass_CIV,systematic_error_FWHM]
         return log10_BH_mass_CIV
 
+
+    def BH_mass_MgII_VO2009(self, wavelengths, continuum_baseline, FWHM_MgII, par_values_MgII, H0=70):
+
+        """
+        This function estimates the black hole mass based on Vestergaard & Osmer, 2009, ApJ, 699, "MASS FUNCTIONS OF THE ACTIVE BLACK HOLES
+        IN DISTANT QUASARS FROM THE LARGE BRIGHT QUASAR SURVEY, THE BRIGHT QUASAR SURVEY, AND THE COLOR-SELECTED SAMPLE OF THE SDSS FALL
+        EQUATORIAL STRIPE". As stated in this work, here we assume a cosmology with H0 = 70 km/s/Mpc, Omega_Lambda = 0.7,
+        and Omega_matter = 0.3, although we allow the user to change the value of the Hubble constant (H0).
+
+        We assume a systematic error of 0.55 dex for the estimated black hole masses. This value is reported in Vestergaard & Osmer, 2009.
+        Since this error is much higher than the errors in FWHM and integrated flux, we simply ignore the measured errors in these parameters.
+
+        Parameters
+        ----------
+        wavelengths: numpy.ndarray (astropy.units Angstrom)
+            The wavelength solution for the given spectrum.
+        continuum_baseline: numpy.ndarray (float)
+            An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
+        FWHM_MgII: float (astropy.units Angstrom)
+            The FWHM for the MgII line in Angstrom units.
+        par_values_MgII: list
+            The list with the best fit values for the MgII line. This information is contained in the variable "par_values_list" returned from the function
+            analysis.fit_lines().
+        H0: float
+            This is the Hubble constant value. Default is 70 km/s/Mpc.
+
+        Returns
+        -------
+        log10_BH_mass_MgII: float
+            The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 1 from Vestergaard & Osmer, 2009, ApJ, 699,
+            taking the continuum luminosity at 3000 Angstroms. If the continuum at 3000 Angstroms is not available, it automatically uses the
+            continuum at 2100 Angstroms.
+        """
+
+        systematic_error_FWHM = 0.55 # dex. Result from Vestergaard & Osmer, 2009.
+        z = par_values_MgII[0]
+        FWHM_MgII_velocity = c.to("km/s").value*FWHM_MgII.value*(1+z)/par_values_MgII[1]
+
+        cosmo = FlatLambdaCDM(H0=H0, Om0=0.3, Tcmb0 = 2.7) # Omega lambda is implicitly 0.7
+        Distance = cosmo.luminosity_distance(z).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
+
+        continuum_index = extraction.find_nearest(wavelengths.value, 3000*(1+z))
+        if wavelengths.value[continuum_index] < 0.9*3000*(1+z):
+            continuum_index = extraction.find_nearest(wavelengths.value, 2100*(1+z))
+            Lum_2100 = continuum_baseline[continuum_index]*wavelengths.value[continuum_index]*4*np.pi*(Distance**2)
+            log10_BH_mass_MgII = np.log10( ((FWHM_MgII_velocity/1000)**2) * (Lum_2100/(10**44))**0.5 ) + 6.79
+        else:
+            Lum_3000 = continuum_baseline[continuum_index]*wavelengths.value[continuum_index]*4*np.pi*(Distance**2)
+            log10_BH_mass_MgII = np.log10( ((FWHM_MgII_velocity/1000)**2) * (Lum_3000/(10**44))**0.5 ) + 6.86
+
+        log10_BH_mass_MgII = [log10_BH_mass_MgII,systematic_error_FWHM]
+        return log10_BH_mass_MgII
+
+    def BH_mass_Halpha_Shen2011(self, FWHM_Halpha, par_values_Halpha, integrated_flux_Halpha, H0=70):
+
+        """
+        This function estimates the black hole mass based on Shen at al. 2011, ApJS, 194:45, "A CATALOG OF QUASAR PROPERTIES FROM
+        SLOAN DIGITAL SKY SURVEY DATA RELEASE 7". As stated in this work, here we assume a cosmology with H0 = 70 km/s/Mpc, Omega_Lambda = 0.7,
+        and Omega_matter = 0.3, although we allow the user to change the value of the Hubble constant (H0).
+
+        We assume a systematic error of 0.18 dex for the estimated black hole masses. This value is reported in Shen et al. 2011.
+        Since this error is much higher than the errors in FWHM and integrated flux, we simply ignore the measured errors in these parameters.
+
+        Parameters
+        ----------
+        FWHM_Halpha: float (astropy.units Angstrom)
+            The FWHM for the Halpha line in Angstrom units.
+        par_values_Halpha: list
+            The list with the best fit values for the Halpha line. This information is contained in the variable "par_values_list" returned from the function
+            analysis.fit_lines().
+        integrated_flux_Halpha: float (astropy.units Angstrom)
+            The integrated flux for the Halpha line in erg/cm2/s units.
+        H0: float
+            This is the Hubble constant value. Default is 70 km/s/Mpc.
+
+        Returns
+        -------
+        log10_BH_mass_Halpha: float
+            The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 10 from Shen et al. 2011. 
+        """
+
+        systematic_error_FWHM = 0.18
+        z = par_values_Halpha[0]
+        FWHM_Halpha_velocity = c.to("km/s").value*FWHM_Halpha.value*(1+z)/par_values_Halpha[1]
+
+        cosmo = FlatLambdaCDM(H0=H0, Om0=0.3, Tcmb0 = 2.7) # Omega lambda is implicitly 0.7
+        Distance = cosmo.luminosity_distance(z).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
+        Lum_Halpha = integrated_flux_Halpha.value*4*np.pi*(Distance**2)
+
+        log10_BH_mass_Halpha = np.log10(  (FWHM_Halpha_velocity**2.1) * ((Lum_Halpha/(10**42)))**0.43 ) + 0.379
+        
+        log10_BH_mass_Halpha = [log10_BH_mass_Halpha,systematic_error_FWHM]
+        return log10_BH_mass_Halpha
+
+        
 """
 Documentacao
-
-Massa dos buracos negros do paper de Shen 2011.
 
 """
