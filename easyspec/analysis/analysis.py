@@ -971,7 +971,6 @@ class analysis:
             labels = ["Mean", "Amplitude", "fwhm_Lorentz", "fwhm_Gauss"]
             adopted_model = self.model_Voigt
 
-        
         return initial, priors, labels, adopted_model
 
 
@@ -1118,14 +1117,14 @@ class analysis:
             local_line_std_deviation = line_std_deviation[number]/local_normalization
 
             if priors is None or priors[number] is None:
-                line_region_min = wavelength_peak_positions[number] - 100
+                line_region_min = wavelength_peak_positions[number] - 150
                 if number > 0:
                     mean_point = (wavelength_peak_positions[number-1] + wavelength_peak_positions[number])/2
                     if mean_point > line_region_min:
                         line_region_min = mean_point
                 line_region_min_cache.append(line_region_min)
 
-                line_region_max = wavelength_peak_positions[number] + 100
+                line_region_max = wavelength_peak_positions[number] + 150
                 if number < (len(rest_frame_line_wavelengths)-1):
                     mean_point = (wavelength_peak_positions[number] + wavelength_peak_positions[number+1])/2
                     if mean_point < line_region_max:
@@ -1135,11 +1134,13 @@ class analysis:
             else:
                 initial, _, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, line_region_min=None, line_region_max=None)
                 local_priors = np.asarray(priors[number],dtype="object")
+
                 # In the case of a single-line analysis, if the user inputs priors=[[7500,7700],[0.1],[2,50]] instead of priors=[ [[7500,7700],[0.1],[2,50]] ], the analysis will work anyway.
                 if isinstance(local_priors[0],float) or isinstance(local_priors[0],int):
                     local_priors = np.asarray(priors,dtype="object")
                 line_region_min = local_priors[0][0]
                 line_region_max = local_priors[0][1]
+                line_region_min_cache.append(line_region_min)
             
             # Reseting wavelength windows for blended lines:
             if number < (len(rest_frame_line_wavelengths)-1):
@@ -1150,7 +1151,7 @@ class analysis:
                     else:
                         counter = counter + 1
                         
-                line_region_max = wavelength_peak_positions[number+counter] + 100
+                line_region_max = wavelength_peak_positions[number+counter] + 150
                 if (number+counter) < (len(rest_frame_line_wavelengths)-1):
                     mean_point = (wavelength_peak_positions[number+counter] + wavelength_peak_positions[number+counter+1])/2
                     if mean_point < line_region_max:
@@ -1440,12 +1441,13 @@ class analysis:
         integration_limit_0 = 0
         for n,flux_bin in enumerate(np.flip(line_function_positive[:index_peak])):
             if flux_bin > 2*line_std_deviation:
-                try:
-                    integration_limit_0 = wavelengths_window[index_peak-n-2]
-                except:
+                if n < (index_peak-2):
+                    try:
+                        integration_limit_0 = wavelengths_window[index_peak-n-2]
+                    except:
+                        break
+                else:
                     break
-            else:
-                break
         integration_limit_1 = 0
         for n,flux_bin in enumerate(line_function_positive[index_peak:]):
             if flux_bin > 2*line_std_deviation:
@@ -2007,5 +2009,4 @@ class analysis:
         
 """
 Documentacao
-
 """
