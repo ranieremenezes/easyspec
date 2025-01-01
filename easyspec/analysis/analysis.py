@@ -317,7 +317,7 @@ class analysis:
 
     def all_models(self, model_name, custom_function=None):
         """
-        This function is used to select a specific line model. E.g.: Gaussian, Lorentz, doubleLorentz, and so on.
+        This function is used to select a specific line model. E.g.: Gaussian, Lorentz, GaussianLorentzGaussian, and so on.
 
         Parameters
         ----------
@@ -581,6 +581,8 @@ class analysis:
         return lp + self.lnlike(theta, x, y, yerr, model)
 
     def line_MCMC(self, p0, priors, nwalkers, niter, initial, lnprob, data, model_name, custom_function=None, burn_in=100, ncores=1):
+
+        """This function runs a MCMC approach for one line (singular or blended) for a given a model."""
         
         priors = tuple([priors])  # The priors are transformed into a tuple containing only one element
         
@@ -625,6 +627,8 @@ class analysis:
     
 
     def plotter(self, sampler, model_name, x, color="grey", normalization = 1):
+
+        """In this function we plot the 'hairs' (i.e. alternative models) around the maximum likelihood model estimated with the MCMC method."""
                 
         samples = sampler.flatchain
         adopted_model = self.all_models(model_name, custom_function=None)
@@ -664,7 +668,25 @@ class analysis:
     def data_window_selection(self, wavelengths, spec_flux, spec_flux_err, line_region_min,line_region_max):
         
         """
-        wavelength must be in absolute values, i.e. without units
+        Function to slice the data into a wavelength window.
+
+        Parameters
+        ----------
+        wavelengths: numpy.array
+            This variable must be in absolute values, i.e. without units.
+        spec_flux: numpy.array
+            The spectral density array.
+        spec_flux_err: numpy.array
+            The spectral density array.
+        line_region_min: float
+            Inferior window limit.
+        line_region_max: float
+            Superior window limit.
+        
+        Returns
+        -------
+        x, y, yerr: numpy.arrays
+            New arrays containing data within the selected window.        
         """
         
         selection = (wavelengths > line_region_min) & (wavelengths < line_region_max) 
@@ -682,19 +704,41 @@ class analysis:
     def parameter_estimation(self, samples, model_name, air_wavelength_line=None, quantiles=[0.16, 0.5, 0.84], normalization = 1, parlabels=None, line_names="", output_dir=".", savefile=True):
         
         """
-        line_names: str or list of str
-        
+        In this function we estimate the parameter values and corresponding errors based on the 16%, 50%, and 84% quantiles of the
+        MCMC posterior distributions of parameters.
+
+        Parameters
+        ----------
+        samples: list
+            A list containing the MCMC posterior distributions.
+        model_name: string
+            The current model adopted in the fit.
+        air_wavelength_line: float
+            The line rest-frame wavelength used to compute the redshift.
+        quantiles: list
+            The quantiles adpted to compute the parameter values and corresponding errors. Default is quantiles=[0.16, 0.5, 0.84].
+        normalization: float
+            The plot normalization.
         parlabels: list
-        this is a list with the names of the free parameters in the adopted model. If you use a **custom** model
-        with two peaks, then parlabels needs two input lists, e.g.: parlabels=[['a','b'],['c','d']]. If it has three peaks, parlabels
-        must be parlabels=[['a','b'],['c','d'],['e','f']] and so on.
+            This is a list with the names of the free parameters in the adopted model. If you use a model with two peaks,
+            then parlabels needs two input lists, e.g.: parlabels=[['a','b'],['c','d']]. If it has three peaks, parlabels
+            must be parlabels=[['a','b'],['c','d'],['e','f']] and so on.
+        line_names: string or list of strings
+            The line names.
+        outputdir: string
+            The output directory.        
+        savefile: boolean
+            If True, the data will be saved in the output directory.
         
-        lambda_peak_names: str or list of str
-        Name or list of names of the parameters corresponting to the line peaks. E.g.: for a Gaussian, the parameter that tell us where
-        the line peak is located is the Gaussian mean. E.g. 2: if your model consists of two Gaussians with 
-        parlabels = [["mean", "Amplitude", "fwhm"],["mean", "Amplitude", "fwhm"]], then
-        lambda_peak_names = ["mean","mean"]
-        
+        Returns
+        -------
+        par_values: list
+            A list with the parameter values recovered from the 50% quantiles of the MCMC posterior distributions of parameters.
+        par_values_errors: list
+            A list with the parameter errors recovered from the 16% and 84% quantiles of the MCMC posterior distributions of parameters.
+        par_names: list
+            A list with the parameter names.
+
         """
         
         if isinstance(parlabels[0],str):
@@ -776,14 +820,43 @@ class analysis:
         return par_values, par_values_errors, par_names
 
 
-    def quick_plot(self, x,y,model_name, parlabels, sampler=None, best_fit_model=None, theta_max=None, normalization= 1, hair_color="grey", title="",xlabel="Observed $\lambda$ [$\AA$]",ylabel="F$_{\lambda}$ [erg cm$^{-2}$ s$^{-1}$ $\AA^{-1}$ ]",savefig=True, outputdir="./"):
+    def quick_plot(self, x, y, model_name, parlabels, sampler=None, best_fit_model=None, theta_max=None, normalization = 1, hair_color="grey", title="",xlabel="Observed $\lambda$ [$\AA$]",ylabel="F$_{\lambda}$ [erg cm$^{-2}$ s$^{-1}$ $\AA^{-1}$ ]",overplot_median_model=True,savefig=True, outputdir="./"):
         
         """
+        In this function we plot the data window together with the maximum likelihood and/or the median model.
+
+        Parameters
+        ----------
+        x, y: numpy.arrays
+            Arrays containing the data within the selected window.
+        model_name: string
+            The current model adopted in the fit.
+        parlabels: list
+            A list with the parameter names for the adopted model.
+        sampler:
+            The MCMC sampler.
+        best_fit_model: numpy.array
+            Array with the best-fit model.
         theta_max: numpy.ndarray
-        This parameter is useful here only if model_name is not 'custom'. I will be used to plot the vertical lines
-        coincident with the line peaks.
-        
-        
+            Array with the best-fit parameters.
+        normalization: float
+            The plot normalization.        
+        hair_color: string
+            The color adopted for the MCMC hairs.
+        title: string
+            The title of the plot.
+        xlabel,ylabel: strings
+            The axes labels.
+        overplot_median_model: boolean
+            If True, the median model and model standard deviation will be overploted.
+        savefig: boolean
+            If True, the figure will be saved in the output directory.
+        outputdir: string
+            The output directory.
+
+        Returns
+        -------
+
         """
                 
         f = plt.figure(figsize=(10,8))
@@ -800,6 +873,13 @@ class analysis:
         if best_fit_model is not None:
             x_plot = np.linspace(x.min(),x.max(),len(best_fit_model))
             plt.plot(x_plot,best_fit_model*normalization, color="black", label="Highest likelihood model")
+        if overplot_median_model:
+            samples = sampler.flatchain
+            median_model,spread = self.MCMC_spread(x, samples, model_name, nsamples=200)
+            x_plot = np.linspace(x.min(),x.max(),len(median_model))
+            plt.plot(x_plot,median_model*normalization, color="C0", ls="--", label="Median model")
+            plt.fill_between(x_plot,(median_model+spread)*normalization,(median_model-spread)*normalization,color="C0",alpha=0.3,label="$1\sigma$")
+
         plt.xlabel(xlabel,fontsize=12)
         plt.ylabel(ylabel,fontsize=12)
         plt.title(title)
@@ -971,13 +1051,14 @@ class analysis:
             labels = ["Mean", "Amplitude", "fwhm_Lorentz", "fwhm_Gauss"]
             adopted_model = self.model_Voigt
 
+        
         return initial, priors, labels, adopted_model
 
 
 
     def fit_lines(self, wavelengths, flux_density, continuum_baseline, wavelength_peak_positions, rest_frame_line_wavelengths, peak_heights, line_std_deviation,
                   blended_line_min_separation = 50, which_models="Lorentz", line_names = None, overplot_archival_lines = ["H"], priors = None, MCMC_walkers = 250,
-                  MCMC_iterations = 400, N_cores = 1, plot_spec = True, plot_MCMC = False, save_results = True):
+                  MCMC_iterations = 400, N_cores = 1, plot_spec = True, plot_MCMC = False, overplot_median_model = False, save_results = True):
 
         """
         This function uses a Markov-chain Monte Carlo to estimate the line parameters and their errors.
@@ -1032,6 +1113,8 @@ class analysis:
         plot_MCMC: boolean
             If True, a series of diagnostic plots for the MCMC will be shown, as the corner plot, the evolution of the parameters over time, and the line fitted to 
             the data.
+        overplot_median_model: boolean
+            If True, the median model and model standard deviation will be overploted in the diagnostic plots.
         save_results: boolean
             If True, the plots and fit information will be saved in the output directory defined in the function analysis.load_calibrated_data()
             
@@ -1117,14 +1200,14 @@ class analysis:
             local_line_std_deviation = line_std_deviation[number]/local_normalization
 
             if priors is None or priors[number] is None:
-                line_region_min = wavelength_peak_positions[number] - 150
+                line_region_min = wavelength_peak_positions[number] - 100
                 if number > 0:
                     mean_point = (wavelength_peak_positions[number-1] + wavelength_peak_positions[number])/2
                     if mean_point > line_region_min:
                         line_region_min = mean_point
                 line_region_min_cache.append(line_region_min)
 
-                line_region_max = wavelength_peak_positions[number] + 150
+                line_region_max = wavelength_peak_positions[number] + 100
                 if number < (len(rest_frame_line_wavelengths)-1):
                     mean_point = (wavelength_peak_positions[number] + wavelength_peak_positions[number+1])/2
                     if mean_point < line_region_max:
@@ -1134,13 +1217,11 @@ class analysis:
             else:
                 initial, _, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, line_region_min=None, line_region_max=None)
                 local_priors = np.asarray(priors[number],dtype="object")
-
                 # In the case of a single-line analysis, if the user inputs priors=[[7500,7700],[0.1],[2,50]] instead of priors=[ [[7500,7700],[0.1],[2,50]] ], the analysis will work anyway.
                 if isinstance(local_priors[0],float) or isinstance(local_priors[0],int):
                     local_priors = np.asarray(priors,dtype="object")
                 line_region_min = local_priors[0][0]
                 line_region_max = local_priors[0][1]
-                line_region_min_cache.append(line_region_min)
             
             # Reseting wavelength windows for blended lines:
             if number < (len(rest_frame_line_wavelengths)-1):
@@ -1151,7 +1232,7 @@ class analysis:
                     else:
                         counter = counter + 1
                         
-                line_region_max = wavelength_peak_positions[number+counter] + 150
+                line_region_max = wavelength_peak_positions[number+counter] + 100
                 if (number+counter) < (len(rest_frame_line_wavelengths)-1):
                     mean_point = (wavelength_peak_positions[number+counter] + wavelength_peak_positions[number+counter+1])/2
                     if mean_point < line_region_max:
@@ -1211,7 +1292,7 @@ class analysis:
                         self.parameter_time_series(initial, sampler, labels)
 
                         self.quick_plot(x,y,model_name=copy_which_models[number], parlabels=labels, sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=local_normalization,
-                                        hair_color="grey",title=self.target_name+" - "+line_names[number], ylabel="F$_{\lambda} - F_{continuum}$ ["+f"{flux_density.unit}]", outputdir = self.output_dir)
+                                        hair_color="grey",title=self.target_name+" - "+line_names[number], ylabel="F$_{\lambda} - F_{continuum}$ ["+f"{flux_density.unit}]", overplot_median_model=overplot_median_model, outputdir = self.output_dir)
 
                 else:
                     blended_line_names.append(line_names[number])
@@ -1281,7 +1362,7 @@ class analysis:
                         self.parameter_time_series(initial, sampler, labels_corner)
 
                         self.quick_plot(x,y,model_name=copy_which_models[number], parlabels = labels_corner,sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=local_normalization,
-                                        hair_color="grey",title=self.target_name+" - "+line_names_corner, ylabel="F$_{\lambda} - F_{continuum}$ ["+f"{flux_density.unit}]", outputdir = self.output_dir)
+                                        hair_color="grey",title=self.target_name+" - "+line_names_corner, ylabel="F$_{\lambda} - F_{continuum}$ ["+f"{flux_density.unit}]",overplot_median_model=overplot_median_model, outputdir = self.output_dir)
                 else:
                     continue
                 
@@ -1441,13 +1522,12 @@ class analysis:
         integration_limit_0 = 0
         for n,flux_bin in enumerate(np.flip(line_function_positive[:index_peak])):
             if flux_bin > 2*line_std_deviation:
-                if n < (index_peak-2):
-                    try:
-                        integration_limit_0 = wavelengths_window[index_peak-n-2]
-                    except:
-                        break
-                else:
+                try:
+                    integration_limit_0 = wavelengths_window[index_peak-n-2]
+                except:
                     break
+            else:
+                break
         integration_limit_1 = 0
         for n,flux_bin in enumerate(line_function_positive[index_peak:]):
             if flux_bin > 2*line_std_deviation:
@@ -2007,6 +2087,3 @@ class analysis:
         return log10_BH_mass_Halpha
 
         
-"""
-Documentacao
-"""
