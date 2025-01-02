@@ -22,7 +22,7 @@ The following instructions assume an installation of `conda` or `mamba` (i.e. a 
 ### Mamba-based installation 
 
 In the terminal, run (substitute *mamba* by *conda* if it is the case for you):
-<pre><code>mamba create --name easyspec -c conda-forge python=3.9 "scipy=1.9.1" "astropy=5.1" "emcee=3.1.4" "corner=2.2.2" "ccdproc=2.4.0" "matplotlib=3.5.2" "numpy=1.21.5" "dust_extinction=1.2" "notebook==6.4.4" </code></pre>
+<pre><code>mamba create --name easyspec -c conda-forge python=3.9 "scipy=1.9.1" "astropy=5.1" "emcee=3.1.4" "corner=2.2.2" "ccdproc=2.4.0" "matplotlib=3.5.2" "numpy=1.21.5" "dust_extinction=1.2" "notebook=6.4.4" "tqdm=4.64.1" </code></pre>
 
 This will create the virtual environment and install all dependencies. Then activate the environment and install _easyspec_:
 <pre><code>mamba activate easyspec
