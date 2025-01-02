@@ -10,7 +10,6 @@ import warnings
 from scipy import odr
 from astropy.nddata import CCDData
 from astropy import units as u
-import ccdproc as ccdp
 import os
 from scipy.signal import medfilt
 
