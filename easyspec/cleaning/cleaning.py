@@ -10,9 +10,11 @@ import warnings
 from scipy import odr
 from astropy.nddata import CCDData
 from astropy import units as u
+import ccdproc as ccdp
 import os
 from scipy.signal import medfilt
 
+easyspec_cleaning_version = "1.0.0"
 
 class cleaning:
 
@@ -20,7 +22,7 @@ class cleaning:
 
     def __init__(self): 
         # Print the current version of easyspec       
-        os.system("pip show easyspec")
+        print("easyspec-cleaning version: ",easyspec_cleaning_version)
 
 
     def data_paths(self,bias=None,flats=None,lamp=None,standard_star=None,targets=None,darks=None):
