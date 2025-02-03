@@ -2,7 +2,7 @@ Cleaning
 ========
 
   
-.. _basic:
+.. _debias:
 
 Debias
 ------
