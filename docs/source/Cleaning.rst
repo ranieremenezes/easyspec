@@ -1,5 +1,5 @@
-Basic Analysis
-==============
+Cleaning
+========
 
   
 .. _basic:
