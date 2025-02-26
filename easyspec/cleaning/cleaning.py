@@ -14,7 +14,7 @@ import ccdproc as ccdp
 import os
 from scipy.signal import medfilt
 
-easyspec_cleaning_version = "1.0.0"
+easyspec_cleaning_version = "1.0.0" 
 
 class cleaning:
 
