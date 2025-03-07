@@ -1158,6 +1158,9 @@ class analysis:
         elif isinstance(line_std_deviation,list):
             line_std_deviation = np.asarray(line_std_deviation)
 
+        if isinstance(rest_frame_line_wavelengths,u.quantity.Quantity):
+            rest_frame_line_wavelengths = rest_frame_line_wavelengths.value
+
         if isinstance(rest_frame_line_wavelengths,float) or isinstance(rest_frame_line_wavelengths,int):
             rest_frame_line_wavelengths = [rest_frame_line_wavelengths]
 
@@ -1595,12 +1598,18 @@ class analysis:
             plt.grid(which="both",linestyle="dotted")
             if numerator > 0:
                 plt.vlines(first_moment,0,(flux_density_window-continuum_baseline_window).max(),colors="C0",linestyles=":",label="centroid")
-                plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).max()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0", alpha=0.3, label=r"$\lambda_0 \pm \sigma_{rms}$")
+                try:
+                    plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).max()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0", alpha=0.3, label=r"$\lambda_0 \pm \sigma_{rms}$")
+                except:
+                    print(f"Plotting error: first or second line moment is probably NaN. First moment: {first_moment}, second moment: {line_dispersion}")
                 plt.plot([interpol_wavelenghts[lambda_0_index],interpol_wavelenghts[lambda_1_index]],[interpol_density_flux.max()/2,interpol_density_flux.max()/2],color="black")
                 plt.text((interpol_wavelenghts[lambda_0_index]+interpol_wavelenghts[lambda_1_index])/2,1.05*interpol_density_flux.max()/2,"FWHM",horizontalalignment='center',)
             else:
                 plt.vlines(first_moment,0,(flux_density_window-continuum_baseline_window).min(),colors="C0",linestyles=":",label="centroid")
-                plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).min()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0", alpha=0.3, label=r"$\lambda_0 \pm \sigma_{rms}$")
+                try:
+                    plt.fill_betweenx([0,(flux_density_window-continuum_baseline_window).min()],first_moment-line_dispersion,first_moment+line_dispersion, color="C0", alpha=0.3, label=r"$\lambda_0 \pm \sigma_{rms}$")
+                except:
+                    print(f"Plotting error: first or second line moment is probably NaN. First moment: {first_moment}, second moment: {line_dispersion}")
                 plt.plot([interpol_wavelenghts[lambda_0_index],interpol_wavelenghts[lambda_1_index]],[interpol_density_flux.min()/2,interpol_density_flux.min()/2],color="black")
                 plt.text((interpol_wavelenghts[lambda_0_index]+interpol_wavelenghts[lambda_1_index])/2,0.90*interpol_density_flux.min()/2,"FWHM",horizontalalignment='center',)
             
