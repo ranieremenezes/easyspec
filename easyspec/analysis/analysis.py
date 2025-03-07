@@ -1449,7 +1449,10 @@ class analysis:
 
 
         if save_results:
-            self.merge_fit_results(self.target_name,list_of_files=None, wavelength_systematic_error=self.wavelength_systematic_error.value,output_dir=self.output_dir)
+            try:
+                self.merge_fit_results(self.target_name,list_of_files=None, wavelength_systematic_error=self.wavelength_systematic_error.value,output_dir=self.output_dir)
+            except: # This line here allows to work with spectrum data files that have no systematic_error column:
+                self.merge_fit_results(self.target_name,list_of_files=None,output_dir=self.output_dir)
             list_of_files = glob.glob(self.output_dir+"/*_line_fit_results.csv")
             for file in list_of_files:
                 os.remove(file)
