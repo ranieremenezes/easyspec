@@ -1054,6 +1054,41 @@ class analysis:
         
         return initial, priors, labels, adopted_model
 
+    def estimate_norm_height(self, wavelengths, flux_density, continuum_baseline, wavelength_peak_position, peak_height):
+
+        """
+        Funtion to estimate the normalized height of a peak to set the priors for the MCMC.
+
+        Parameters
+        ----------
+        wavelengths: numpy.ndarray (astropy.units Angstrom)
+            The wavelength solution for the given spectrum.
+        flux_density: numpy.ndarray (astropy.units erg/cm2/s/A)
+            The calibrated spectrum in flux density.
+        continuum_baseline: numpy.ndarray (float)
+            An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
+        wavelength_peak_position: astropy.units Angstrom
+            The position of the peak in the wavelength axis in Angstroms.
+        peak_height: astropy.units erg/cm2/s/A
+            The height of the peak in erg/cm2/s/A.
+
+        Returns
+        -------
+        norm_height: float
+            The estimated normalized height of the input peak. This value can be set to estimate priors for the MCMC.
+        
+        """
+
+        if isinstance(wavelength_peak_position, u.quantity.Quantity):
+            wavelength_peak_position = wavelength_peak_position.value
+
+        index = extraction.find_nearest(wavelengths.value, wavelength_peak_position)
+
+        local_normalization = 10**round(np.log10(np.median(flux_density.value - 0.9*continuum_baseline)))
+
+        norm_height = (peak_height - continuum_baseline[index])/local_normalization
+
+        return norm_height
 
 
     def fit_lines(self, wavelengths, flux_density, continuum_baseline, wavelength_peak_positions, rest_frame_line_wavelengths, peak_heights, line_std_deviation,
@@ -1075,7 +1110,7 @@ class analysis:
             The position of each peak in Angstroms found with the function analysis.find_lines().
         rest_frame_line_wavelengths: list
             A list with the rest frame wavelength values for each one of the input lines.
-        peak_heights: numpy.ndarray (astropy.units Angstrom)
+        peak_heights: numpy.ndarray (astropy.units erg/cm2/s/A)
             The height of each peak in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
         line_std_deviation: numpy.ndarray (float)
             The standard deviation for the local continuum. This variable is an output of the function analysis.find_lines().
@@ -1184,6 +1219,9 @@ class analysis:
         peak_heights = peak_heights - continuum_baseline[local_continuum_index]
         local_normalization = 10**round(np.log10(np.median(flux_density.value - 0.9*continuum_baseline)))
 
+        if priors is None:
+            priors = [None]*len(wavelength_peak_positions)
+
         # Here we identify the blended lines:
         peak_distances = np.diff(wavelength_peak_positions)
         blended_line = [False]  # The first line will never be blended with a precedent line
@@ -1218,7 +1256,11 @@ class analysis:
 
                 initial, local_priors, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, line_region_min, line_region_max)
             else:
-                initial, _, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, line_region_min=None, line_region_max=None)
+                _, _, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, line_region_min=None, line_region_max=None)
+                if len(priors[number]) == 3:
+                    initial = np.array([wavelength_peak_positions[number], peak_height, np.mean(priors[number][2])])
+                else:
+                    initial = np.array([wavelength_peak_positions[number], peak_height, np.mean(priors[number][2]), np.mean(priors[number][3])])
                 local_priors = np.asarray(priors[number],dtype="object")
                 # In the case of a single-line analysis, if the user inputs priors=[[7500,7700],[0.1],[2,50]] instead of priors=[ [[7500,7700],[0.1],[2,50]] ], the analysis will work anyway.
                 if isinstance(local_priors[0],float) or isinstance(local_priors[0],int):
@@ -1227,7 +1269,7 @@ class analysis:
                 line_region_max = local_priors[0][1]
             
             # Reseting wavelength windows for blended lines:
-            if number < (len(rest_frame_line_wavelengths)-1):
+            if number < (len(rest_frame_line_wavelengths)-1) and priors[number] is None:
                 counter = 0
                 for i in blended_line[number+1:]:
                     if i is False:
@@ -1241,7 +1283,7 @@ class analysis:
                     if mean_point < line_region_max:
                         line_region_max = mean_point
 
-            if blended_line[number] is True:
+            if blended_line[number] is True and priors[number] is None:
                 counter = 1
                 for i in np.flip(blended_line[:number]):
                     if bool(i) is True:
@@ -1528,9 +1570,12 @@ class analysis:
         integration_limit_0 = 0
         for n,flux_bin in enumerate(np.flip(line_function_positive[:index_peak])):
             if flux_bin > 2*line_std_deviation:
-                try:
-                    integration_limit_0 = wavelengths_window[index_peak-n-2]
-                except:
+                if n < (index_peak-2):  # This condition is necessary such that we don't take e.g. wavelengths_window[-1] (negative index!)
+                    try:
+                        integration_limit_0 = wavelengths_window[index_peak-n-2]
+                    except:
+                        break
+                else:
                     break
             else:
                 break
