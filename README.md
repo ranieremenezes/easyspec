@@ -64,6 +64,9 @@ The main tutorials are:
 * [spectroscopy\_tracing\_easyspec](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/spectroscopy_tracing_easyspec.ipynb): here we will show you how to extract your spectra and calibrate them in wavelegnth and flux.
 * [spectral\_analysis\_easyspec](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/spectral_analysis_easyspec.ipynb): finally, we show you how to fit a model to each line of your spectrum with a MCMC approach and recover physical quantities such as redshift, dispersion velocity, FWHM, line flux and many more.
 
+For a more advanced analysis, we recommend the tutorial
+* [spectral\_analysis\_fitting\_a\_line\_with\_two\_Gaussians](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/spectral_analysis_fitting_a_line_with_two_Gaussians.ipynb): here we fit the H$\beta$ line with two Gaussian components.
+
 
 The documentation of `easyspec` can be found in the header of all the functions, and at the link (TBD).
 
