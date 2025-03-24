@@ -12,10 +12,10 @@ cleaning.cleaning module
    :undoc-members:
    :show-inheritance:
 
-Module contents
----------------
+cleaning.cleaning.data_paths module
+-----------------------------------
 
-.. automodule:: cleaning
+.. automodule:: cleaning.cleaning.data_paths
    :members:
    :undoc-members:
    :show-inheritance:
