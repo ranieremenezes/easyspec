@@ -7,10 +7,7 @@ build:
 
 python:
   install:
-    - method: pip
-      path: .
-      extra_requirements:
-        - easyspec
+    - requirements: docs/requirements.txt
 
 sphinx:
   configuration: docs/source/conf.py
