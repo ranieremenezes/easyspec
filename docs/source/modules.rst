@@ -1,5 +1,5 @@
-easyspec
-========
+package
+=======
 
 .. toctree::
    :maxdepth: 4
