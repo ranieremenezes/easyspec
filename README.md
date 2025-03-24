@@ -68,7 +68,7 @@ For a more advanced analysis, we recommend the tutorial
 * [spectral\_analysis\_fitting\_a\_line\_with\_two\_Gaussians](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/spectral_analysis_fitting_a_line_with_two_Gaussians.ipynb): here we fit the Hbeta line with two Gaussian components and also explore the MCMC posterior distributions.
 
 
-The documentation of `easyspec` can be found in the header of all the functions, and at the link (TBD).
+The documentation of `easyspec` can be found in the header of all the functions, and at [this link](https://easyspec.readthedocs.io/en/latest/index.html).
 
 
 # Acknowledgments
