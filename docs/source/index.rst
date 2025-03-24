@@ -26,6 +26,5 @@ Contents
 
 .. toctree::
 
-   Cleaning
+   cleaning
    
-   Package
