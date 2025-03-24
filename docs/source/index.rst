@@ -19,12 +19,13 @@ For a more advanced analysis, we recommend the tutorial
 
 * `spectral_analysis_fitting_a_line_with_two_Gaussians <https://github.com/ranieremenezes/easyspec/blob/main/tutorial/spectral_analysis_fitting_a_line_with_two_Gaussians.ipynb>`_: here we fit the H :math:`{\beta}` line with two Gaussian components and also explore the MCMC posterior distributions.
 
-Ohoya
 
 Contents
 --------
 
 .. toctree::
+   :maxdepth: 2
+   :caption: Contents:
 
-   cleaning
+   modules
    
