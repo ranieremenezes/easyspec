@@ -2,19 +2,6 @@
 
 import os
 import sys
-import mock
-
-"""MOCK_MODULES = ['pyLikelihood','GtApp',
-                    'BinnedAnalysis','SrcModel','AnalysisBase',
-                    'LikelihoodState','pyIrfLoader',
-                    'SummedLikelihood','FluxDensity']
- 
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)"""
-
-
-MOCK_MODULES = ['numpy', 'matplotlib.gridspec', 'matplotlib.pyplot','mpl_toolkits.axes_grid1', 'glob', 'scipy', 'pathlib','warnings', 'astropy.io', 'astropy.nddata','astropy','ccdproc','os','scipy.signal']
-for mod_name in MOCK_MODULES:
-    sys.modules[mod_name] = mock.Mock()
 
 
 sys.path.insert(0, os.path.abspath('..'))
