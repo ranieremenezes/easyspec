@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Data cleaning &#8212; easyspec 2025 documentation</title>
+    <title>Data Cleaning &#8212; easyspec 2025 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
@@ -35,8 +35,21 @@
           <div class="body" role="main">
             
   <section id="data-cleaning">
-<h1>Data cleaning<a class="headerlink" href="#data-cleaning" title="Permalink to this heading">¶</a></h1>
-<p>TBD</p>
+<h1>Data Cleaning<a class="headerlink" href="#data-cleaning" title="Permalink to this heading">¶</a></h1>
+<p>The acquisition of photometric and spectroscopic data in astronomy is affected by various sources of noise. The major ones are:</p>
+<ul class="simple">
+<li><p><strong>Sensor Bias</strong> – An electronic offset introduced by the detector. This is the image obtained when taking a zero-second exposure with the shutter closed. To correct for this, the <strong>bias must be subtracted</strong> from the data.</p></li>
+<li><p><strong>Dark Current</strong> – Thermal noise present in non-refrigerated cameras. This image is obtained in exposures taken with the shutter closed for the same duration as the target observation. To remove this noise, the <strong>dark frame must be subtracted</strong> from the data.</p></li>
+<li><p><strong>Flat-Field Variations</strong> – Pixel-to-pixel sensitivity differences in the light sensor. These variations can be measured by taking a short exposure (typically less than ten seconds) of a uniformly illuminated white screen inside the telescope dome (or using a sky-flat). After subtracting bias and dark frames, the 2D spectrum must be <strong>divided by the flat-field</strong> to correct for these inhomogeneities.</p></li>
+<li><p><strong>Cosmic-Ray Strikes</strong> – Longer exposures accumulate more cosmic-ray hits. If multiple exposures of the same target are available, cosmic rays can be removed by taking the <strong>median</strong> of all exposures (avoid using the average). If only a few exposures are available, specialized algorithms can detect and remove cosmic rays by identifying their sharp edges.</p></li>
+</ul>
+<p>A raw 2D spectrum with the dispersion axis aligned horizontally and affected by cosmic-ray strikes appears as follows:</p>
+<a class="reference internal image-reference" href="_images/Fig_1_raw_spec.png"><img alt="_images/Fig_1_raw_spec.png" src="_images/Fig_1_raw_spec.png" style="width: 700px;" /></a>
+<p>In the <code class="docutils literal notranslate"><span class="pre">easyspec</span></code> <a class="reference external" href="https://github.com/ranieremenezes/easyspec/blob/main/tutorial/Image_cleaning_easyspec.ipynb">cleaning tutorial</a>, we show how to clean a raw astronomical image. For the detaild documentation on the <code class="docutils literal notranslate"><span class="pre">cleaning()</span></code> class, we refer the reader to the <a class="reference external" href="https://easyspec.readthedocs.io/en/latest/easyspec.cleaning.html">specitic cleaning documentation</a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">cleaning()</span></code> class of <code class="docutils literal notranslate"><span class="pre">easyspec</span></code> can also be used to clean photometric data.</p>
+</div>
 </section>
 
 
@@ -58,7 +71,7 @@
 <h3>Navigation</h3>
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Data cleaning</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Data Cleaning</a></li>
 <li class="toctree-l1"><a class="reference internal" href="modules.html">Package</a></li>
 </ul>
 
