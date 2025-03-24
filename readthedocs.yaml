@@ -9,7 +9,7 @@ python:
   install:
     - requirements: docs/requirements.txt
     - method: pip
-      path: src/easyspec
+      path: src/
 
 sphinx:
   configuration: docs/source/conf.py
