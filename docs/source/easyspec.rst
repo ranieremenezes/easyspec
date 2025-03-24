@@ -1,9 +1,6 @@
 easyspec package
 ================
 
-Subpackages
------------
-
 .. toctree::
    :maxdepth: 4
 
@@ -11,10 +8,3 @@ Subpackages
    easyspec.cleaning
    easyspec.extraction
 
-Module contents
----------------
-
-.. automodule:: easyspec
-   :members:
-   :undoc-members:
-   :show-inheritance:
