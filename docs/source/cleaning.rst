@@ -1,9 +1,6 @@
 cleaning package
 ================
 
-Submodules
-----------
-
 cleaning.cleaning module
 ------------------------
 
