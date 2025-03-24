@@ -4,7 +4,7 @@ easyspec package
 ================
 
 
-easyspec.cleaning.data_paths module
+easyspec.cleaning module
 -----------------------------------
 
 .. automodule:: easyspec.cleaning.data_paths
