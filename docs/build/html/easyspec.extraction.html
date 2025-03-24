@@ -1,0 +1,392 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>easyspec.extraction package &#8212; easyspec 2025 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="easyspec.cleaning package" href="easyspec.cleaning.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-easyspec.extraction.extraction">
+<span id="easyspec-extraction-package"></span><h1>easyspec.extraction package<a class="headerlink" href="#module-easyspec.extraction.extraction" title="Permalink to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="easyspec.extraction.extraction.extraction">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">easyspec.extraction.extraction.</span></span><span class="sig-name descname"><span class="pre">extraction</span></span><a class="reference internal" href="_modules/easyspec/extraction/extraction.html#extraction"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.extraction.extraction.extraction" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>This class contains all the functions necessary to perform the spectral extraction from a cleaned/stacked image.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.extraction.extraction.extraction.extinction_correction">
+<span class="sig-name descname"><span class="pre">extinction_correction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spec_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wavelengths_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">observatory</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_observatory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spline_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/extraction/extraction.html#extraction.extinction_correction"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.extraction.extraction.extraction.extinction_correction" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function removes the atmospheric extinction from the observed spectra.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>spec_list</strong> (<em>list</em>) – List with the extracted spectra of all the targets in the image or only the brightest spectrum. This is one of the outputs from function extraction.extracting().</p></li>
+<li><p><strong>wavelengths_list</strong> (<em>list</em>) – List with the wavelength solutions for each given spectrum. This is the main result from function extraction.wavelength_calibration().</p></li>
+<li><p><strong>observatory</strong> (<em>string</em>) – This is the observatory where you collected yoru data. Options are “ctio”, “kpno”, “lapalma”, “mko”, “mtham”, “paranal”, “apo”.</p></li>
+<li><p><strong>data_type</strong> (<em>string</em>) – Options are “target” or “std_star”. We use this information to correctly select the airmass for the extinction correction.</p></li>
+<li><p><strong>custom_observatory</strong> (<em>string</em>) – Optional. Path to a txt file containing the airmass extinction curve. This file must have two columns, the first with the wavelengths
+<em>in Angstroms</em> and the second with the extinction in mag/airmass.</p></li>
+<li><p><strong>spline_order</strong> (<em>integer</em>) – The degree of the spline fit. Even values of spline_order should be avoided.</p></li>
+<li><p><strong>plots</strong> (<em>boolean</em>) – If True, easyspec will plot a comparison between the corrected and original spectrum, as well as the extinction interpolation curve.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>spec_atm_corrected_list</strong> – List with all the spectra corrected for atmospheric extinction.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.extraction.extraction.extraction.extracting">
+<span class="sig-name descname"><span class="pre">extracting</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_spec_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fitted_polymodel_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">master_lamp_data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trace_half_width</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shift_y_pixels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lamp_peak_height</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">peak_distance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">diagnostic_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spec_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/extraction/extraction.html#extraction.extracting"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.extraction.extraction.extraction.extracting" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function takes the traces as input to extract one or more spectra from the image with a Gaussian-weighted model.</p>
+<dl class="simple">
+<dt>In case you need references for the lamp peaks, here are some databases you can use (as of 12 September, 2024):</dt><dd><ul class="simple">
+<li><p>TNG DOLORES spectrograph reference lamps can be found in table 1 here: <a class="reference external" href="https://www.tng.iac.es/instruments/lrs/">https://www.tng.iac.es/instruments/lrs/</a></p></li>
+<li><p>SOAR Goodman Spectrograph Reference Lamp Library: <a class="reference external" href="https://soardocs.readthedocs.io/projects/lamps/en/latest/">https://soardocs.readthedocs.io/projects/lamps/en/latest/</a></p></li>
+<li><p>Observatorio do Pico dos Dias (OPD-LNA) spectrographs: <a class="reference external" href="https://www.gov.br/lna/pt-br/composicao-1/coast/obs/opd/instrumentacao/instrumentos-e-detectores">https://www.gov.br/lna/pt-br/composicao-1/coast/obs/opd/instrumentacao/instrumentos-e-detectores</a></p></li>
+</ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target_spec_data</strong> (<em>numpy.ndarray</em><em> (</em><em>float</em><em>)</em>) – Matrix containing the target spectral image.</p></li>
+<li><p><strong>fitted_polymodel_list</strong> (<em>string</em>) – List with the fitted spine for one or more spectra in the target spectral image. This is the output of the function extraction.tracing().</p></li>
+<li><p><strong>master_lamp_data</strong> (<em>string</em>) – Optional. The path to the master lamp data file. This file can be produced with the easyspec cleaning() class.</p></li>
+<li><p><strong>trace_half_width</strong> (<em>integer</em>) – The half-width of the trace. The spectra will be extracted within a region 2*trace_half_width around their corresponding traces.</p></li>
+<li><p><strong>shift_y_pixels</strong> (<em>integer</em>) – Value used to shift the trace vertically by +-N pixels and repeat the extracting process to get the sky spectrum around each trace.</p></li>
+<li><p><strong>lamp_peak_height</strong> (<em>float</em>) – The height of the lamp peaks (in counts and with respect to zero) to be detected.</p></li>
+<li><p><strong>peak_distance</strong> (<em>float</em>) – The minimum distance between lamp peaks in pixels. Default is the length of the x-axis divided by 20.</p></li>
+<li><p><strong>diagnostic_plots</strong> (<em>boolean</em>) – If True, easyspec will plot the spectral images overlaid with the target’s spectral trace and corresponding sky traces.</p></li>
+<li><p><strong>spec_plots</strong> (<em>boolean</em>) – If True, easyspec will plot the extracted spectra for the target(s) and the lamp.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>spec_list</strong> (<em>list</em>) – List with the extracted spectra of all the targets in the image or only the brightest spectrum.</p></li>
+<li><p><strong>lamp_spec_list</strong> (<em>list</em>) – Optional. List with the extracted spectra of the lamp based on the traces of all spectra find in the image.</p></li>
+<li><p><strong>lamp_peak_positions_list</strong> (<em>list</em>) – Optional. List with the positions (in pixels) of all peaks in the lamp spectra with heights above the spectrum median. We have one list with
+peak positions for each trace given as an input in the variable fitted_polymodel_list. Notice that the peak positions are slightly different
+for different traces.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.extraction.extraction.extraction.find_nearest">
+<span class="sig-name descname"><span class="pre">find_nearest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">array</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/extraction/extraction.html#extraction.find_nearest"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.extraction.extraction.extraction.find_nearest" title="Permalink to this definition">¶</a></dt>
+<dd><p>For a monotonically increasing/decreasing array, this function finds the index of the element nearest to the given value</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>array</strong> (<em>numpy array</em><em> (</em><em>float</em><em>)</em>) – Monotonically increasing/decreasing array.</p></li>
+<li><p><strong>value</strong> (<em>float</em>) – Value to look for in the array.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>idx</strong> – The index corresponding to the closest element to the given value.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.extraction.extraction.extraction.import_data">
+<span class="sig-name descname"><span class="pre">import_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_spec_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exposure_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exposure_header_entry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'AVEXP'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">airmass_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">airmass_header_entry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'AVAIRMAS'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">std_star_spec_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exposure_std_star</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">airmass_std_star</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/extraction/extraction.html#extraction.import_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.extraction.extraction.extraction.import_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function opens the data file (i.e. fits image with one or more spectra) and reads the exposure time from its header. Optionally, the user can manually add the exposure time.
+If you want to calibrate your spectrum in flux, please also add the standard star spectral fits file and the reddening.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target_spec_file</strong> (<em>string</em>) – The path to the data ‘.fits’ or ‘.fit’ file containing the target spectrum.</p></li>
+<li><p><strong>target_name</strong> (<em>string</em>) – The name of the target to be used in subsequent plots.</p></li>
+<li><p><strong>exposure_target</strong> (<em>float</em>) – Optional. You can manually pass the exposure time (in seconds) of your observation. If ‘None’, easyspec will automatically look in the image header for the entry given by the variable ‘exposure_header_entry’.</p></li>
+<li><p><strong>exposure_header_entry</strong> (<em>string</em>) – Optional. If ‘exposure_target’ is not None, easyspec will automatically look into the image header for the exposure time corresponding to this entry. This entry will be used for the target and standard star images.</p></li>
+<li><p><strong>airmass_target</strong> (<em>float</em>) – Optional. You can manually pass the average airmass of your observation. If ‘None’, easyspec will automatically look in the image header for the entry given by the variable ‘airmass_header_entry’.</p></li>
+<li><p><strong>airmass_header_entry</strong> (<em>string</em>) – Optional. If ‘airmass_target’ is not None, easyspec will automatically look into the image header for the average airmass corresponding to this entry. This entry will be used for the target and standard star images.</p></li>
+<li><p><strong>std_star_spec_file</strong> (<em>string</em>) – Optional. The path to the data ‘.fits’ or ‘.fit’ file containing the standard star spectrum.</p></li>
+<li><p><strong>exposure_std_star</strong> (<em>float</em>) – Optional. You can manually pass the exposure time (in seconds) of your observation. If ‘None’, easyspec will automatically look in the image header for the entry given by the variable ‘exposure_header_entry’</p></li>
+<li><p><strong>airmass_std_star</strong> (<em>float</em>) – Optional. You can manually pass the average airmass of your standard star observation. If ‘None’, easyspec will automatically look in the image header for the entry given by the variable ‘airmass_header_entry’.</p></li>
+<li><p><strong>plot</strong> (<em>boolean</em>) – If True, easyspec will plot the input spectra.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>target_spec_data</strong> (<em>numpy.ndarray (float)</em>) – Matrix containing the target spectral image.</p></li>
+<li><p><strong>std_star_spec_data</strong> (<em>numpy.ndarray (float)</em>) – Matrix containing the standard star spectral image (only if the standard star spectral file is given by the user).</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.extraction.extraction.extraction.list_available_standards">
+<span class="sig-name descname"><span class="pre">list_available_standards</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">std_star_dataset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/extraction/extraction.html#extraction.list_available_standards"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.extraction.extraction.extraction.list_available_standards" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function lists the available datasets and their standard stars.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>std_star_dataset</strong> (<em>string</em>) – If None, the function will plot all available datasets. Options are “ctiocal”, “irscal”, “bstdscal”, “spec16cal”, “spechayescal”, “iidscal”, “spec50cal”,
+“redcal”, “ctionewcal”, “ctio”, “oke1990”, “blackbody”.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>reference_dictionaty[dataset]</strong> – If a dataset is given, the function will return the reference for this dataset.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>string</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.extraction.extraction.extraction.std_star_normalization">
+<span class="sig-name descname"><span class="pre">std_star_normalization</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spec_atm_corrected_std</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wavelengths_std</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">std_star_dataset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">std_star_archive_file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">101</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_regions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_window_archive</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">11</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interpolation_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/extraction/extraction.html#extraction.std_star_normalization"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.extraction.extraction.extraction.std_star_normalization" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function normalizes the measured standard spectrum by its exposure time (read in the function extraction.import_data()) and
+by its archival spectrum.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>spec_atm_corrected_std</strong> (<em>list</em>) – This is the standard star spectrum after being corrected for atmospheric extinction.</p></li>
+<li><p><strong>wavelengths_std</strong> (<em>list</em>) – This is the wavelength solution for the standard star obtained with the function extraction.wavelength_calibration().</p></li>
+<li><p><strong>std_star_dataset</strong> (<em>string</em>) – This is the dataset where you can find your standard star.The options are “ctiocal”, “irscal”, “bstdscal”, “spec16cal”,
+“spechayescal”, “iidscal”, “spec50cal”, “redcal”, “ctionewcal”, “ctio”, “oke1990”, “blackbody”.</p></li>
+<li><p><strong>std_star_archive_file</strong> (<em>string</em>) – This is the name of the datafile of the archival standard star spectrum. You can find more by running the function
+extraction.list_available_standards(). In any case, it should be something like “l4364blue.dat”.</p></li>
+<li><p><strong>smooth_window</strong> (<em>integer</em>) – Must be an odd number. This is the number of neighbouring wavelength bins used to extract the standard star continuum
+with a median filter.</p></li>
+<li><p><strong>exclude_regions</strong> (<em>list</em>) – List of regions (in Angstroms) to be excluded from the measured standard star spectrum when extracting its continuum, e.g.: exclude_regions = [[4000,5000],[8000,8500]].</p></li>
+<li><p><strong>smooth_window_archive</strong> (<em>integer</em>) – Must be an odd number. Same as above but for the archival spectrum.</p></li>
+<li><p><strong>interpolation_order</strong> – The interpolation order for the spline.</p></li>
+<li><p><strong>plots</strong> (<em>boolean</em>) – If True, easyspec will plot several diagnostic plots showing the step-by-step of the flux calibration solution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>correction_factor</strong> – This is an array in astropy units of erg/cm2/s/Angstrom containing the flux calibration solution for the standard star.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.extraction.extraction.extraction.target_flux_calibration">
+<span class="sig-name descname"><span class="pre">target_flux_calibration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">wavelengths_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spec_atm_corrected_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">correction_factor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reddening</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Rv</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wavelength_cuts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_directory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'./'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_spec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/extraction/extraction.html#extraction.target_flux_calibration"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.extraction.extraction.extraction.target_flux_calibration" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function normalizes the target spectra for exposure time, corrects them by reddening (optional) and calibrate them using
+the correction_factor obtained with the standard star.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>wavelengths_list</strong> (<em>list</em>) – List with the wavelength solutions for all target spectra.</p></li>
+<li><p><strong>spec_atm_corrected_list</strong> (<em>list</em>) – List with all the spectra corrected for atmospheric extinction.</p></li>
+<li><p><strong>correction_factor</strong> (<em>array</em>) – This is the array (in astropy units of erg/cm2/s/Angstrom) containing the flux calibration solution for the standard star.
+This is the main result from the function extraction.std_star_normalization().</p></li>
+<li><p><strong>reddening</strong> (<em>float</em>) – Optional. The E(B-V) reddening in magnitudes. This is the Galactic redening in the direction of your observation. You can look
+for the appropriate reddening for your target here: ‘<a class="reference external" href="https://irsa.ipac.caltech.edu/applications/DUST/">https://irsa.ipac.caltech.edu/applications/DUST/</a>’.</p></li>
+<li><p><strong>Rv</strong> (<em>float</em>) – visual extinction to reddening ratio. Default is 3.1, but depending on the case, even a value up to 5 can be used. You can
+check what is a reasonable value for your target here: ‘<a class="reference external" href="https://irsa.ipac.caltech.edu/applications/DUST/">https://irsa.ipac.caltech.edu/applications/DUST/</a>’.</p></li>
+<li><p><strong>wavelength_cuts</strong> (<em>list</em>) – List with two wavelength values. The spectrum within this wavelength range will survive the analysis. The rest will be removed.
+Example: wavelength_cuts = [3500,7500]. Assuming the units in <em>Angstroms</em>.</p></li>
+<li><p><strong>output_directory</strong> (<em>string</em>) – A string with the path to the output directory.</p></li>
+<li><p><strong>save_spec</strong> (<em>boolean</em>) – If True, the spectra will be saved in the output directory as “spec_0.dat”, “spec_1.dat” and so on.</p></li>
+<li><p><strong>plots</strong> (<em>boolean</em>) – If True, easyspec will plot several diagnostic plots showing the step-by-step of the flux calibration solution.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>calibrated_flux_list</strong> – This is a list with the spectra calibrated in flux density.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.extraction.extraction.extraction.tracing">
+<span class="sig-name descname"><span class="pre">tracing</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_spec_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'argmax'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_pixel_range</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xlims</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">poly_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trace_half_width</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">peak_height</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">distance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Number_of_slices</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">peak_dispersion_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">main_plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_residuals</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/extraction/extraction.html#extraction.tracing"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.extraction.extraction.extraction.tracing" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function detects all the spectra available in an image and fits a polynomial to recover the trace of each one of them.
+It can be used to recover the spectral spine (or trace) of one or several spectra in the same image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target_spec_data</strong> (<em>numpy.ndarray</em><em> (</em><em>float</em><em>)</em>) – Matrix containing the target spectral image.</p></li>
+<li><p><strong>method</strong> (<em>string</em>) – The method to be adopted in finding the trace. Options are “argmax” or “moments” if you want to extract only the strongest spectrum in the image, or “multi” if you
+want to extract more than one spectrum. The option “argmax” works very well although is limited by the pixel size. The option “moments” is suited only for spectra
+with a very high signal-to-noise ratio. The option “multi” will use the “argmax” method to look for several spectra in a single image.</p></li>
+<li><p><strong>y_pixel_range</strong> (<em>integer</em>) – Y-axis range of pixels to be used to extract a specific spectrum. The total y-axis interval adopted is 2*y_pixel_range.</p></li>
+<li><p><strong>xlims</strong> (<em>list</em><em> or </em><em>array</em>) – A list/array with the two limits in the x-axis delimiting the region where we will look for the spectra. E.g. if your image x-axis has 2000 pixels but your spectrum
+goes from pixels ~700 up to pixel ~1800, you can set xlims = [700,1800] to avoid fitting regions of pure noise. This variable is useful only for the “argmax” or
+“moments” methods.</p></li>
+<li><p><strong>poly_order</strong> (<em>integer</em>) – The order of the polynomial(s) used to fit the trace.</p></li>
+<li><p><strong>trace_half_width</strong> (<em>integer</em>) – The half-width of the trace. Here it is useful for estimating the background and plotting the data.</p></li>
+<li><p><strong>peak_height</strong> (<em>float</em>) – The required height of the peaks. The smaller this value, the more spectra you will find in your image.</p></li>
+<li><p><strong>distance</strong> (<em>float</em>) – Required minimal distance (&gt;= 1) in pixels between neighbouring peaks in the y-axis. Default is 20 pixels. If you set this value too high with respect to the y-axis
+resolultion of your image, this function will return undesired results.</p></li>
+<li><p><strong>Number_of_slices</strong> (<em>integer</em>) – Useful only for the “multi” mode. This is the number of slices in which every spectra in the image is divided in the x-axis. It is used to set the best x-axis interval
+at which easyspec will fit the trace.</p></li>
+<li><p><strong>peak_dispersion_limit</strong> (<em>float</em>) – Useful only for the “multi” mode. This parameter sets the dispersion limit (with respect to the trace slice of minimum dispersion) of a trace slice such that we can
+use this slice to fit the trace, i.e. if the trace dispersion in a slice is larger than peak_dispersion_limit*minimum_dispersion, this slice will be ignored in the
+fit, where the term ‘minimum_dispersion’ stands for the dispersion in the slice with minimum trace dispersion.</p></li>
+<li><p><strong>main_plot</strong> (<em>boolean</em>) – If True, easyspec will plot all the traces over all the spectra (or the main spectra) in the image.</p></li>
+<li><p><strong>plot_residuals</strong> (<em>boolean</em>) – If True, easyspec will plot the residuals for each trace fitted to the data.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>fitted_polymodel_list</strong> – List with the fitted spine for all spectra in the image or only the brighter spectrum.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.extraction.extraction.extraction.wavelength_calibration">
+<span class="sig-name descname"><span class="pre">wavelength_calibration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lamp_peak_positions_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corresponding_wavelengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">poly_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">diagnostic_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/extraction/extraction.html#extraction.wavelength_calibration"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.extraction.extraction.extraction.wavelength_calibration" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function takes the list of lamp spectral peak positions (in pixels) and their corresponding wavelengths, and returns a list with
+the calibrated x-axis for one or more spectra.</p>
+<dl class="simple">
+<dt>In case you need references for the lamp peaks, here are some databases you can use (as of 12 September, 2024):</dt><dd><ul class="simple">
+<li><p>TNG DOLORES spectrograph reference lamps can be found in table 1 here: <a class="reference external" href="https://www.tng.iac.es/instruments/lrs/">https://www.tng.iac.es/instruments/lrs/</a></p></li>
+<li><p>SOAR Goodman Spectrograph Reference Lamp Library: <a class="reference external" href="https://soardocs.readthedocs.io/projects/lamps/en/latest/">https://soardocs.readthedocs.io/projects/lamps/en/latest/</a></p></li>
+<li><p>Observatorio do Pico dos Dias (OPD-LNA) spectrographs: <a class="reference external" href="https://www.gov.br/lna/pt-br/composicao-1/coast/obs/opd/instrumentacao/instrumentos-e-detectores">https://www.gov.br/lna/pt-br/composicao-1/coast/obs/opd/instrumentacao/instrumentos-e-detectores</a></p></li>
+</ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lamp_peak_positions_list</strong> (<em>list</em>) – This is one of the outputs from function extraction.extracting(). It contains the positions (in pixels) of all peaks in the lamp
+spectra with heights above the spectrum median.</p></li>
+<li><p><strong>corresponding_wavelengths</strong> (<em>list</em>) – List with wavelengths (in <em>Angstroms</em>) corresponding to each peak given in lamp_peak_positions_list. Even if the peak positions are slightly different
+for different traces, a single list with the corresponding wavelengths will do the job here.</p></li>
+<li><p><strong>poly_order</strong> (<em>integer</em>) – The order of the polynomial used to find the wavelength solution.</p></li>
+<li><p><strong>diagnostic_plots</strong> (<em>boolean</em>) – If True, easyspec will plot the wavelength solution and fit residuals.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>wavelengths_list</strong> (<em>list</em>) – List with the wavelength solutions for each given spectrum.</p></li>
+<li><p><strong>wavelengths_fit_std_list</strong> (<em>list</em>) – The standard deviation of the data points with respect to the wavelength solution for each given spectrum.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">easyspec</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="data_cleaning.html">Data cleaning</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">easyspec</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="easyspec.html">easyspec package</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  <li><a href="modules.html">easyspec</a><ul>
+  <li><a href="easyspec.html">easyspec package</a><ul>
+      <li>Previous: <a href="easyspec.cleaning.html" title="previous chapter">easyspec.cleaning package</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2025, Raniere de Menezes.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.0.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/easyspec.extraction.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

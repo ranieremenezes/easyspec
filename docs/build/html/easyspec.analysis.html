@@ -1,0 +1,908 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>easyspec.analysis package &#8212; easyspec 2025 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="easyspec.cleaning package" href="easyspec.cleaning.html" />
+    <link rel="prev" title="easyspec package" href="easyspec.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-easyspec.analysis.analysis">
+<span id="easyspec-analysis-package"></span><h1>easyspec.analysis package<a class="headerlink" href="#module-easyspec.analysis.analysis" title="Permalink to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">easyspec.analysis.analysis.</span></span><span class="sig-name descname"><span class="pre">analysis</span></span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>This class contains all the functions necessary to perform the analysis of calibrated spectral data.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.BH_mass_CIV_VP2006">
+<span class="sig-name descname"><span class="pre">BH_mass_CIV_VP2006</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">wavelengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continuum_baseline</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">FWHM_CIV</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">par_values_CIV</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">70</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.BH_mass_CIV_VP2006"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.BH_mass_CIV_VP2006" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function estimates the black hole mass based on Vestergaard &amp; Peterson, 2006, ApJ, 641, “DETERMINING CENTRAL BLACK HOLE
+MASSES IN DISTANT ACTIVE GALAXIES AND QUASARS. II. IMPROVED OPTICAL AND UV SCALING RELATIONSHIPS”. As stated in this work,
+here we assume a cosmology with H0 = 70 km/s/Mpc, Omega_Lambda = 0.7, and Omega_matter = 0.3, although we allow the user to
+change the value of the Hubble constant (H0).</p>
+<p>We assume a systematic error of 0.36 dex for the estimated black hole masses. This value is reported in Vestergaard &amp; Peterson, 2006. Since this error is
+much higher than the errors in FWHM and integrated flux, we simply ignore the measured errors in these parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>wavelengths</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The wavelength solution for the given spectrum.</p></li>
+<li><p><strong>continuum_baseline</strong> (<em>numpy.ndarray</em><em> (</em><em>float</em><em>)</em>) – An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().</p></li>
+<li><p><strong>FWHM_CIV</strong> (<em>float</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The FWHM for the CIV line in Angstrom units.</p></li>
+<li><p><strong>par_values_CIV</strong> (<em>list</em>) – The list with the best fit values for the CIV line. This information is contained in the variable “par_values_list” returned from the function
+analysis.fit_lines().</p></li>
+<li><p><strong>H0</strong> (<em>float</em>) – This is the Hubble constant value. Default is 70 km/s/Mpc.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>log10_BH_mass_CIV</strong> – The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 8 from Vestergaard &amp; Peterson, 2006, ApJ, 641.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.BH_mass_Halpha_Shen2011">
+<span class="sig-name descname"><span class="pre">BH_mass_Halpha_Shen2011</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">FWHM_Halpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">par_values_Halpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">integrated_flux_Halpha</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">70</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.BH_mass_Halpha_Shen2011"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.BH_mass_Halpha_Shen2011" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function estimates the black hole mass based on Shen at al. 2011, ApJS, 194:45, “A CATALOG OF QUASAR PROPERTIES FROM
+SLOAN DIGITAL SKY SURVEY DATA RELEASE 7”. As stated in this work, here we assume a cosmology with H0 = 70 km/s/Mpc, Omega_Lambda = 0.7,
+and Omega_matter = 0.3, although we allow the user to change the value of the Hubble constant (H0).</p>
+<p>We assume a systematic error of 0.18 dex for the estimated black hole masses. This value is reported in Shen et al. 2011.
+Since this error is much higher than the errors in FWHM and integrated flux, we simply ignore the measured errors in these parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>FWHM_Halpha</strong> (<em>float</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The FWHM for the Halpha line in Angstrom units.</p></li>
+<li><p><strong>par_values_Halpha</strong> (<em>list</em>) – The list with the best fit values for the Halpha line. This information is contained in the variable “par_values_list” returned from the function
+analysis.fit_lines().</p></li>
+<li><p><strong>integrated_flux_Halpha</strong> (<em>float</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The integrated flux for the Halpha line in erg/cm2/s units.</p></li>
+<li><p><strong>H0</strong> (<em>float</em>) – This is the Hubble constant value. Default is 70 km/s/Mpc.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>log10_BH_mass_Halpha</strong> – The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 10 from Shen et al. 2011.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.BH_mass_Hbeta_VP2006">
+<span class="sig-name descname"><span class="pre">BH_mass_Hbeta_VP2006</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">wavelengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continuum_baseline</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">FWHM_Hbeta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">par_values_Hbeta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">integrated_flux_Hbeta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">70</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.BH_mass_Hbeta_VP2006"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.BH_mass_Hbeta_VP2006" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function estimates the black hole mass based on Vestergaard &amp; Peterson, 2006, ApJ, 641, “DETERMINING CENTRAL BLACK HOLE MASSES IN DISTANT ACTIVE
+GALAXIES AND QUASARS. II. IMPROVED OPTICAL AND UV SCALING RELATIONSHIPS”. As stated in this work, here we assume a cosmology with H0 = 70 km/s/Mpc, Omega_Lambda = 0.7,
+and Omega_matter = 0.3, although we allow the user to change the value of the Hubble constant (H0).</p>
+<p>We assume a systematic error of 0.43 dex for the estimated black hole masses. This value is reported in Vestergaard &amp; Peterson, 2006. Since this error is
+much higher than the errors in FWHM and integrated flux, we simply ignore the measured errors in these parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>wavelengths</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The wavelength solution for the given spectrum.</p></li>
+<li><p><strong>continuum_baseline</strong> (<em>numpy.ndarray</em><em> (</em><em>float</em><em>)</em>) – An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().</p></li>
+<li><p><strong>FWHM_Hbeta</strong> (<em>float</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The FWHM for the Hbeta line in Angstrom units.</p></li>
+<li><p><strong>par_values_Hbeta</strong> (<em>list</em>) – The list with the best fit values for the Hbeta line. This information is contained in the variable “par_values_list” returned from the function
+analysis.fit_lines().</p></li>
+<li><p><strong>integrated_flux_Hbeta</strong> (<em>float</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The integrated flux for the Hbeta line in erg/cm2/s units.</p></li>
+<li><p><strong>H0</strong> (<em>float</em>) – This is the Hubble constant value. Default is 70 km/s/Mpc.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>log10_BH_mass_continuum</strong> (<em>float</em>) – The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 5 from Vestergaard &amp; Peterson, 2006, ApJ, 641.</p></li>
+<li><p><strong>log10_BH_mass_line_lum</strong> (<em>float</em>) – The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 6 from Vestergaard &amp; Peterson, 2006, ApJ, 641.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.BH_mass_MgII_VO2009">
+<span class="sig-name descname"><span class="pre">BH_mass_MgII_VO2009</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">wavelengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continuum_baseline</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">FWHM_MgII</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">par_values_MgII</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">70</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.BH_mass_MgII_VO2009"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.BH_mass_MgII_VO2009" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function estimates the black hole mass based on Vestergaard &amp; Osmer, 2009, ApJ, 699, “MASS FUNCTIONS OF THE ACTIVE BLACK HOLES
+IN DISTANT QUASARS FROM THE LARGE BRIGHT QUASAR SURVEY, THE BRIGHT QUASAR SURVEY, AND THE COLOR-SELECTED SAMPLE OF THE SDSS FALL
+EQUATORIAL STRIPE”. As stated in this work, here we assume a cosmology with H0 = 70 km/s/Mpc, Omega_Lambda = 0.7,
+and Omega_matter = 0.3, although we allow the user to change the value of the Hubble constant (H0).</p>
+<p>We assume a systematic error of 0.55 dex for the estimated black hole masses. This value is reported in Vestergaard &amp; Osmer, 2009.
+Since this error is much higher than the errors in FWHM and integrated flux, we simply ignore the measured errors in these parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>wavelengths</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The wavelength solution for the given spectrum.</p></li>
+<li><p><strong>continuum_baseline</strong> (<em>numpy.ndarray</em><em> (</em><em>float</em><em>)</em>) – An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().</p></li>
+<li><p><strong>FWHM_MgII</strong> (<em>float</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The FWHM for the MgII line in Angstrom units.</p></li>
+<li><p><strong>par_values_MgII</strong> (<em>list</em>) – The list with the best fit values for the MgII line. This information is contained in the variable “par_values_list” returned from the function
+analysis.fit_lines().</p></li>
+<li><p><strong>H0</strong> (<em>float</em>) – This is the Hubble constant value. Default is 70 km/s/Mpc.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>log10_BH_mass_MgII</strong> – The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 1 from Vestergaard &amp; Osmer, 2009, ApJ, 699,
+taking the continuum luminosity at 3000 Angstroms. If the continuum at 3000 Angstroms is not available, it automatically uses the
+continuum at 2100 Angstroms.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.MCMC_spread">
+<span class="sig-name descname"><span class="pre">MCMC_spread</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">samples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsamples</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_function</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.MCMC_spread"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.MCMC_spread" title="Permalink to this definition">¶</a></dt>
+<dd><p>Function to compute the median MCMC model and its standard deviation.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.all_models">
+<span class="sig-name descname"><span class="pre">all_models</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_function</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.all_models"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.all_models" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function is used to select a specific line model. E.g.: Gaussian, Lorentz, GaussianLorentzGaussian, and so on.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model_name</strong> (<em>string</em>) – The name of the line model, e.g. “Gaussian”.</p></li>
+<li><p><strong>custom_function</strong> (<em>method</em>) – Optional. You can input a custom model here.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>models[model_name]</strong> – returns a function with the desired line model.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>method</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.automatic_priors">
+<span class="sig-name descname"><span class="pre">automatic_priors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">which_model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">observed_wavelength</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">peak_height</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_region_min</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_region_max</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.automatic_priors"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.automatic_priors" title="Permalink to this definition">¶</a></dt>
+<dd><p>In this function we automatically set the priors, initial parameter values and select the line model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>which_models</strong> (<em>string</em>) – The models to be applied to the line. Options are “Gaussian”, “Lorentz” and “Voigt”.</p></li>
+<li><p><strong>observed_wavelength</strong> (<em>float</em>) – The wavelength corresponding to the peak position.</p></li>
+<li><p><strong>peak_height</strong> (<em>flaot</em>) – The height of the peak with respect to the continuum emission.</p></li>
+<li><p><strong>line_region_min</strong> (<em>float</em>) – The starting wavelength around the studied line.</p></li>
+<li><p><strong>line_region_max</strong> (<em>float</em>) – The final wavelength around the studied line.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>initial</strong> (<em>numpy.array</em>) – An array with the automatic initial parameter values for the MCMC.</p></li>
+<li><p><strong>priors</strong> (<em>numpy.array</em>) – An array containing three or four lists of two elements, i.e. one list for each parameter given in ‘initial’.</p></li>
+<li><p><strong>labels</strong> (<em>list</em>) – A list with the names of each parameter.</p></li>
+<li><p><strong>adopted_model</strong> (<em>method</em>) – A function with the adopted model, i.e., a “Gaussian”, “Lorentz” or “Voigt”.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.continuum_fit">
+<span class="sig-name descname"><span class="pre">continuum_fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">flux</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wavelengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continuum_regions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'powerlaw'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pl_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">111</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.continuum_fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.continuum_fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function fits the continuum emission with an spline or a power law.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>flux</strong> (<em>array</em><em> (</em><em>float</em><em>)</em>) – Array with the flux density to be fitted and (if spline is chosen) smoothed.</p></li>
+<li><p><strong>wavelengths</strong> (<em>array</em><em> (</em><em>float</em><em>)</em>) – Wavelength must be in absolute values, i.e. without units.</p></li>
+<li><p><strong>continuum_regions</strong> (<em>list</em><em> (</em><em>float</em><em>)</em>) – The continuum will be computed only within these wavelength regions and then extrapolated everywhere else. E.g.: continuum_regions = [[3000,6830],[6930,7500]].
+If None, then all the wavelength range will be used.</p></li>
+<li><p><strong>method</strong> (<em>string</em>) – This is the desired method to compute the continuum. Options are ‘powerlaw’ (or ‘pl’) and “median_filter”.
+The ‘powerlaw’ method is better in case you have large emission/absorption lines. The method “median_filter” is excellent
+for extracting the continuum of a spectrum with narrow emission/absorption lines.</p></li>
+<li><p><strong>pl_order</strong> (<em>int</em>) – Polynomial order for the power law fit. Used only if input variable method=”powerlaw” (or “pl”).</p></li>
+<li><p><strong>smooth_window</strong> (<em>int</em>) – This is the size of the smooth window for the “median_filter” method. This number must be odd.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>continuum_selection</strong> (<em>array (float)</em>) – Array with the continuum flux density.</p></li>
+<li><p><strong>continuum_std_deviation</strong> (<em>float</em>) – The standard deviation for the continuum.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.data_window_selection">
+<span class="sig-name descname"><span class="pre">data_window_selection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">wavelengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spec_flux</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spec_flux_err</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_region_min</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_region_max</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.data_window_selection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.data_window_selection" title="Permalink to this definition">¶</a></dt>
+<dd><p>Function to slice the data into a wavelength window.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>wavelengths</strong> (<em>numpy.array</em>) – This variable must be in absolute values, i.e. without units.</p></li>
+<li><p><strong>spec_flux</strong> (<em>numpy.array</em>) – The spectral density array.</p></li>
+<li><p><strong>spec_flux_err</strong> (<em>numpy.array</em>) – The spectral density array.</p></li>
+<li><p><strong>line_region_min</strong> (<em>float</em>) – Inferior window limit.</p></li>
+<li><p><strong>line_region_max</strong> (<em>float</em>) – Superior window limit.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>x, y, yerr</strong> – New arrays containing data within the selected window.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>numpy.arrays</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.equiv_width_error">
+<span class="sig-name descname"><span class="pre">equiv_width_error</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">integrand</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_window</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_parameters</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_par_errors</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.equiv_width_error"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.equiv_width_error" title="Permalink to this definition">¶</a></dt>
+<dd><p>In this function we estimate the modeled equivalent width error for a line based on a Monte Carlo simulation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>integrand</strong> (<em>function</em>) – The function to be integrated. See the details here: <a class="reference external" href="https://en.wikipedia.org/wiki/Equivalent_width">https://en.wikipedia.org/wiki/Equivalent_width</a></p></li>
+<li><p><strong>line_window</strong> (<em>list</em>) – A list containing the wavelength limits around the line.</p></li>
+<li><p><strong>line_parameters</strong> (<em>list</em>) – A list with the line best-fit parameters obtained with the MCMC method.</p></li>
+<li><p><strong>line_par_errors</strong> (<em>list</em>) – A list with the asymmetrical parameter errors.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>EQW_error_down</strong> (<em>float</em>) – The equivalent width lower error for a modeled line.</p></li>
+<li><p><strong>EQW_error_up</strong> (<em>float</em>) – The equivalent width upper error for a modeled line.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.error_propagation_voigt">
+<span class="sig-name descname"><span class="pre">error_propagation_voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">FWHM_Lorentz</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">FWHM_Gauss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">error_lorentz</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">error_gauss</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.error_propagation_voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.error_propagation_voigt" title="Permalink to this definition">¶</a></dt>
+<dd><p>In this function we propagate the FWHM error for the Voigt model assuming independent variables.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>FWHM_Lorentz</strong> (<em>float</em>) – The Lorentzian component FWHM.</p></li>
+<li><p><strong>FWHM_Gauss</strong> (<em>float</em>) – The Gaussian component FWHM.</p></li>
+<li><p><strong>error_lorentz</strong> (<em>float</em>) – The associated error to the Lorentzian FWHM.</p></li>
+<li><p><strong>error_gauss</strong> (<em>float</em>) – The associated error to the Gaussian FWHM.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>fwhm_error_voigt</strong> – The propagated uncertainty in FWHM for the Voigt model.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.estimate_norm_height">
+<span class="sig-name descname"><span class="pre">estimate_norm_height</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">wavelengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flux_density</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continuum_baseline</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wavelength_peak_position</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">peak_height</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.estimate_norm_height"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.estimate_norm_height" title="Permalink to this definition">¶</a></dt>
+<dd><p>Funtion to estimate the normalized height of a peak to set the priors for the MCMC.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>wavelengths</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The wavelength solution for the given spectrum.</p></li>
+<li><p><strong>flux_density</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units erg/cm2/s/A</em><em>)</em>) – The calibrated spectrum in flux density.</p></li>
+<li><p><strong>continuum_baseline</strong> (<em>numpy.ndarray</em><em> (</em><em>float</em><em>)</em>) – An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().</p></li>
+<li><p><strong>wavelength_peak_position</strong> (<em>astropy.units Angstrom</em>) – The position of the peak in the wavelength axis in Angstroms.</p></li>
+<li><p><strong>peak_height</strong> (<em>astropy.units erg/cm2/s/A</em>) – The height of the peak in erg/cm2/s/A.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>norm_height</strong> – The estimated normalized height of the input peak. This value can be set to estimate priors for the MCMC.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.find_lines">
+<span class="sig-name descname"><span class="pre">find_lines</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">wavelengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flux_density</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_significance_sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">peak_distance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">peak_width</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'median_filter'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continuum_regions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pl_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">111</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_lines</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_regions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.find_lines"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.find_lines" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function will find all emission/absorption lines with significance above ‘line_significance_sigma’ with respect to the local continuum.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>wavelengths</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The wavelength solution for the given spectrum.</p></li>
+<li><p><strong>flux_density</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units erg/cm2/s/A</em><em>)</em>) – The calibrated spectrum in flux density.</p></li>
+<li><p><strong>line_significance_sigma</strong> (<em>float</em>) – Defines how many standard deviations above the continuum the line peak must be in order to be detected.</p></li>
+<li><p><strong>peak_distance</strong> (<em>float</em>) – The minimal distance (data bins, not in Angstroms) between peaks (&gt;=1).</p></li>
+<li><p><strong>peak_width</strong> (<em>float</em>) – Minimum required width of peaks in data bins. The number of data bins is equal to the number of pixels in the reduced spectral image.</p></li>
+<li><p><strong>method</strong> (<em>string</em>) – This is the desired method to compute the continuum. Options are ‘powerlaw’ (or ‘pl’) and “median_filter”.
+The ‘powerlaw’ method is better in case you have large emission/absorption lines. The method “median_filter” is excellent
+for extracting the continuum of a spectrum with narrow emission/absorption lines.</p></li>
+<li><p><strong>continuum_regions</strong> (<em>list</em><em> (</em><em>float</em><em>)</em>) – The continuum will be computed only within these wavelength regions and then extrapolated everywhere else. E.g.: continuum_regions = [[3000,6830],[6930,7500]].
+If None, then all the wavelength range will be used.</p></li>
+<li><p><strong>pl_order</strong> (<em>int</em>) – Polynomial order for the power law fit. Used only if input variable method=”powerlaw” (or “pl”).</p></li>
+<li><p><strong>smooth_window</strong> (<em>int</em>) – This is the size of the smooth window for the “median_filter” method. This number must be odd.</p></li>
+<li><p><strong>plot_lines</strong> (<em>boolean</em>) – If True, the spectrum and all detected lines will be shown.</p></li>
+<li><p><strong>plot_regions</strong> (<em>boolean</em>) – If True, the spectrum will be plotted in multiple regions (assuming continuum_regions is not None). For each one of these regions,
+the noise is independently estimated from the local continuum.</p></li>
+<li><p><strong>save_plot</strong> (<em>boolean</em>) – If True, the spectrum plot will be saved in the output directory defined in analysis.load_calibrated_data().</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>continuum_baseline</strong> (<em>numpy.ndarray (float)</em>) – An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A.</p></li>
+<li><p><strong>line_std_deviation</strong> (<em>numpy.ndarray (float)</em>) – The standard deviation for the local continuum. Line significance is calculated with respect to this value.</p></li>
+<li><p><strong>wavelength_peak_positions</strong> (<em>numpy.ndarray (astropy.units Angstrom)</em>) – The position of each peak in Angstroms.</p></li>
+<li><p><strong>peak_heights</strong> (<em>numpy.ndarray (astropy.units erg/cm2/s/A)</em>) – The height of each peak in erg/cm2/s/A</p></li>
+<li><p><strong>line_significance</strong> (<em>array (floats)</em>) – The line significance with respect to the local continuum standard deviation.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.fit_lines">
+<span class="sig-name descname"><span class="pre">fit_lines</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">wavelengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flux_density</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continuum_baseline</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wavelength_peak_positions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rest_frame_line_wavelengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">peak_heights</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_std_deviation</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">blended_line_min_separation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">which_models</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Lorentz'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overplot_archival_lines</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['H']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">priors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">MCMC_walkers</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">250</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">MCMC_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">400</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">N_cores</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_spec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_MCMC</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overplot_median_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_results</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.fit_lines"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.fit_lines" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function uses a Markov-chain Monte Carlo to estimate the line parameters and their errors.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>wavelengths</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The wavelength solution for the given spectrum.</p></li>
+<li><p><strong>flux_density</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units erg/cm2/s/A</em><em>)</em>) – The calibrated spectrum in flux density.</p></li>
+<li><p><strong>continuum_baseline</strong> (<em>numpy.ndarray</em><em> (</em><em>float</em><em>)</em>) – An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().</p></li>
+<li><p><strong>wavelength_peak_positions</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The position of each peak in Angstroms found with the function analysis.find_lines().</p></li>
+<li><p><strong>rest_frame_line_wavelengths</strong> (<em>list</em>) – A list with the rest frame wavelength values for each one of the input lines.</p></li>
+<li><p><strong>peak_heights</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units erg/cm2/s/A</em><em>)</em>) – The height of each peak in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().</p></li>
+<li><p><strong>line_std_deviation</strong> (<em>numpy.ndarray</em><em> (</em><em>float</em><em>)</em>) – The standard deviation for the local continuum. This variable is an output of the function analysis.find_lines().</p></li>
+<li><p><strong>blended_line_min_separation</strong> (<em>float</em>) – The minimum separation between blended line peaks in Angstrom. If the line peaks are closer than this value, a blended model will be adopted.</p></li>
+<li><p><strong>which_models</strong> (<em>string</em><em> or </em><em>list of strings</em>) – A list containing the models to be applied to each line, e.g.: if you are trying to model 2 lines, you can use which_models = [“Lorentz”,”Gaussian”].
+If you wish to use the same model for all lines, you can use which_models = [“Gaussian”,”Gaussian”] or simply which_models = “Gaussian”. Options are
+“Gaussian”, “Lorentz” and “Voigt”.</p></li>
+<li><p><strong>line_names</strong> (<em>list</em>) – Optional. A list with line names, e.g.: if you are trying to model 2 lines, you can use line_names = [“Hbeta”,”Halpha”].
+If the names are not provided, easyspec will call the lines line_0, line_1… and so on.</p></li>
+<li><p><strong>overplot_archival_lines</strong> (<em>list</em>) – List with the strings corresponding to different elements. E.g.: [“H”,”He”] will overplot all the Hydrogen and Helium lines redshifted based on the average
+redshift of the lines given in wavelength_peak_positions. If you don’t want to overplot lines, use overplot_archival_lines = None. If you use too many lines
+as input, they will very likely overlap in the plot. Be aware that this feature is meant only for guiding the user! There are several lines which are not
+included in our database, but we tried to select the most commonly seen lines in galaxy, quasar and stellar spectra.</p></li>
+<li><p><strong>priors</strong> (<em>list</em><em> or </em><em>list of lists</em>) – This parameter is complicated. It is better if you leave it as “None”. This parameter controls the priors used in the MCMC in the estimation of the
+line parameters. The initial parameters for the MCMC are always defined as wavelength_peak_positions (for the position of the line peak) and
+peak_heights (for the height of the peak). If priors = None, the priors are set to wavelength_peak_positions +- 100 Angstroms (or to half the distance
+to the closest line if this line is closer than 100 Angstroms), 0.1*peak_heights up to 10*peak_heights (normalized based on the continuum),
+and the std or fwhm are confined within 0.1 to 150. If you are e.g. analysing 4 lines with the Lorentz model and want to change the priors of the third
+line, you can set priors = [None, None,[[7496,7696],[0.1, 150],[2,150]], None], where the list of three ranges here represents the allowed sampling
+intervals, i.e. the position of the peak, the peak heigh in terms of the continuum level and the fwhm. For the Voigt model, the input variable would
+be  priors = [None, None,[[7496,7696],[0.1, 150],[2,150],[1,150]], None]. Of course you can set up the ranges for all lines.</p></li>
+<li><p><strong>MCMC_walkers</strong> (<em>int</em>) – This is the number of walkers for the MCMC.</p></li>
+<li><p><strong>MCMC_iterations</strong> (<em>int</em>) – This is the number of iterations for the MCMC.</p></li>
+<li><p><strong>N_cores</strong> (<em>int</em>) – This is the number of cores in case you want to run this analysis in parallel.</p></li>
+<li><p><strong>plot_spec</strong> (<em>boolean</em>) – If True, a plot of the spectrum with the lines requested in the input variable overplot_archival_lines will be shown.</p></li>
+<li><p><strong>plot_MCMC</strong> (<em>boolean</em>) – If True, a series of diagnostic plots for the MCMC will be shown, as the corner plot, the evolution of the parameters over time, and the line fitted to
+the data.</p></li>
+<li><p><strong>overplot_median_model</strong> (<em>boolean</em>) – If True, the median model and model standard deviation will be overploted in the diagnostic plots.</p></li>
+<li><p><strong>save_results</strong> (<em>boolean</em>) – If True, the plots and fit information will be saved in the output directory defined in the function analysis.load_calibrated_data()</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>par_values_list</strong> (<em>list</em>) – This is a list containing sublists with the best-fit values for each line model.</p></li>
+<li><p><strong>par_values_errors_list</strong> (<em>list</em>) – A list with the asymmetrical errors for each parameter listed in par_values_list.</p></li>
+<li><p><strong>par_names_list</strong> (<em>list</em>) – A list with the names of all the parameters used in each line model.</p></li>
+<li><p><strong>samples_list</strong> (<em>list</em>) – A list containing the MCMC posterior distributions.</p></li>
+<li><p><strong>line_windows</strong> (<em>list</em>) – A list containing the wavelength intervals around each line.</p></li>
+<li><p><em>XXXXXXX_lines.csv</em> – Optional. This file contains all the best-fit parameters for each line model and is saved in the output directory defined in the
+function analysis.load_calibrated_data(). “XXXXXXX” here stands for the target’s name.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.line_MCMC">
+<span class="sig-name descname"><span class="pre">line_MCMC</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">p0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">priors</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nwalkers</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">niter</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lnprob</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">custom_function</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">burn_in</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ncores</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.line_MCMC"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.line_MCMC" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function runs a MCMC approach for one line (singular or blended) for a given a model.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.line_dispersion_and_equiv_width">
+<span class="sig-name descname"><span class="pre">line_dispersion_and_equiv_width</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">wavelengths_window</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flux_density_window</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continuum_baseline_window</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_std_deviation</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.line_dispersion_and_equiv_width"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.line_dispersion_and_equiv_width" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function estimates the line dispersion (aka the rms width of the line), the profile equivalent width, and the FWHM. All measures are independent
+on the line model (i.e. Gaussian, Lorentz or Voigt) and dependent on the interpolated line profile.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>wavelengths_window</strong> (<em>numpy.ndarray</em>) – The wavelength window for the given line.</p></li>
+<li><p><strong>flux_density_window</strong> (<em>numpy.ndarray</em>) – The flux density window for the given line.</p></li>
+<li><p><strong>continuum_baseline_window</strong> (<em>numpy.ndarray</em>) – An array with the continuum density flux window for the given line. Standard easyspec units are in erg/cm2/s/A.</p></li>
+<li><p><strong>line_std_deviation</strong> (<em>numpy.ndarray</em><em> (</em><em>float</em><em>)</em>) – The standard deviation for the local continuum. This variable is an output of the function analysis.find_lines().</p></li>
+<li><p><strong>line_name</strong> (<em>string</em>) – The line name.</p></li>
+<li><p><strong>plot</strong> (<em>boolean</em>) – If True, the line and corresponding centroid and dispersion will be showed.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>line_dispersion</strong> (<em>float</em>) – The line dispersion is well defined for arbitrary line profiles. See Eqs. 4 and 5 in Peterson et al. 2004 for some guidance.
+You should avoid using the line dispersion in case of blended lines. The result here is given in the observed frame.</p></li>
+<li><p><strong>profile_equiv_width</strong> (<em>float</em>) – This is a model-independent estimate of the equivalent width and can be used with arbitrary line profiles.
+This is the integral of (Fc - F)/Fc over the wavelengths, where Fc is the continuum flux density and F is the interpolated flux density.
+The result is given in the observed frame.</p></li>
+<li><p><strong>profile_FWHM</strong> (<em>float</em>) – The model-independent FWHM.</p></li>
+<li><p><strong>line_disp_error</strong> (<em>float</em>) – The error on the line dispersion computed with a Monte Carlo simulation.</p></li>
+<li><p><strong>equiv_width_error</strong> (<em>float</em>) – The error on the equivalent width computed with a Monte Carlo simulation.</p></li>
+<li><p><strong>fwhm_error</strong> (<em>float</em>) – The error on the FWHM computed with a Monte Carlo simulation.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.line_physics">
+<span class="sig-name descname"><span class="pre">line_physics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">wavelengths</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flux_density</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continuum_baseline</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">par_values_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">par_values_errors_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">par_names_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_windows</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_std_deviation</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.line_physics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.line_physics" title="Permalink to this definition">¶</a></dt>
+<dd><p>In this function we compute several physical properties for the fitted lines.</p>
+<p>OBS 1: For the Voigt model, we assume independent variables when propagating the FWHM error. If this is not the case (you can check this in the MCMC
+corner plots), we recommend that you use the Gaussian or Lorentzian models.</p>
+<p>OBS 2: The integrated flux is computed by taking the equivalent width and multiplying it by the continuum value at the line center.</p>
+<p>OBS 3: The line dispersion is well defined for arbitrary line profiles. See e.g. Eqs. 4 and 5 in Peterson et al. 2004. This method is not recommended in case of blended lines.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>wavelengths</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units Angstrom</em><em>)</em>) – The wavelength solution for the given spectrum.</p></li>
+<li><p><strong>flux_density</strong> (<em>numpy.ndarray</em><em> (</em><em>astropy.units erg/cm2/s/A</em><em>)</em>) – The calibrated spectrum in flux density.</p></li>
+<li><p><strong>continuum_baseline</strong> (<em>numpy.ndarray</em><em> (</em><em>float</em><em>)</em>) – An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().</p></li>
+<li><p><strong>par_values_list</strong> (<em>list</em>) – This is a list containing sublists with the best-fit values for each line model.</p></li>
+<li><p><strong>par_values_errors_list</strong> (<em>list</em>) – A list with the asymmetrical errors for each parameter listed in par_values_list.</p></li>
+<li><p><strong>par_names_list</strong> (<em>list</em>) – A list with the names of all the parameters used in each line model.</p></li>
+<li><p><strong>line_windows</strong> (<em>list</em>) – A list containing the wavelength intervals around each line.</p></li>
+<li><p><strong>line_std_deviation</strong> (<em>numpy.ndarray</em><em> (</em><em>float</em><em>)</em>) – The standard deviation for the local continuum. This variable is an output of the function analysis.find_lines().</p></li>
+<li><p><strong>plot</strong> (<em>boolean</em>) – If True, the line and corresponding centroid and dispersion will be showed.</p></li>
+<li><p><strong>save_file</strong> (<em>boolean</em>) – If True, the results of this function will be saved in a .csv file in the output directory defined at analysis.load_calibrated_data().</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>profile_equiv_width_rest_frame</strong> (<em>list (astropy.units Angstrom)</em>) – A list with the equivalent widths (and respective errors) for each line and their respective errors in the rest frame. The values here are obtained with the
+interpolation of the line profile and are therefore independent on the line model (i.e. Gaussian, Lorentzian or Voigt).</p></li>
+<li><p><strong>modeled_equiv_width_rest_frame</strong> (<em>list (astropy.units Angstrom)</em>) – A list with the model-dependent equivalent widths (and respective errors) for each line and their respective errors in the rest frame.</p></li>
+<li><p><strong>profile_integrated_flux</strong> (<em>list (astropy.units erg/cm2/s)</em>) – A list with the model-independent line fluxes and their respective errors.</p></li>
+<li><p><strong>modeled_integrated_flux</strong> (<em>list (astropy.units erg/cm2/s)</em>) – A list with the model-dependent line fluxes and their respective errors.</p></li>
+<li><p><strong>profile_rest_frame_disp_velocity</strong> (<em>list (astropy.units km/s)</em>) – A list with the model-independent dispersion velocities and their respective errors in the rest frame.</p></li>
+<li><p><strong>modeled_rest_frame_disp_velocity</strong> (<em>list (astropy.units km/s)</em>) – A list with the model-dependent dispersion velocities and their respective errors in the rest frame.</p></li>
+<li><p><strong>profile_line_dispersion_rest_frame</strong> (<em>list (astropy.units Angstrom)</em>) – A list with the line dispersions (from the line second moments) and their respective errors in the rest frame.</p></li>
+<li><p><strong>profile_rest_frame_fwhm</strong> (<em>list (astropy.units Angstrom)</em>) – A list with the model-independent line FWHMs and their respective errors in the rest frame.</p></li>
+<li><p><strong>modeled_rest_frame_fhwm</strong> (<em>list (astropy.units Angstrom)</em>) – A list with the model-dependent line FWHMs and their respective errors in the rest frame.</p></li>
+<li><p><em>XXXXXXX_line_physics.csv</em> – Optional. This file contains all physics parameters for each modeled line and is saved in the output directory defined in the
+function analysis.load_calibrated_data(). “XXXXXXX” here stands for the target’s name.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.lnlike">
+<span class="sig-name descname"><span class="pre">lnlike</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yerr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.lnlike"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.lnlike" title="Permalink to this definition">¶</a></dt>
+<dd><p>Here we compute the likelihood of the current model given the data.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.lnprior">
+<span class="sig-name descname"><span class="pre">lnprior</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">priors</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.lnprior"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.lnprior" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function checks if the input parameters satisfy the prior conditions.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.lnprob">
+<span class="sig-name descname"><span class="pre">lnprob</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">priors</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yerr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.lnprob"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.lnprob" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.load_calibrated_data">
+<span class="sig-name descname"><span class="pre">load_calibrated_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calibrated_spec_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'./'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.load_calibrated_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.load_calibrated_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function loads the spectral calibrated data. Preferentially, you should use the file ‘TARGETNAME_spec_X.dat’ generated
+with easyfermi function ‘extraction.target_flux_calibration()’.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>calibrated_spec_data</strong> (<em>string</em>) – The path to the data ‘.dat’ file containing the calibrated spectrum.</p></li>
+<li><p><strong>target_name</strong> (<em>string</em>) – Optional. This name will be used in all subsequent plots.</p></li>
+<li><p><strong>output_dir</strong> (<em>string</em>) – A string with the path to the output directory.</p></li>
+<li><p><strong>plot</strong> (<em>boolean</em>) – If True, the spectrum will be shown.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>wavelengths</strong> (<em>numpy.ndarray (astropy.units Angstrom)</em>) – The wavelength solution for the given spectrum</p></li>
+<li><p><strong>flux_density</strong> (<em>numpy.ndarray (astropy.units erg/cm2/s/A)</em>) – The calibrated spectrum in flux density.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.merge_fit_results">
+<span class="sig-name descname"><span class="pre">merge_fit_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">list_of_files</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wavelength_systematic_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'./'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.merge_fit_results"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.merge_fit_results" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function merges the individual data files for each line into a single merged data file.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss">
+<span class="sig-name descname"><span class="pre">model_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Gauss">
+<span class="sig-name descname"><span class="pre">model_Gauss_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Gauss_Gauss">
+<span class="sig-name descname"><span class="pre">model_Gauss_Gauss_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Gauss_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Gauss_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Gauss_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Gauss_Gauss_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Gauss_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Gauss_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Gauss_Voigt">
+<span class="sig-name descname"><span class="pre">model_Gauss_Gauss_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Gauss_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Gauss_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Gauss_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Lorentz_Gauss">
+<span class="sig-name descname"><span class="pre">model_Gauss_Lorentz_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Lorentz_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Lorentz_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Lorentz_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Gauss_Lorentz_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Lorentz_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Lorentz_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Lorentz_Voigt">
+<span class="sig-name descname"><span class="pre">model_Gauss_Lorentz_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Lorentz_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Lorentz_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Voigt">
+<span class="sig-name descname"><span class="pre">model_Gauss_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Voigt_Gauss">
+<span class="sig-name descname"><span class="pre">model_Gauss_Voigt_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Voigt_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Voigt_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Voigt_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Gauss_Voigt_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Voigt_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Voigt_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Gauss_Voigt_Voigt">
+<span class="sig-name descname"><span class="pre">model_Gauss_Voigt_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Gauss_Voigt_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Gauss_Voigt_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Gauss">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Gauss_Gauss">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Gauss_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Gauss_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Gauss_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Gauss_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Gauss_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Gauss_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Gauss_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Gauss_Voigt">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Gauss_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Gauss_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Gauss_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Lorentz_Gauss">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Lorentz_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Lorentz_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Lorentz_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Lorentz_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Lorentz_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Lorentz_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Lorentz_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Lorentz_Voigt">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Lorentz_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Lorentz_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Lorentz_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Voigt">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Voigt_Gauss">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Voigt_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Voigt_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Voigt_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Voigt_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Voigt_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Voigt_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Voigt_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Lorentz_Voigt_Voigt">
+<span class="sig-name descname"><span class="pre">model_Lorentz_Voigt_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Lorentz_Voigt_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Lorentz_Voigt_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt">
+<span class="sig-name descname"><span class="pre">model_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Gauss">
+<span class="sig-name descname"><span class="pre">model_Voigt_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Gauss_Gauss">
+<span class="sig-name descname"><span class="pre">model_Voigt_Gauss_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Gauss_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Gauss_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Gauss_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Voigt_Gauss_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Gauss_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Gauss_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Gauss_Voigt">
+<span class="sig-name descname"><span class="pre">model_Voigt_Gauss_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Gauss_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Gauss_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Voigt_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Lorentz_Gauss">
+<span class="sig-name descname"><span class="pre">model_Voigt_Lorentz_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Lorentz_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Lorentz_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Lorentz_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Voigt_Lorentz_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Lorentz_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Lorentz_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Lorentz_Voigt">
+<span class="sig-name descname"><span class="pre">model_Voigt_Lorentz_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Lorentz_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Lorentz_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Voigt">
+<span class="sig-name descname"><span class="pre">model_Voigt_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Voigt_Gauss">
+<span class="sig-name descname"><span class="pre">model_Voigt_Voigt_Gauss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Voigt_Gauss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Voigt_Gauss" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Voigt_Lorentz">
+<span class="sig-name descname"><span class="pre">model_Voigt_Voigt_Lorentz</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Voigt_Lorentz"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Voigt_Lorentz" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.model_Voigt_Voigt_Voigt">
+<span class="sig-name descname"><span class="pre">model_Voigt_Voigt_Voigt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">theta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.model_Voigt_Voigt_Voigt"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.model_Voigt_Voigt_Voigt" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.parameter_estimation">
+<span class="sig-name descname"><span class="pre">parameter_estimation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">samples</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">air_wavelength_line</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">quantiles</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0.16,</span> <span class="pre">0.5,</span> <span class="pre">0.84]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parlabels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'.'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">savefile</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.parameter_estimation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.parameter_estimation" title="Permalink to this definition">¶</a></dt>
+<dd><p>In this function we estimate the parameter values and corresponding errors based on the 16%, 50%, and 84% quantiles of the
+MCMC posterior distributions of parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>samples</strong> (<em>list</em>) – A list containing the MCMC posterior distributions.</p></li>
+<li><p><strong>model_name</strong> (<em>string</em>) – The current model adopted in the fit.</p></li>
+<li><p><strong>air_wavelength_line</strong> (<em>float</em>) – The line rest-frame wavelength used to compute the redshift.</p></li>
+<li><p><strong>quantiles</strong> (<em>list</em>) – The quantiles adpted to compute the parameter values and corresponding errors. Default is quantiles=[0.16, 0.5, 0.84].</p></li>
+<li><p><strong>normalization</strong> (<em>float</em>) – The plot normalization.</p></li>
+<li><p><strong>parlabels</strong> (<em>list</em>) – This is a list with the names of the free parameters in the adopted model. If you use a model with two peaks,
+then parlabels needs two input lists, e.g.: parlabels=[[‘a’,’b’],[‘c’,’d’]]. If it has three peaks, parlabels
+must be parlabels=[[‘a’,’b’],[‘c’,’d’],[‘e’,’f’]] and so on.</p></li>
+<li><p><strong>line_names</strong> (<em>string</em><em> or </em><em>list of strings</em>) – The line names.</p></li>
+<li><p><strong>outputdir</strong> (<em>string</em>) – The output directory.</p></li>
+<li><p><strong>savefile</strong> (<em>boolean</em>) – If True, the data will be saved in the output directory.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>par_values</strong> (<em>list</em>) – A list with the parameter values recovered from the 50% quantiles of the MCMC posterior distributions of parameters.</p></li>
+<li><p><strong>par_values_errors</strong> (<em>list</em>) – A list with the parameter errors recovered from the 16% and 84% quantiles of the MCMC posterior distributions of parameters.</p></li>
+<li><p><strong>par_names</strong> (<em>list</em>) – A list with the parameter names.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.parameter_time_series">
+<span class="sig-name descname"><span class="pre">parameter_time_series</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">initial</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampler</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.parameter_time_series"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.parameter_time_series" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function plots the time series of the parameters running in the MCMC.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.plotter">
+<span class="sig-name descname"><span class="pre">plotter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sampler</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">color</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'grey'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.plotter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.plotter" title="Permalink to this definition">¶</a></dt>
+<dd><p>In this function we plot the ‘hairs’ (i.e. alternative models) around the maximum likelihood model estimated with the MCMC method.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.quick_plot">
+<span class="sig-name descname"><span class="pre">quick_plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parlabels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampler</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">best_fit_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theta_max</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalization</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hair_color</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'grey'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xlabel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Observed</span> <span class="pre">$\\lambda$</span> <span class="pre">[$\\AA$]'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylabel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'F$_{\\lambda}$</span> <span class="pre">[erg</span> <span class="pre">cm$^{-2}$</span> <span class="pre">s$^{-1}$</span> <span class="pre">$\\AA^{-1}$</span> <span class="pre">]'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overplot_median_model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">savefig</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outputdir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'./'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.quick_plot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.quick_plot" title="Permalink to this definition">¶</a></dt>
+<dd><p>In this function we plot the data window together with the maximum likelihood and/or the median model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>numpy.arrays</em>) – Arrays containing the data within the selected window.</p></li>
+<li><p><strong>y</strong> (<em>numpy.arrays</em>) – Arrays containing the data within the selected window.</p></li>
+<li><p><strong>model_name</strong> (<em>string</em>) – The current model adopted in the fit.</p></li>
+<li><p><strong>parlabels</strong> (<em>list</em>) – A list with the parameter names for the adopted model.</p></li>
+<li><p><strong>sampler</strong> – The MCMC sampler.</p></li>
+<li><p><strong>best_fit_model</strong> (<em>numpy.array</em>) – Array with the best-fit model.</p></li>
+<li><p><strong>theta_max</strong> (<em>numpy.ndarray</em>) – Array with the best-fit parameters.</p></li>
+<li><p><strong>normalization</strong> (<em>float</em>) – The plot normalization.</p></li>
+<li><p><strong>hair_color</strong> (<em>string</em>) – The color adopted for the MCMC hairs.</p></li>
+<li><p><strong>title</strong> (<em>string</em>) – The title of the plot.</p></li>
+<li><p><strong>xlabel</strong> (<em>strings</em>) – The axes labels.</p></li>
+<li><p><strong>ylabel</strong> (<em>strings</em>) – The axes labels.</p></li>
+<li><p><strong>overplot_median_model</strong> (<em>boolean</em>) – If True, the median model and model standard deviation will be overploted.</p></li>
+<li><p><strong>savefig</strong> (<em>boolean</em>) – If True, the figure will be saved in the output directory.</p></li>
+<li><p><strong>outputdir</strong> (<em>string</em>) – The output directory.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="easyspec.analysis.analysis.analysis.redshift_calculator">
+<span class="sig-name descname"><span class="pre">redshift_calculator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q_16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q_50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q_84</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">air_wavelength_line</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/easyspec/analysis/analysis.html#analysis.redshift_calculator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#easyspec.analysis.analysis.analysis.redshift_calculator" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">easyspec</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="data_cleaning.html">Data cleaning</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">easyspec</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="easyspec.html">easyspec package</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  <li><a href="modules.html">easyspec</a><ul>
+  <li><a href="easyspec.html">easyspec package</a><ul>
+      <li>Previous: <a href="easyspec.html" title="previous chapter">easyspec package</a></li>
+      <li>Next: <a href="easyspec.cleaning.html" title="next chapter">easyspec.cleaning package</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2025, Raniere de Menezes.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.0.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/easyspec.analysis.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

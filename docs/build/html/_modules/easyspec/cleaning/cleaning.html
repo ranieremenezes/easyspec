@@ -1,0 +1,1119 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>easyspec.cleaning.cleaning &#8212; easyspec 2025 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css" />
+    <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for easyspec.cleaning.cleaning</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">mpl_toolkits.axes_grid1</span> <span class="kn">import</span> <span class="n">make_axes_locatable</span> <span class="c1">#this is to adjust the colorbars</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">matplotlib.gridspec</span> <span class="k">as</span> <span class="nn">gridspec</span>
+<span class="kn">import</span> <span class="nn">glob</span>
+<span class="kn">from</span> <span class="nn">astropy.io</span> <span class="kn">import</span> <span class="n">fits</span>
+<span class="kn">from</span> <span class="nn">scipy</span> <span class="kn">import</span> <span class="n">stats</span> <span class="k">as</span> <span class="n">st</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">from</span> <span class="nn">scipy</span> <span class="kn">import</span> <span class="n">odr</span>
+<span class="kn">from</span> <span class="nn">astropy.nddata</span> <span class="kn">import</span> <span class="n">CCDData</span>
+<span class="kn">from</span> <span class="nn">astropy</span> <span class="kn">import</span> <span class="n">units</span> <span class="k">as</span> <span class="n">u</span>
+<span class="kn">import</span> <span class="nn">ccdproc</span> <span class="k">as</span> <span class="nn">ccdp</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">scipy.signal</span> <span class="kn">import</span> <span class="n">medfilt</span>
+
+<span class="n">easyspec_cleaning_version</span> <span class="o">=</span> <span class="s2">&quot;1.0.0&quot;</span> 
+
+<div class="viewcode-block" id="cleaning"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning">[docs]</a><span class="k">class</span> <span class="nc">cleaning</span><span class="p">:</span>
+
+    <span class="sd">&quot;&quot;&quot;This class contains all the functions necessary to perform the image reduction/cleaning, including cosmic ray removal.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> 
+        <span class="c1"># Print the current version of easyspec       </span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;easyspec-cleaning version: &quot;</span><span class="p">,</span><span class="n">easyspec_cleaning_version</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="cleaning.data_paths"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.data_paths">[docs]</a>    <span class="k">def</span> <span class="nf">data_paths</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">bias</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">flats</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">lamp</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">standard_star</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">targets</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">darks</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function collects the paths for all data files (bias, flats, lamp, standard star, and targets), as long as they have the extension &quot;.fit*&quot;.</span>
+<span class="sd">        </span>
+<span class="sd">        IMPORTANT: please note that different kinds of data files must be in different directories. E.g., put all bias files in a directory called &quot;bias&quot;, </span>
+<span class="sd">        all flat files in a directory called &quot;flats&quot; and so on.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        bias,flats,lamp,standard_star,darks: strings</span>
+<span class="sd">            Strings containing the path to the directory containing the data files.</span>
+<span class="sd">        </span>
+<span class="sd">        targets: string or list of strings</span>
+<span class="sd">            You can pass a single directory path as a string or a list of paths. E.g. targets = &quot;./spectra_target1&quot; or targets = [&quot;./spectra_target1&quot;,&quot;./spectra_target2&quot;].</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        all_raw_data: dict</span>
+<span class="sd">            A dictionary containing the paths to all data files (dictionary keys) and the raw data for all images (dictionary values).</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># Master list with the paths to all data files</span>
+
+        <span class="k">if</span> <span class="n">bias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">bias</span><span class="p">)</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+                <span class="c1"># Make a list with the bias files:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">bias_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">bias</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="o">+</span><span class="s1">&#39;/*.fit*&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias_list</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Invalid diretory for bias files.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bias_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">if</span> <span class="n">flats</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">flats</span><span class="p">)</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+                <span class="c1"># Make a list with the flat images:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">flats</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="o">+</span><span class="s1">&#39;/*.fit*&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Invalid diretory for flat files.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">if</span> <span class="n">lamp</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">lamp</span><span class="p">)</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+                <span class="c1"># Make a list with the lamp images:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">lamp_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">lamp</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="o">+</span><span class="s1">&#39;/*.fit*&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">lamp_list</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Invalid diretory for lamp files.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lamp_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">if</span> <span class="n">standard_star</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">standard_star</span><span class="p">)</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+                <span class="c1"># Make a list with the standard star images:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">std_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">standard_star</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="o">+</span><span class="s1">&#39;/*.fit*&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">std_list</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Invalid diretory for standard star files.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">std_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+        <span class="k">if</span> <span class="n">targets</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">targets</span><span class="p">,</span><span class="nb">str</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+                    <span class="c1"># Make a list with the raw science images:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="o">+</span><span class="s1">&#39;/*.fit*&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Invalid diretory for target files.&quot;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">targets</span><span class="p">,</span><span class="nb">list</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">target</span> <span class="ow">in</span> <span class="n">targets</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">target</span><span class="p">)</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+                        <span class="c1"># Make a list with the raw science images:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">target</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="o">+</span><span class="s1">&#39;/*.fit*&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Invalid diretory for target files.&quot;</span><span class="p">)</span>
+                
+                <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Variable &#39;target&#39; must be a string or a list of strings.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+        <span class="k">if</span> <span class="n">darks</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">darks</span><span class="p">)</span><span class="o">.</span><span class="n">is_dir</span><span class="p">():</span>
+                <span class="c1"># Make a list with the dark files:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">darks_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">darks</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="o">+</span><span class="s1">&#39;/*.fit*&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">darks_list</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Invalid diretory for dark files.&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">darks_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1"># Here we create a dictionary with all raw images:</span>
+        <span class="n">all_raw_data</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">images_shape</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">image_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span><span class="p">:</span>
+            <span class="n">raw_image_data</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">getdata</span><span class="p">(</span><span class="n">image_name</span><span class="p">)</span>
+            <span class="n">all_raw_data</span><span class="p">[</span><span class="n">image_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">raw_image_data</span>
+            <span class="n">images_shape</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">raw_image_data</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+        <span class="c1"># Here we check if all the images have the same size:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">images_shape</span><span class="p">))</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Raw data files have different shapes. Here is a list of them:&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">image_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">all_images_list</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;File: &quot;</span><span class="p">,</span><span class="n">image_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="s2">&quot;. Shape: &quot;</span><span class="p">,</span><span class="n">all_raw_data</span><span class="p">[</span><span class="n">image_name</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;One or more raw image files have different sizes. All data files must have the same dimesions. Please fix this before proceeding.&quot;</span>
+                               <span class="o">+</span><span class="s2">&quot; See the list above with the shapes of all data files.&quot;</span><span class="p">)</span>
+            
+        <span class="k">return</span> <span class="n">all_raw_data</span></div>
+
+
+<div class="viewcode-block" id="cleaning.trim"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.trim">[docs]</a>    <span class="k">def</span> <span class="nf">trim</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">raw_image_data</span><span class="p">,</span><span class="n">x1</span><span class="p">,</span><span class="n">x2</span><span class="p">,</span><span class="n">y1</span><span class="p">,</span><span class="n">y2</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        We use this function to trim the data</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        raw_image_data: dict</span>
+<span class="sd">            Dictionary containing the path (keys) and the raw data (values) for one or several images.</span>
+<span class="sd">        x1,x2,y1,y2: integers</span>
+<span class="sd">            Values giving the cutting limits for the trim function.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        raw_image_data_trimmed: dict</span>
+<span class="sd">            A dictionary with all image data files trimmed</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">raw_image_data_trimmed</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># Here we create a new dictionary for the trimmed data.</span>
+        <span class="k">for</span> <span class="n">image_data_path</span><span class="p">,</span><span class="n">raw_image</span> <span class="ow">in</span> <span class="n">raw_image_data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">raw_image_data_trimmed</span><span class="p">[</span><span class="n">image_data_path</span><span class="p">]</span> <span class="o">=</span> <span class="n">raw_image</span><span class="p">[</span><span class="n">y1</span><span class="p">:</span><span class="n">y2</span><span class="p">,</span><span class="n">x1</span><span class="p">:</span><span class="n">x2</span><span class="p">]</span>  <span class="c1"># Addind the trimmed data to the new dictionary.</span>
+        
+        <span class="k">return</span> <span class="n">raw_image_data_trimmed</span></div>
+
+
+<div class="viewcode-block" id="cleaning.plot_images"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.plot_images">[docs]</a>    <span class="k">def</span> <span class="nf">plot_images</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">datacube</span><span class="p">,</span><span class="n">image_type</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">,</span> <span class="n">Ncols</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">specific_image</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">vertical_scale</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to plot a matrix with all the images given in datacube</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        datacube: dict</span>
+<span class="sd">            A dictionary containing the paths to all data files (dictionary keys) and the data for all images (dictionary values).</span>
+<span class="sd">        image_type: string</span>
+<span class="sd">            String with the type of file to plot. Options: &quot;all&quot;, &quot;bias&quot;, &quot;flat&quot;, &quot;lamp&quot;, &quot;standard_star&quot;, &quot;target&quot;, and &quot;dark&quot;.</span>
+<span class="sd">        Ncols: int</span>
+<span class="sd">            Number of culumns for the grid.</span>
+<span class="sd">        specific_image: int</span>
+<span class="sd">            In case you want to see a single image from e.g. the bias or the target sample, use specific_image = number corresponding to your image. It goes</span>
+<span class="sd">            from zero up to the total number (minus one) of files of a specific kind you have. For instance, if you want to display only the first bias file,</span>
+<span class="sd">            use image_type = &quot;bias&quot;, Ncols = 1, and specific_image = 0.</span>
+<span class="sd">        vertical_scale: float</span>
+<span class="sd">            This variable allows you to control the vertical scale between the plots.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">            A plot with 3 columns and several lines containing all the images passed in the variable datacube.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Here we guarantee that Ncols is integer:</span>
+        <span class="n">Ncols</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">Ncols</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">Ncols</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">Ncols</span> <span class="o">=</span> <span class="mi">2</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;A temptative of setting Ncols &lt; 1 was done. easyspec is setting it back to the default value.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">image_type</span> <span class="o">==</span> <span class="s2">&quot;all&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">datacube</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="k">elif</span> <span class="n">image_type</span> <span class="o">==</span> <span class="s2">&quot;bias&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias_list</span>
+        <span class="k">elif</span> <span class="n">image_type</span> <span class="o">==</span> <span class="s2">&quot;flat&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span>
+        <span class="k">elif</span> <span class="n">image_type</span> <span class="o">==</span> <span class="s2">&quot;lamp&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lamp_list</span>
+        <span class="k">elif</span> <span class="n">image_type</span> <span class="o">==</span> <span class="s2">&quot;standard_star&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">std_list</span>
+        <span class="k">elif</span> <span class="n">image_type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span>
+        <span class="k">elif</span> <span class="n">image_type</span> <span class="o">==</span> <span class="s2">&quot;dark&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">darks_list</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;Invalid image_type. Options are: &quot;bias&quot;, &quot;flat&quot;, &quot;lamp&quot;, &quot;standard_star&quot;, &quot;target&quot;, and &quot;dark&quot;.&#39;</span><span class="p">)</span>
+        
+        <span class="c1"># Here we create an array containing the image data for all requested files:</span>
+        <span class="n">datacube</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">datacube</span><span class="p">[</span><span class="n">image_frame</span><span class="p">]</span> <span class="k">for</span> <span class="n">image_frame</span> <span class="ow">in</span> <span class="n">imagenames</span><span class="p">],</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">number_of_images</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">datacube</span><span class="p">)</span>  <span class="c1"># Number of individual images in the cube</span>
+        
+        <span class="k">if</span> <span class="n">specific_image</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">datacube_single</span> <span class="o">=</span> <span class="p">[]</span>  
+            <span class="n">datacube_single</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">datacube</span><span class="p">[</span><span class="n">specific_image</span><span class="p">])</span>
+            <span class="n">datacube</span> <span class="o">=</span> <span class="n">datacube_single</span>
+            <span class="n">number_of_images</span> <span class="o">=</span> <span class="mi">1</span>
+
+        
+
+        <span class="k">if</span> <span class="n">number_of_images</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">number_of_rows</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">elif</span> <span class="n">number_of_images</span><span class="o">%</span><span class="n">Ncols</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">number_of_rows</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">number_of_images</span><span class="o">/</span><span class="n">Ncols</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>  <span class="c1"># Number of image grid rows</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">number_of_rows</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">number_of_images</span><span class="o">/</span><span class="n">Ncols</span><span class="p">)</span>  <span class="c1"># Number of image grid rows</span>
+        
+        <span class="n">Matrix_shape</span> <span class="o">=</span> <span class="n">gridspec</span><span class="o">.</span><span class="n">GridSpec</span><span class="p">(</span><span class="n">number_of_rows</span><span class="p">,</span> <span class="n">Ncols</span><span class="p">)</span> <span class="c1"># Define the image grid</span>
+
+        <span class="k">if</span> <span class="n">vertical_scale</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="n">vertical_scale</span><span class="o">*</span><span class="n">number_of_rows</span><span class="p">))</span> <span class="c1"># Set the figure size</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="mi">3</span><span class="o">*</span><span class="n">number_of_rows</span><span class="p">))</span> <span class="c1"># Set the figure size</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">number_of_images</span><span class="p">):</span> 
+            <span class="c1"># In this loop we plot each individual image we have</span>
+            <span class="n">single_image_data</span> <span class="o">=</span> <span class="n">datacube</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="n">Matrix_shape</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">single_image_name</span> <span class="o">=</span> <span class="n">imagenames</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># Here we take only the image file name, i.e., we strike out all the data path and the extension.</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="n">single_image_name</span><span class="p">)</span>
+            <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span>
+            <span class="n">im</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">single_image_data</span><span class="p">),</span> <span class="n">origin</span><span class="o">=</span><span class="s1">&#39;lower&#39;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="n">vmin</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="n">vmax</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">specific_image</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">divider</span> <span class="o">=</span> <span class="n">make_axes_locatable</span><span class="p">(</span><span class="n">ax</span><span class="p">)</span>
+                <span class="n">cax</span> <span class="o">=</span> <span class="n">divider</span><span class="o">.</span><span class="n">append_axes</span><span class="p">(</span><span class="s2">&quot;right&quot;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="s2">&quot;2%&quot;</span><span class="p">,</span> <span class="n">pad</span><span class="o">=</span><span class="mf">0.08</span><span class="p">)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">cax</span><span class="o">=</span><span class="n">cax</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;Counts in log scale&quot;</span><span class="p">)</span>
+            
+            
+        
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+    
+
+<div class="viewcode-block" id="cleaning.master"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.master">[docs]</a>    <span class="k">def</span> <span class="nf">master</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">Type</span><span class="p">,</span><span class="n">trimmed_data</span><span class="p">,</span><span class="n">method</span><span class="o">=</span><span class="s2">&quot;median&quot;</span><span class="p">,</span><span class="n">header_hdu_entry</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="n">exposure_header_entry</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">airmass_header_entry</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to stack the data files into a master file.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        Type: string</span>
+<span class="sd">            Type of master to stack. Options are: &quot;bias&quot;, &quot;flat&quot;, &quot;lamp&quot;, &quot;standard_star&quot;, &quot;target&quot;, and &quot;dark&quot;.</span>
+<span class="sd">        trimmed_data: dict</span>
+<span class="sd">            Dictionary containing trimmed data. At the end we select only the entries defined with the variable &#39;Type&#39;.</span>
+<span class="sd">        method: string</span>
+<span class="sd">            Stacking method. Options are &quot;median&quot;, &quot;mean&quot;, or &quot;mode&quot;.</span>
+<span class="sd">        header_hdu_entry: int</span>
+<span class="sd">            HDU extension where we can find the header. Please check your data before choosing this value.</span>
+<span class="sd">        exposure_header_entry: string</span>
+<span class="sd">            If you want to save the mean/median exposure time in the master fits file, type the header keyword for the exposure here.</span>
+<span class="sd">        airmass_header_entry: string</span>
+<span class="sd">            If you want to save the mean/median airmass in the master fits file, type the header keyword for the airmass here.</span>
+<span class="sd">        plot: bool</span>
+<span class="sd">            Keep it as True if you want to plot the master bias/dark/flat/etc.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        master: numpy array</span>
+<span class="sd">            The master bias raw data.</span>
+<span class="sd">        master_TYPE.fits: data file</span>
+<span class="sd">            This function automatically saves a file named master_TYPE.fits in the working directory.             </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;bias&quot;</span><span class="p">:</span>
+            <span class="n">data_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias_list</span>
+        <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;flat&quot;</span><span class="p">:</span>
+            <span class="n">data_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span>
+        <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;lamp&quot;</span><span class="p">:</span>
+            <span class="n">data_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lamp_list</span>
+        <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;standard_star&quot;</span><span class="p">:</span>
+            <span class="n">data_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">std_list</span>
+        <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span><span class="p">:</span>
+            <span class="n">data_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span>
+        <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;dark&quot;</span><span class="p">:</span>
+            <span class="n">data_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">darks_list</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;Invalid Type. Options are: &quot;bias&quot;, &quot;flat&quot;, &quot;lamp&quot;, &quot;standard_star&quot;, &quot;target&quot;, and &quot;dark&quot;.&#39;</span><span class="p">)</span>
+
+        <span class="n">data_cube</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">trimmed_data</span><span class="p">[</span><span class="n">frame</span><span class="p">]</span> <span class="k">for</span> <span class="n">frame</span> <span class="ow">in</span> <span class="n">data_list</span><span class="p">],</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="c1"># If Type == target, we have to check if we have more than one target:</span>
+        <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span><span class="p">:</span>
+            <span class="n">data_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">data_splitter</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">n</span><span class="p">,</span><span class="n">file</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">data_list</span><span class="p">):</span>
+                <span class="n">parent_directory</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">file</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
+                <span class="k">if</span> <span class="n">parent_directory</span> <span class="o">!=</span> <span class="n">data_path</span><span class="p">:</span>
+                    <span class="n">data_path</span> <span class="o">=</span> <span class="n">parent_directory</span>
+                    <span class="n">data_splitter</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+            <span class="n">data_splitter</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data_list</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">data_splitter</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">data_list</span><span class="p">)]</span>
+
+        
+        <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;mode&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">data_cube</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;int&quot;</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">method</span> <span class="o">=</span> <span class="s2">&quot;median&quot;</span>
+                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;The &#39;mode&#39; method only works if the pixels have integer values. The pixels in the given file are of the &quot;</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">data_cube</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span><span class="o">+</span>
+                              <span class="s2">&quot; type. easyspec will reset method=&#39;median&#39;.&quot;</span><span class="p">)</span>
+
+        <span class="n">master_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data_splitter</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])):</span>
+
+            <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;median&quot;</span><span class="p">:</span>
+                <span class="n">master</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">data_cube</span><span class="p">[</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="p">]:</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="o">+</span><span class="mi">1</span><span class="p">]],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># To combine with a median</span>
+            <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;mode&quot;</span><span class="p">:</span>
+                <span class="n">master</span> <span class="o">=</span> <span class="n">st</span><span class="o">.</span><span class="n">mode</span><span class="p">(</span><span class="n">data_cube</span><span class="p">[</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="p">]:</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="o">+</span><span class="mi">1</span><span class="p">]],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>  <span class="c1"># To combine with a mode</span>
+            <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;mean&quot;</span><span class="p">:</span>
+                <span class="n">master</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data_cube</span><span class="p">[</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="p">]:</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="o">+</span><span class="mi">1</span><span class="p">]],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># To combine with a mean</span>
+
+
+            <span class="c1"># Saving master file:</span>
+            <span class="n">hdr</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">getheader</span><span class="p">(</span><span class="n">data_list</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">ext</span><span class="o">=</span><span class="n">header_hdu_entry</span><span class="p">)</span>
+            <span class="n">hdu</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">PrimaryHDU</span><span class="p">(</span><span class="n">master</span><span class="p">,</span><span class="n">header</span><span class="o">=</span><span class="n">hdr</span><span class="p">)</span>
+            <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="p">[</span><span class="s1">&#39;COMMENT&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;This is the master &#39;</span><span class="o">+</span><span class="n">Type</span><span class="o">+</span><span class="s1">&#39; generated with easyspec. Method: &#39;</span><span class="o">+</span><span class="n">method</span>
+            <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="p">[</span><span class="s1">&#39;BZERO&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># This is to avoid a rescaling of the data</span>
+
+            <span class="c1"># Adding exposure and airmass to the master file header:</span>
+            <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span> <span class="ow">or</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;standard_star&quot;</span><span class="p">:</span>
+                <span class="n">allow_exp_and_airmass</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">allow_exp_and_airmass</span> <span class="o">=</span> <span class="kc">False</span>
+
+            <span class="k">if</span> <span class="n">exposure_header_entry</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">allow_exp_and_airmass</span><span class="p">:</span>
+                <span class="n">list_of_exposure_times</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">data_list</span><span class="p">[</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="p">]:</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="o">+</span><span class="mi">1</span><span class="p">]]:</span>
+                    <span class="n">list_of_exposure_times</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">look_in_header</span><span class="p">(</span><span class="n">file</span><span class="p">,</span><span class="n">exposure_header_entry</span><span class="p">))</span>
+                
+                <span class="n">average_exposure</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">list_of_exposure_times</span><span class="p">)</span>
+                <span class="n">median_exposure</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">list_of_exposure_times</span><span class="p">)</span>
+                <span class="n">summed_exposure</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">list_of_exposure_times</span><span class="p">)</span>
+                <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;EXPSUM&#39;</span><span class="p">,</span> <span class="n">summed_exposure</span><span class="p">,</span> <span class="s1">&#39;Summed exposure time for all observations&#39;</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;AVEXP&#39;</span><span class="p">,</span> <span class="n">average_exposure</span><span class="p">,</span> <span class="s1">&#39;Average exposure time for all observations&#39;</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;MEDEXP&#39;</span><span class="p">,</span> <span class="n">median_exposure</span><span class="p">,</span> <span class="s1">&#39;Median exposure time for all observations&#39;</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">airmass_header_entry</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">allow_exp_and_airmass</span><span class="p">:</span>
+                <span class="n">list_of_airmasses</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">data_list</span><span class="p">[</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="p">]:</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="o">+</span><span class="mi">1</span><span class="p">]]:</span>
+                    <span class="n">list_of_airmasses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">look_in_header</span><span class="p">(</span><span class="n">file</span><span class="p">,</span><span class="n">airmass_header_entry</span><span class="p">))</span>
+                
+                <span class="n">average_airmass</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">list_of_airmasses</span><span class="p">)</span>
+                <span class="n">median_airmass</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">list_of_airmasses</span><span class="p">)</span>
+                <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;AVAIRMAS&#39;</span><span class="p">,</span> <span class="n">average_airmass</span><span class="p">,</span> <span class="s1">&#39;Average airmass&#39;</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;MDAIRMAS&#39;</span><span class="p">,</span> <span class="n">median_airmass</span><span class="p">,</span> <span class="s1">&#39;Median airmass&#39;</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            
+            <span class="n">hdul</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">HDUList</span><span class="p">([</span><span class="n">hdu</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span><span class="p">:</span>
+                <span class="n">target_name</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">data_list</span><span class="p">[</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="p">]])</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">hdul</span><span class="o">.</span><span class="n">writeto</span><span class="p">(</span><span class="s1">&#39;master_&#39;</span><span class="o">+</span><span class="n">Type</span><span class="o">+</span><span class="sa">f</span><span class="s1">&#39;_</span><span class="si">{</span><span class="n">target_name</span><span class="si">}</span><span class="s1">.fits&#39;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">hdul</span><span class="o">.</span><span class="n">writeto</span><span class="p">(</span><span class="s1">&#39;master_&#39;</span><span class="o">+</span><span class="n">Type</span><span class="o">+</span><span class="s1">&#39;.fits&#39;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_splitter</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">master_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">master</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">plot</span><span class="p">:</span>
+                <span class="n">image_shape</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">master</span><span class="p">)</span>
+                <span class="n">aspect_ratio</span> <span class="o">=</span> <span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">/</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="mi">12</span><span class="o">*</span><span class="n">aspect_ratio</span><span class="p">))</span>
+                <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span><span class="p">:</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Master &#39;</span><span class="o">+</span><span class="n">Type</span><span class="o">+</span><span class="sa">f</span><span class="s1">&#39; </span><span class="si">{</span><span class="n">target_name</span><span class="si">}</span><span class="s1"> - Method: &#39;</span><span class="o">+</span><span class="n">method</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Master &#39;</span><span class="o">+</span><span class="n">Type</span><span class="o">+</span><span class="s1">&#39; - Method: &#39;</span><span class="o">+</span><span class="n">method</span><span class="p">)</span>
+                <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;bias&quot;</span><span class="p">:</span>
+                    <span class="n">vmax</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">master</span><span class="p">))</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">master</span><span class="p">),</span> <span class="n">origin</span><span class="o">=</span><span class="s1">&#39;lower&#39;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="n">vmax</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">im</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">master</span><span class="p">),</span> <span class="n">origin</span><span class="o">=</span><span class="s1">&#39;lower&#39;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">)</span>
+                <span class="n">divider</span> <span class="o">=</span> <span class="n">make_axes_locatable</span><span class="p">(</span><span class="n">ax</span><span class="p">)</span>
+                <span class="n">cax</span> <span class="o">=</span> <span class="n">divider</span><span class="o">.</span><span class="n">append_axes</span><span class="p">(</span><span class="s2">&quot;right&quot;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="s2">&quot;2%&quot;</span><span class="p">,</span> <span class="n">pad</span><span class="o">=</span><span class="mf">0.08</span><span class="p">)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">cax</span><span class="o">=</span><span class="n">cax</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;Counts in log scale&quot;</span><span class="p">)</span>
+            
+            <span class="k">if</span> <span class="n">n</span> <span class="o">==</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data_splitter</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+        
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_splitter</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">master_list</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">master</span></div>
+
+<div class="viewcode-block" id="cleaning.debias"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.debias">[docs]</a>    <span class="k">def</span> <span class="nf">debias</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">trimmed_data</span><span class="p">,</span> <span class="n">masterbias</span><span class="p">,</span> <span class="n">Type</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">,</span> <span class="n">pad_with_zeros</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to subtract the masterbias from the rest of the data.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        trimmed_data: dict</span>
+<span class="sd">            Dictionary containing trimmed data. It can even contain the raw bias files. At the end we select only the entry given in the variable Type.</span>
+<span class="sd">        masterbias: array</span>
+<span class="sd">            Array with master bias raw data.</span>
+<span class="sd">        Type: string</span>
+<span class="sd">            Type of data files to subtract the master bias. Options are: &quot;all&quot;, &quot;flat&quot;, &quot;lamp&quot;, &quot;standard_star&quot;, &quot;target&quot;, and &quot;dark&quot;.</span>
+<span class="sd">        pad_with_zeros: bool</span>
+<span class="sd">            If True, easyspec will look for negative-value pixels after the bias subtraction and set them to zero. </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        debias_data_out: dict</span>
+<span class="sd">            Dictionary containing the debiased data.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">debias_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="n">trimmed_data</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;all&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias_list</span><span class="p">:</span>
+                <span class="n">debias_list</span> <span class="o">=</span> <span class="n">debias_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;flat&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span><span class="p">:</span>
+                <span class="n">debias_list</span> <span class="o">=</span> <span class="n">debias_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;lamp&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">lamp_list</span><span class="p">:</span>
+                <span class="n">debias_list</span> <span class="o">=</span> <span class="n">debias_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;standard_star&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">std_list</span><span class="p">:</span>
+                <span class="n">debias_list</span> <span class="o">=</span> <span class="n">debias_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span><span class="p">:</span>
+                <span class="n">debias_list</span> <span class="o">=</span> <span class="n">debias_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;dark&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">darks_list</span><span class="p">:</span>
+                <span class="n">debias_list</span> <span class="o">=</span> <span class="n">debias_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+
+        <span class="n">debias_data_out</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># Dictionary for the debiased images</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">debias_list</span><span class="p">)):</span>  
+            <span class="n">debias_data_out</span><span class="p">[</span><span class="n">debias_list</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">=</span> <span class="n">trimmed_data</span><span class="p">[</span><span class="n">debias_list</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">-</span> <span class="n">masterbias</span>  <span class="c1"># Subtracting the master bias from each one of the raw images</span>
+            <span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">debias_data_out</span><span class="p">[</span><span class="n">debias_list</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span><span class="o">&lt;=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">pad_with_zeros</span><span class="p">:</span>
+                <span class="n">debias_data_out</span><span class="p">[</span><span class="n">debias_list</span><span class="p">[</span><span class="n">i</span><span class="p">]][</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># Padding negative pixels with zeros</span>
+        
+        <span class="k">return</span> <span class="n">debias_data_out</span></div>
+
+
+<div class="viewcode-block" id="cleaning.sub_dark"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.sub_dark">[docs]</a>    <span class="k">def</span> <span class="nf">sub_dark</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">debiased_data</span><span class="p">,</span> <span class="n">masterdark</span><span class="p">,</span> <span class="n">Type</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">,</span> <span class="n">pad_with_zeros</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to subtract the masterdark from the rest of the data.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        debiased_data: dict</span>
+<span class="sd">            Dictionary containing debiased data. This dictionary can even contain the raw dark files, but should not contain the raw bias files. </span>
+<span class="sd">            At the end we select only the entry given in the variable Type.</span>
+<span class="sd">        masterdark: array</span>
+<span class="sd">            Array with master dark raw data.</span>
+<span class="sd">        Type: string</span>
+<span class="sd">            Type of data files to subtract the master bias. Options are: &quot;all&quot;, &quot;flat&quot;, &quot;lamp&quot;, &quot;standard_star&quot;, and &quot;target&quot;.</span>
+<span class="sd">        pad_with_zeros: bool</span>
+<span class="sd">            If True, easyspec will look for negative-value pixels after the dark subtraction and set them to zero. </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        subdark_data_out: dict</span>
+<span class="sd">            Dictionary containing the data corrected for dark.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">subdark_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="n">debiased_data</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;all&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">darks_list</span><span class="p">:</span>
+                <span class="n">subdark_list</span> <span class="o">=</span> <span class="n">subdark_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;flat&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span><span class="p">:</span>
+                <span class="n">subdark_list</span> <span class="o">=</span> <span class="n">subdark_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;lamp&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">lamp_list</span><span class="p">:</span>
+                <span class="n">subdark_list</span> <span class="o">=</span> <span class="n">subdark_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;standard_star&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">std_list</span><span class="p">:</span>
+                <span class="n">subdark_list</span> <span class="o">=</span> <span class="n">subdark_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span><span class="p">:</span>
+                <span class="n">subdark_list</span> <span class="o">=</span> <span class="n">subdark_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;There are two possibilities for this error:</span><span class="se">\n</span><span class="s1">1) There is an invalid value for the variable Type. Options are: &quot;all&quot;, &quot;flat&quot;, &quot;lamp&quot;, &quot;standard_star&quot;, and &quot;target&quot;.&#39;</span><span class="o">+</span>
+                               <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">2)If the value of Type is fine, please be sure that you did not change the keys in the debiased_data dictionary.&#39;</span><span class="p">)</span>
+
+        <span class="n">subdark_data_out</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># Dictionary for the sub_dark images</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">subdark_list</span><span class="p">)):</span>  
+            <span class="n">subdark_data_out</span><span class="p">[</span><span class="n">subdark_list</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">=</span> <span class="n">debiased_data</span><span class="p">[</span><span class="n">subdark_list</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">-</span> <span class="n">masterdark</span>  <span class="c1"># Subtracting the master dark from each one of the raw images</span>
+            <span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">subdark_data_out</span><span class="p">[</span><span class="n">subdark_list</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span><span class="o">&lt;=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">pad_with_zeros</span><span class="p">:</span>
+                <span class="n">subdark_data_out</span><span class="p">[</span><span class="n">subdark_list</span><span class="p">[</span><span class="n">i</span><span class="p">]][</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># Padding negative pixels with zeros</span>
+        
+        <span class="k">return</span> <span class="n">subdark_data_out</span></div>
+
+
+<div class="viewcode-block" id="cleaning.norm_master_flat"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.norm_master_flat">[docs]</a>    <span class="k">def</span> <span class="nf">norm_master_flat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">masterflat</span><span class="p">,</span> <span class="n">method</span> <span class="o">=</span> <span class="s2">&quot;polynomial&quot;</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">smooth_window</span> <span class="o">=</span> <span class="mi">101</span><span class="p">,</span> <span class="n">header_hdu_entry</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="n">plots</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to normalize the master flat.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        masterflat: array</span>
+<span class="sd">            Array with master flat raw data.</span>
+<span class="sd">        method: string</span>
+<span class="sd">            Method to be adopted to fit the master flat profile (see plots for clarification). Options are &quot;polynomial&quot; or &quot;median_filter&quot;.</span>
+<span class="sd">        degree: int</span>
+<span class="sd">            Polynomial degree to be fitted to the median masterflat x-profile. This parameter is useful only if method = &quot;polynomial&quot;.</span>
+<span class="sd">        smooth_window: integer</span>
+<span class="sd">            Must be an odd number. This is the number of neighbouring pixels used to extract the flat field profile with a median filter.</span>
+<span class="sd">        header_hdu_entry: int</span>
+<span class="sd">            HDU extension where we can find the header. Please check your data before choosing this value.</span>
+<span class="sd">        plots: bool</span>
+<span class="sd">            If True, easyspec will plot the master flat profile, fit residuals and normalized master flat. </span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        normalized_master_flat: array</span>
+<span class="sd">            Normalized master flat raw data.</span>
+<span class="sd">        norm_master_flat.fits: data file</span>
+<span class="sd">            This function automatically saves a file named &quot;norm_master_flat.fits&quot; in the working directory.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">smooth_window</span><span class="o">%</span><span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">smooth_window</span> <span class="o">=</span> <span class="n">smooth_window</span> <span class="o">-</span> <span class="mi">1</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The input parameter &#39;smooth_window&#39; must be odd. We are resetting it to </span><span class="si">{</span><span class="n">smooth_window</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+
+        <span class="n">yvals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">masterflat</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">xvals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">masterflat</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;polynomial&quot;</span><span class="p">:</span>
+            <span class="n">poly_model</span> <span class="o">=</span> <span class="n">odr</span><span class="o">.</span><span class="n">polynomial</span><span class="p">(</span><span class="n">degree</span><span class="p">)</span>  <span class="c1"># Using a polynomial model of order &#39;degree&#39;</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">odr</span><span class="o">.</span><span class="n">Data</span><span class="p">(</span><span class="n">xvals</span><span class="p">,</span> <span class="n">yvals</span><span class="p">)</span>
+            <span class="n">odr_obj</span> <span class="o">=</span> <span class="n">odr</span><span class="o">.</span><span class="n">ODR</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">poly_model</span><span class="p">)</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">odr_obj</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>  <span class="c1"># Running ODR fitting</span>
+            <span class="n">poly</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">poly1d</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">beta</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="n">poly_y</span> <span class="o">=</span> <span class="n">poly</span><span class="p">(</span><span class="n">xvals</span><span class="p">)</span>
+            <span class="n">fit_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">masterflat</span><span class="p">))</span><span class="o">*</span><span class="n">poly_y</span>
+        <span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;median_filter&quot;</span><span class="p">:</span>
+            <span class="n">smoothed_flat_profile</span> <span class="o">=</span> <span class="n">medfilt</span><span class="p">(</span><span class="n">yvals</span><span class="p">,</span> <span class="n">smooth_window</span><span class="p">)</span>
+            <span class="n">fit_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">masterflat</span><span class="p">))</span><span class="o">*</span><span class="n">smoothed_flat_profile</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Invalid input value for &#39;method&#39;. Options are &#39;polynomial&#39; and &#39;median_filter&#39;.&quot;</span><span class="p">)</span>
+
+        <span class="n">normalized_master_flat</span> <span class="o">=</span> <span class="n">masterflat</span><span class="o">/</span><span class="n">fit_matrix</span>
+
+        <span class="c1"># Saving norm master flat:</span>
+        <span class="n">hdr</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">getheader</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="n">ext</span><span class="o">=</span><span class="n">header_hdu_entry</span><span class="p">)</span>
+        <span class="n">hdu</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">PrimaryHDU</span><span class="p">(</span><span class="n">normalized_master_flat</span><span class="p">,</span><span class="n">header</span><span class="o">=</span><span class="n">hdr</span><span class="p">)</span>
+        <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="p">[</span><span class="s1">&#39;COMMENT&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;This is the normalized master flat generated with easyspec&#39;</span>
+        <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="p">[</span><span class="s1">&#39;BZERO&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span> <span class="c1">#This is to avoid a rescaling of the data</span>
+        <span class="n">hdul</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">HDUList</span><span class="p">([</span><span class="n">hdu</span><span class="p">])</span>
+        <span class="n">hdul</span><span class="o">.</span><span class="n">writeto</span><span class="p">(</span><span class="s1">&#39;norm_master_flat.fits&#39;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">plots</span><span class="p">:</span>
+            <span class="n">Matrix_shape</span> <span class="o">=</span> <span class="n">gridspec</span><span class="o">.</span><span class="n">GridSpec</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>  <span class="c1"># Define the image grid</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="mi">4</span><span class="p">))</span>  <span class="c1"># Set the figure size</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">):</span> 
+                <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="n">Matrix_shape</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="n">which</span><span class="o">=</span><span class="s2">&quot;both&quot;</span><span class="p">,</span><span class="n">linestyle</span><span class="o">=</span><span class="s2">&quot;:&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Master flat profile&quot;</span><span class="p">)</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">xvals</span><span class="p">,</span> <span class="n">yvals</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;column-median data&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;polynomial&quot;</span><span class="p">:</span>
+                        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">xvals</span><span class="p">,</span> <span class="n">poly_y</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;limegreen&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;ODR polynomial fit&quot;</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">xvals</span><span class="p">,</span> <span class="n">smoothed_flat_profile</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;limegreen&#39;</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;Median-filter flat profile&quot;</span><span class="p">)</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s2">&quot;polynomial&quot;</span><span class="p">:</span>
+                        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Polynomial fit residuals&quot;</span><span class="p">)</span>
+                        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">xvals</span><span class="p">,</span> <span class="n">yvals</span> <span class="o">-</span> <span class="n">poly_y</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;limegreen&#39;</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Median-filter residuals&quot;</span><span class="p">)</span>
+                        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">xvals</span><span class="p">,</span> <span class="n">yvals</span> <span class="o">-</span> <span class="n">smoothed_flat_profile</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;limegreen&#39;</span><span class="p">)</span>
+            
+            
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+            <span class="n">image_shape</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">normalized_master_flat</span><span class="p">)</span>
+            <span class="n">aspect_ratio</span> <span class="o">=</span> <span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">/</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="mi">12</span><span class="o">*</span><span class="n">aspect_ratio</span><span class="p">))</span>
+            <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Normalized Master Flat&#39;</span><span class="p">)</span>
+            <span class="n">im</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">normalized_master_flat</span><span class="p">),</span> <span class="n">origin</span><span class="o">=</span><span class="s1">&#39;lower&#39;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">)</span>
+            <span class="n">divider</span> <span class="o">=</span> <span class="n">make_axes_locatable</span><span class="p">(</span><span class="n">ax</span><span class="p">)</span>
+            <span class="n">cax</span> <span class="o">=</span> <span class="n">divider</span><span class="o">.</span><span class="n">append_axes</span><span class="p">(</span><span class="s2">&quot;right&quot;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="s2">&quot;2%&quot;</span><span class="p">,</span> <span class="n">pad</span><span class="o">=</span><span class="mf">0.08</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">cax</span><span class="o">=</span><span class="n">cax</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;Norm. counts in log scale&quot;</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+        
+        <span class="k">return</span> <span class="n">normalized_master_flat</span></div>
+    
+
+<div class="viewcode-block" id="cleaning.rotate"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.rotate">[docs]</a>    <span class="k">def</span> <span class="nf">rotate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">raw_image_data</span><span class="p">,</span><span class="n">N_rotations</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to rotate the raw data files by N_rotations*90°. In easyspec, the dispersion axis must be in the horizontal.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        raw_image_data: dict</span>
+<span class="sd">            A dictionary containing the paths to all data files (dictionary keys) and the raw data for all images (dictionary values). E.g.: the output from the data_paths() function.</span>
+<span class="sd">        N_rotations: int</span>
+<span class="sd">            Number of 90° rotations to be performed.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        raw_images_rotated: dict</span>
+<span class="sd">            A dictionary containing the paths to all data files (dictionary keys) and the rotated raw data for all images (dictionary values).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">raw_images_rotated</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span><span class="n">data</span> <span class="ow">in</span> <span class="n">raw_image_data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">raw_images_rotated</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">rot90</span><span class="p">(</span><span class="n">data</span><span class="p">,</span><span class="n">k</span><span class="o">=</span><span class="n">N_rotations</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">raw_images_rotated</span></div>
+
+
+<div class="viewcode-block" id="cleaning.pad"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.pad">[docs]</a>    <span class="k">def</span> <span class="nf">pad</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">image_data</span><span class="p">,</span><span class="n">value</span><span class="p">,</span><span class="n">x1</span><span class="p">,</span><span class="n">x2</span><span class="p">,</span><span class="n">y1</span><span class="p">,</span><span class="n">y2</span><span class="p">,</span><span class="n">plot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">save_fits</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">get_header_from</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fits_name</span><span class="o">=</span><span class="s2">&quot;padded_image.fits&quot;</span><span class="p">,</span> <span class="n">header_hdu_entry</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        We use this function to pad a specific section of an image with a given value. It is particularly useful when handling the master files.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        image_data: array</span>
+<span class="sd">            Array containing the raw data for one image.</span>
+<span class="sd">        value: float</span>
+<span class="sd">            The value that is going to be substituted in the image section defided by the limits x1,x2,y1,y2.</span>
+<span class="sd">        x1,x2,y1,y2: integers</span>
+<span class="sd">            Values giving the image section limits for padding.</span>
+<span class="sd">        plot: bool</span>
+<span class="sd">            If True, easyspec will print the padded image.</span>
+<span class="sd">        save_fits: bool</span>
+<span class="sd">            Set it to True if you want to save a fits file for the padded image. It only works if get_header_from is not None.</span>
+<span class="sd">        get_header_from: string</span>
+<span class="sd">            This is the path to the original fits file you want to import the header. E.g.: &quot;./master_flat.fits&quot; </span>
+<span class="sd">        fits_name: string</span>
+<span class="sd">            Name of the fits file to be saved.</span>
+<span class="sd">        header_hdu_entry: int</span>
+<span class="sd">            HDU extension where we can find the header. Please check your data before choosing this value.</span>
+<span class="sd">            </span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        image_data: array</span>
+<span class="sd">            An array with the new padded image.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">image_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">image_data</span><span class="p">)</span>
+
+        <span class="n">image_data</span><span class="p">[</span><span class="n">y1</span><span class="p">:</span><span class="n">y2</span><span class="p">,</span><span class="n">x1</span><span class="p">:</span><span class="n">x2</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">if</span> <span class="n">plot</span><span class="p">:</span>
+            <span class="n">image_shape</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">image_data</span><span class="p">)</span>
+            <span class="n">aspect_ratio</span> <span class="o">=</span> <span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">/</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="mi">12</span><span class="o">*</span><span class="n">aspect_ratio</span><span class="p">))</span> 
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Padded image&#39;</span><span class="p">)</span>
+            <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span>
+            <span class="n">im</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">image_data</span><span class="p">),</span> <span class="n">origin</span><span class="o">=</span><span class="s1">&#39;lower&#39;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">)</span>
+            <span class="n">divider</span> <span class="o">=</span> <span class="n">make_axes_locatable</span><span class="p">(</span><span class="n">ax</span><span class="p">)</span>
+            <span class="n">cax</span> <span class="o">=</span> <span class="n">divider</span><span class="o">.</span><span class="n">append_axes</span><span class="p">(</span><span class="s2">&quot;right&quot;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="s2">&quot;2%&quot;</span><span class="p">,</span> <span class="n">pad</span><span class="o">=</span><span class="mf">0.08</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">cax</span><span class="o">=</span><span class="n">cax</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;Counts in log scale&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">save_fits</span> <span class="ow">and</span> <span class="n">get_header_from</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Saving padded file:</span>
+            <span class="n">hdr</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">getheader</span><span class="p">(</span><span class="n">get_header_from</span><span class="p">,</span><span class="n">ext</span><span class="o">=</span><span class="n">header_hdu_entry</span><span class="p">)</span>
+            <span class="n">hdu</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">PrimaryHDU</span><span class="p">(</span><span class="n">image_data</span><span class="p">,</span><span class="n">header</span><span class="o">=</span><span class="n">hdr</span><span class="p">)</span>
+            <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="p">[</span><span class="s1">&#39;COMMENT&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;This image was padded with easyspec&#39;</span>
+            <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="p">[</span><span class="s1">&#39;BZERO&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span> <span class="c1">#This is to avoid a rescaling of the data</span>
+            <span class="n">hdul</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">HDUList</span><span class="p">([</span><span class="n">hdu</span><span class="p">])</span>
+            <span class="n">hdul</span><span class="o">.</span><span class="n">writeto</span><span class="p">(</span><span class="n">fits_name</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Fits file not saved. To save the fits file, please set the variables save_fits and get_header_from.&quot;</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">image_data</span></div>
+
+<div class="viewcode-block" id="cleaning.plot"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.plot">[docs]</a>    <span class="k">def</span> <span class="nf">plot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">image_data</span><span class="p">,</span><span class="n">figure_name</span><span class="p">,</span><span class="n">save</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span><span class="nb">format</span><span class="o">=</span><span class="s2">&quot;png&quot;</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function plots and saves a single image.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        image_data: array</span>
+<span class="sd">            Array containing the raw data for one image.</span>
+<span class="sd">        figure_name: string</span>
+<span class="sd">            Name of the figure. It can also be a path ending with the figure name, e.g. ./output/FIGURE_NAME, as long as this directory exists.</span>
+<span class="sd">        save: bool</span>
+<span class="sd">            If True, the image will be saved.</span>
+<span class="sd">        format: string</span>
+<span class="sd">            You can use png, jpeg, pdf and all other formats accepted by matplotlib.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        figure_name.png : file</span>
+<span class="sd">            An image saved in the current directory.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="n">image_shape</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">image_data</span><span class="p">)</span>
+        <span class="n">aspect_ratio</span> <span class="o">=</span> <span class="n">image_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">/</span><span class="n">image_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span><span class="mi">12</span><span class="o">*</span><span class="n">aspect_ratio</span><span class="p">))</span> 
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="n">figure_name</span><span class="p">)</span>
+        <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">gca</span><span class="p">()</span>
+        <span class="n">im</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">image_data</span><span class="p">),</span> <span class="n">origin</span><span class="o">=</span><span class="s1">&#39;lower&#39;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">)</span>
+        <span class="n">divider</span> <span class="o">=</span> <span class="n">make_axes_locatable</span><span class="p">(</span><span class="n">ax</span><span class="p">)</span>
+        <span class="n">cax</span> <span class="o">=</span> <span class="n">divider</span><span class="o">.</span><span class="n">append_axes</span><span class="p">(</span><span class="s2">&quot;right&quot;</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="s2">&quot;2%&quot;</span><span class="p">,</span> <span class="n">pad</span><span class="o">=</span><span class="mf">0.08</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">cax</span><span class="o">=</span><span class="n">cax</span><span class="p">,</span><span class="n">label</span><span class="o">=</span><span class="s2">&quot;Counts in log scale&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">save</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">figure_name</span><span class="o">+</span><span class="s2">&quot;.&quot;</span><span class="o">+</span><span class="nb">format</span><span class="p">,</span><span class="n">bbox_inches</span><span class="o">=</span><span class="s1">&#39;tight&#39;</span><span class="p">)</span>
+        
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="cleaning.flatten"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.flatten">[docs]</a>    <span class="k">def</span> <span class="nf">flatten</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">debiased_data</span><span class="p">,</span><span class="n">norm_master_flat</span><span class="p">,</span><span class="n">Type</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to apply the master flat on the rest of the data.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        debiased_data: dict</span>
+<span class="sd">            Dictionary containing debiased data. It can even contain the raw bias and dark files, but they will be ignored in the process.</span>
+<span class="sd">        norm_master_flat: array</span>
+<span class="sd">            Array with normalized master flat raw data.</span>
+<span class="sd">        Type: string</span>
+<span class="sd">            Type of data files to apply the normalized master flat. Options are: &quot;all&quot;, &quot;lamp&quot;, &quot;standard_star&quot;, and &quot;target&quot;.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        flattened_debiased_data_out: dict</span>
+<span class="sd">            Dictionary containing the flattened data.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">flatten_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="n">debiased_data</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;all&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias_list</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">darks_list</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span><span class="p">:</span>
+                <span class="n">flatten_list</span> <span class="o">=</span> <span class="n">flatten_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;lamp&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">lamp_list</span><span class="p">:</span>
+                <span class="n">flatten_list</span> <span class="o">=</span> <span class="n">flatten_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;standard_star&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">std_list</span><span class="p">:</span>
+                <span class="n">flatten_list</span> <span class="o">=</span> <span class="n">flatten_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span><span class="p">:</span>
+                <span class="n">flatten_list</span> <span class="o">=</span> <span class="n">flatten_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+
+        <span class="n">flattened_debiased_data_out</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># Dictionary for the flattened images</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">flatten_list</span><span class="p">)):</span>  
+            <span class="n">flattened_debiased_data_out</span><span class="p">[</span><span class="n">flatten_list</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">=</span> <span class="n">debiased_data</span><span class="p">[</span><span class="n">flatten_list</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span><span class="o">/</span><span class="n">norm_master_flat</span>  <span class="c1"># Flattening the images with the normalized master flat.</span>
+        
+        <span class="k">return</span> <span class="n">flattened_debiased_data_out</span></div>
+    
+
+<div class="viewcode-block" id="cleaning.look_in_header"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.look_in_header">[docs]</a>    <span class="k">def</span> <span class="nf">look_in_header</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">file_name</span><span class="p">,</span><span class="n">I_am_looking_for</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function looks for a specific entry over all header entries in a fits file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        file_name: string</span>
+<span class="sd">            The path to the fits data file.</span>
+<span class="sd">        I_am_looking_for: string</span>
+<span class="sd">            Which entry are you looking for? E.g. &quot;EXPTIME&quot; or &quot;RDNOISE&quot;.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        value: don&#39;t have a predefined type</span>
+<span class="sd">            The value corresponding to the key you are looking for.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">ref_hdul</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">file_name</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">extension</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ref_hdul</span><span class="p">)):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">value</span> <span class="o">=</span> <span class="n">ref_hdul</span><span class="p">[</span><span class="n">extension</span><span class="p">]</span><span class="o">.</span><span class="n">header</span><span class="p">[</span><span class="n">I_am_looking_for</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">break</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">pass</span>
+        
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;No entry called &quot;</span><span class="o">+</span><span class="n">I_am_looking_for</span><span class="o">+</span><span class="s2">&quot; was found in the fits file.&quot;</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">value</span></div>
+
+<div class="viewcode-block" id="cleaning.CR_and_gain_corrections"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.CR_and_gain_corrections">[docs]</a>    <span class="k">def</span> <span class="nf">CR_and_gain_corrections</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">flattened_debiased_data</span><span class="p">,</span><span class="n">gain</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">gain_header_entry</span><span class="o">=</span><span class="s2">&quot;GAIN&quot;</span><span class="p">,</span><span class="n">readnoise</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">readnoise_header_entry</span><span class="o">=</span><span class="s2">&quot;RDNOISE&quot;</span><span class="p">,</span><span class="n">Type</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">,</span><span class="n">sigclip</span><span class="o">=</span><span class="mi">5</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to remove cosmic rays from target and standard star raw data based on the LACosmic method originally developed and implemented for IRAF by Pieter G. van Dokkum.</span>
+<span class="sd">        This function also renormalizes the data according to the CCD/CMOS gain. We always need to work in electrons for cosmic ray detection.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        flattened_debiased_data: dict</span>
+<span class="sd">            A dictionary containing the data that needs correction.</span>
+<span class="sd">        gain: float</span>
+<span class="sd">            This is the CCD gain. We will use it to convert the image units from ADU to electrons. If gain = None, easyspec will look for this entry automatically in the file header.</span>
+<span class="sd">        gain_header_entry: string</span>
+<span class="sd">            We use this only if gain=None. This must be the keyword containing the gain value in the fits file header.</span>
+<span class="sd">        readnoise: float</span>
+<span class="sd">            This is the CCD read noise, used to generate the noise model of the image. If readnoise = None, easyspec will look for this entry automatically in the file header.</span>
+<span class="sd">        readnoise_header_entry: string</span>
+<span class="sd">            We use this only if readnoise=None. This must be the keyword containing the read noise value in the fits file header.</span>
+<span class="sd">        Type: string</span>
+<span class="sd">            Type of data files to apply the corrections. Options are: &quot;all&quot;, &quot;lamp&quot;, &quot;standard_star&quot;, and &quot;target&quot;.</span>
+<span class="sd">        sigclip: float</span>
+<span class="sd">            Laplacian-to-noise limit for cosmic ray detection. Lower values will flag more pixels as cosmic rays.</span>
+<span class="sd">            </span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        CR_corrected_data: dict</span>
+<span class="sd">            Dictionary containing the data corrected for gain and cosmic rays.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">rm_cr_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="n">flattened_debiased_data</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;all&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias_list</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">darks_list</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span><span class="p">:</span>
+                <span class="n">rm_cr_list</span> <span class="o">=</span> <span class="n">rm_cr_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span><span class="p">:</span>
+                <span class="n">rm_cr_list</span> <span class="o">=</span> <span class="n">rm_cr_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;standard_star&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">std_list</span><span class="p">:</span>
+                <span class="n">rm_cr_list</span> <span class="o">=</span> <span class="n">rm_cr_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;lamp&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">lamp_list</span><span class="p">:</span>
+                <span class="n">rm_cr_list</span> <span class="o">=</span> <span class="n">rm_cr_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">rm_cr_list</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;Empty list with target and standard star data. There are two possibilities for this error:</span><span class="se">\n</span><span class="s1">1) There is an invalid value for the variable Type. &#39;</span>
+                           <span class="o">+</span><span class="s1">&#39;Options are: &quot;all&quot;, &quot;standard_star&quot;, and &quot;target&quot;.&#39;</span><span class="o">+</span>
+                            <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">2)If the value of Type is fine, please be sure that you did not change the keys in the input dictionary.&#39;</span><span class="p">)</span>
+ 
+
+        <span class="n">CR_corrected_data</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="n">rm_cr_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">readnoise</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">readnoise</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">look_in_header</span><span class="p">(</span><span class="n">file_name</span><span class="p">,</span><span class="n">readnoise_header_entry</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">gain</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">gain</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">look_in_header</span><span class="p">(</span><span class="n">file_name</span><span class="p">,</span><span class="n">gain_header_entry</span><span class="p">)</span>
+            
+            <span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">CCDData</span><span class="p">(</span><span class="n">flattened_debiased_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">],</span> <span class="n">unit</span><span class="o">=</span><span class="s1">&#39;adu&#39;</span><span class="p">)</span>  <span class="c1"># The data is now in the CCDData format. We make it get better to a numpy array below.</span>
+            <span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">ccdp</span><span class="o">.</span><span class="n">gain_correct</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">],</span> <span class="n">gain</span> <span class="o">*</span> <span class="n">u</span><span class="o">.</span><span class="n">electron</span> <span class="o">/</span> <span class="n">u</span><span class="o">.</span><span class="n">adu</span><span class="p">)</span>
+            <span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">ccdp</span><span class="o">.</span><span class="n">cosmicray_lacosmic</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">],</span> <span class="n">readnoise</span><span class="o">=</span><span class="n">readnoise</span><span class="p">,</span> <span class="n">sigclip</span><span class="o">=</span><span class="n">sigclip</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># The mask saved in CR_corrected_data includes cosmic rays identified by the function cosmicray_lacosmic.</span>
+        <span class="c1"># The sum of the mask indicates how many pixels have been identified as cosmic rays.</span>
+        <span class="c1"># Let&#39;s apply the cosmic-ray masks:</span>
+
+        <span class="k">for</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="n">rm_cr_list</span><span class="p">:</span>
+            <span class="n">q</span> <span class="o">=</span> <span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">]</span><span class="o">.</span><span class="n">mask</span>
+            <span class="n">q</span><span class="p">[</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">]</span><span class="o">.</span><span class="n">mask</span><span class="p">]</span><span class="o">=</span><span class="kc">False</span>
+            <span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">]</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+            <span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">])</span>  <span class="c1"># Back to the numpy array format.</span>
+
+
+        <span class="k">return</span> <span class="n">CR_corrected_data</span></div>
+
+
+<div class="viewcode-block" id="cleaning.save_fits_files"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.save_fits_files">[docs]</a>    <span class="k">def</span> <span class="nf">save_fits_files</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">datacube</span><span class="p">,</span><span class="n">output_directory</span><span class="p">,</span><span class="n">header_hdu_entry</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="n">Type</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function saves the raw data contained in the dictionary &#39;datacube&#39; as fits files in the directory &#39;output_directory&#39;.</span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        datacube: dict</span>
+<span class="sd">            A dictionary containing the paths to the data files (dictionary keys) and the data for their respective images (dictionary values).</span>
+<span class="sd">        output_directory: string</span>
+<span class="sd">            String with the path to the output directory.</span>
+<span class="sd">        header_hdu_entry: int</span>
+<span class="sd">            HDU extension where we can find the header. Please check your data before choosing this value.</span>
+<span class="sd">        Type: string</span>
+<span class="sd">            Type of data files to be saved. Options are: &quot;all&quot;, &quot;bias&quot;, &quot;flat&quot;, &quot;lamp&quot;, &quot;standard_star&quot;, &quot;target&quot;, and &quot;dark&quot;.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">            Saves one or more fits files in the output directory.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;all&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">datacube</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;bias&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias_list</span>
+        <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;flat&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span>
+        <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;lamp&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lamp_list</span>
+        <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;standard_star&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">std_list</span>
+        <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span>
+        <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;dark&quot;</span><span class="p">:</span>
+            <span class="n">imagenames</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">darks_list</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;Invalid variable Type. Options are: &quot;bias&quot;, &quot;flat&quot;, &quot;lamp&quot;, &quot;standard_star&quot;, &quot;target&quot;, and &quot;dark&quot;.&#39;</span><span class="p">)</span>
+        
+        <span class="k">for</span> <span class="n">n</span><span class="p">,</span><span class="n">file_name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">imagenames</span><span class="p">):</span>
+            <span class="n">hdr</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">getheader</span><span class="p">(</span><span class="n">file_name</span><span class="p">,</span><span class="n">ext</span><span class="o">=</span><span class="n">header_hdu_entry</span><span class="p">)</span>
+            <span class="n">hdu</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">PrimaryHDU</span><span class="p">(</span><span class="n">datacube</span><span class="p">[</span><span class="n">file_name</span><span class="p">],</span><span class="n">header</span><span class="o">=</span><span class="n">hdr</span><span class="p">)</span>
+            <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="p">[</span><span class="s1">&#39;COMMENT&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;File generated with easyspec&#39;</span>
+            <span class="n">hdu</span><span class="o">.</span><span class="n">header</span><span class="p">[</span><span class="s1">&#39;BZERO&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># This is to avoid a rescaling of the data</span>
+            <span class="n">hdul</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">HDUList</span><span class="p">([</span><span class="n">hdu</span><span class="p">])</span>
+            <span class="n">hdul</span><span class="o">.</span><span class="n">writeto</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">output_directory</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span><span class="o">+</span><span class="s1">&#39;/&#39;</span><span class="o">+</span><span class="n">Type</span><span class="o">+</span><span class="s1">&#39;_</span><span class="si">{:03d}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="o">+</span><span class="s1">&#39;.fits&#39;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="cleaning.vertical_align"><a class="viewcode-back" href="../../../easyspec.cleaning.html#easyspec.cleaning.cleaning.cleaning.vertical_align">[docs]</a>    <span class="k">def</span> <span class="nf">vertical_align</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">CR_corrected_data</span><span class="p">,</span> <span class="n">Type</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">):</span>
+
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function is used to align target and standard star data taht are shifted in the vertical axis.</span>
+<span class="sd">        Although this function does not align lamp images, it accepts the raw lamp data in the dictionary CR_corrected_data.</span>
+<span class="sd">        In the last step of this function, all data will be trimmed according to the alignment cuts, including the lamp data (if provided). </span>
+<span class="sd">        </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        CR_corrected_data: dict</span>
+<span class="sd">            A dictionary containing the paths to the data files (dictionary keys) and the data for their respective images (dictionary values).</span>
+<span class="sd">        Type: string</span>
+<span class="sd">            Type of data files to align. Options are: &quot;all&quot;, &quot;standard_star&quot;, and &quot;target&quot;.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        aligned_data: dict</span>
+<span class="sd">            Dictionary containing the aligned and trimmed data passed in the variable CR_corrected_data.</span>
+<span class="sd">        </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">CR_corrected_data</span> <span class="o">=</span> <span class="n">CR_corrected_data</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="n">align_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="n">CR_corrected_data</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;all&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bias_list</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">darks_list</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">flat_list</span><span class="p">:</span>
+                <span class="n">align_list</span> <span class="o">=</span> <span class="n">align_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">target_list</span><span class="p">:</span>
+                <span class="n">align_list</span> <span class="o">=</span> <span class="n">align_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+            <span class="k">elif</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;standard_star&quot;</span> <span class="ow">and</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">std_list</span><span class="p">:</span>
+                <span class="n">align_list</span> <span class="o">=</span> <span class="n">align_list</span> <span class="o">+</span> <span class="p">[</span><span class="n">file_name</span><span class="p">]</span>
+
+
+        <span class="k">if</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;all&quot;</span> <span class="ow">or</span> <span class="n">Type</span> <span class="o">==</span> <span class="s2">&quot;target&quot;</span><span class="p">:</span>
+            <span class="n">data_path</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">data_splitter</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">n</span><span class="p">,</span><span class="n">file</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">align_list</span><span class="p">):</span>
+                <span class="n">parent_directory</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">file</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">resolve</span><span class="p">())</span>
+                <span class="k">if</span> <span class="n">parent_directory</span> <span class="o">!=</span> <span class="n">data_path</span><span class="p">:</span>
+                    <span class="n">data_path</span> <span class="o">=</span> <span class="n">parent_directory</span>
+                    <span class="n">data_splitter</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+            <span class="n">data_splitter</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">align_list</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">data_splitter</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="nb">len</span><span class="p">(</span><span class="n">align_list</span><span class="p">)]</span>
+
+
+
+        <span class="n">maximum_y1_cut</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">maximum_y2_cut</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data_splitter</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])):</span> 
+            <span class="n">reference_image</span> <span class="o">=</span> <span class="n">align_list</span><span class="p">[</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="p">]]</span>  <span class="c1"># Selecting the first image as the reference image</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Reference image: &quot;</span><span class="p">,</span> <span class="n">reference_image</span><span class="p">)</span>
+
+            <span class="c1"># Selecting the strongest horizontal and vertical lines:</span>
+            <span class="n">ref_yvals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">reference_image</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># Selects the index of the pixel with highest value in each column     </span>
+
+            <span class="k">for</span> <span class="n">file_name</span> <span class="ow">in</span> <span class="n">align_list</span><span class="p">[</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="p">]:</span><span class="n">data_splitter</span><span class="p">[</span><span class="n">n</span><span class="o">+</span><span class="mi">1</span><span class="p">]]:</span>
+                <span class="k">if</span> <span class="n">file_name</span> <span class="o">==</span> <span class="n">reference_image</span><span class="p">:</span>
+                    <span class="k">continue</span>
+
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Current image: &quot;</span><span class="p">,</span> <span class="n">file_name</span><span class="p">)</span>
+                <span class="n">yvals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># Selects the index of the pixel with highest value in each column</span>
+
+                <span class="n">difference_y</span> <span class="o">=</span> <span class="n">ref_yvals</span> <span class="o">-</span> <span class="n">yvals</span>
+                <span class="n">difference_y</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">st</span><span class="o">.</span><span class="n">mode</span><span class="p">(</span><span class="n">difference_y</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># To find the global y shift</span>
+
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Vertical shift (pixels): &quot;</span><span class="p">,</span> <span class="n">difference_y</span><span class="p">)</span>
+
+                <span class="c1"># Vertical alignment: </span>
+                <span class="k">if</span> <span class="n">difference_y</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="c1"># Remember that y increases from the top to the bottom!!!</span>
+                    <span class="n">temporary_image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="n">difference_y</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">])[</span><span class="mi">1</span><span class="p">]])])</span>
+                    <span class="n">temporary_image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">trim</span><span class="p">({</span><span class="s1">&#39;temporary&#39;</span> <span class="p">:</span> <span class="n">temporary_image</span><span class="p">},</span><span class="n">x1</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="n">x2</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">])[</span><span class="mi">1</span><span class="p">],</span><span class="n">y1</span><span class="o">=</span><span class="n">difference_y</span><span class="p">,</span><span class="n">y2</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="n">difference_y</span><span class="p">)</span>
+                    <span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">temporary_image</span><span class="p">[</span><span class="s1">&#39;temporary&#39;</span><span class="p">]</span>  <span class="c1"># Remember that the function trim above returns a dictionary.</span>
+                    <span class="k">if</span> <span class="n">difference_y</span> <span class="o">&lt;</span> <span class="n">maximum_y2_cut</span><span class="p">:</span>
+                        <span class="n">maximum_y2_cut</span> <span class="o">=</span> <span class="n">difference_y</span>
+
+                <span class="k">elif</span> <span class="n">difference_y</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">temporary_image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="n">difference_y</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">])[</span><span class="mi">1</span><span class="p">]]),</span> <span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">]])</span>
+                    <span class="n">temporary_image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">trim</span><span class="p">({</span><span class="s1">&#39;temporary&#39;</span> <span class="p">:</span> <span class="n">temporary_image</span><span class="p">},</span><span class="n">x1</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="n">x2</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">])[</span><span class="mi">1</span><span class="p">],</span><span class="n">y1</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="n">y2</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">])[</span><span class="mi">0</span><span class="p">])</span>
+                    <span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">temporary_image</span><span class="p">[</span><span class="s1">&#39;temporary&#39;</span><span class="p">]</span>  <span class="c1"># Remember that the function trim above returns a dictionary.</span>
+                    <span class="k">if</span> <span class="n">difference_y</span> <span class="o">&gt;</span> <span class="n">maximum_y1_cut</span><span class="p">:</span>
+                        <span class="n">maximum_y1_cut</span> <span class="o">=</span> <span class="n">difference_y</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Images are already aligned in the vertical.&quot;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Final vertical cuts (y1, y2): &quot;</span><span class="p">,</span><span class="n">maximum_y1_cut</span><span class="p">,</span> <span class="n">maximum_y2_cut</span><span class="p">)</span>
+        <span class="n">aligned_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">trim</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">,</span><span class="n">x1</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span><span class="n">x2</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">])[</span><span class="mi">1</span><span class="p">],</span><span class="n">y1</span><span class="o">=</span><span class="n">maximum_y1_cut</span><span class="p">,</span><span class="n">y2</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">CR_corrected_data</span><span class="p">[</span><span class="n">file_name</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="n">maximum_y2_cut</span><span class="p">)</span>  <span class="c1"># Remember that maximum_y2_cut is negative</span>
+
+            
+        <span class="k">return</span> <span class="n">aligned_data</span></div></div>
+    
+    
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">easyspec</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../data_cleaning.html">Data cleaning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules.html">easyspec</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2025, Raniere de Menezes.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.0.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
