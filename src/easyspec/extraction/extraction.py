@@ -982,6 +982,7 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         dust_extinction_model = F99(Rv=Rv)  # F99 is the Fitzpatrick (1999) Milky Way R(V) dependent model
 
         calibrated_flux_list = []
+        wavelengths_sliced_list = []
         for wavelengths,spec_atm_corrected in zip(wavelengths_list,spec_atm_corrected_list):
             if reddening is not None:
                 calibrated_flux_list.append((spec_atm_corrected*correction_factor/self.exposure_target)/dust_extinction_model.extinguish(wavelengths,Ebv=reddening))
@@ -996,6 +997,7 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
                 wavelength_max_index = self.find_nearest(wavelengths, wavelength_cuts[1])
 
             wavelengths = wavelengths[wavelength_min_index:wavelength_max_index]
+            wavelengths_sliced_list.append(wavelengths)
             calibrated_flux_list[-1] = calibrated_flux_list[-1][wavelength_min_index:wavelength_max_index]
             spec_number = len(calibrated_flux_list)-1
 
@@ -1026,7 +1028,7 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         if plot:
             plt.show()
 
-        return calibrated_flux_list
+        return wavelengths_sliced_list, calibrated_flux_list
 
 
 
