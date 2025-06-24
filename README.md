@@ -12,7 +12,9 @@ If you'd like to support the maintenance of `easyspec` (or [easyfermi](https://g
 
 <a href="https://www.buymeacoffee.com/easyfermi" target="_blank"><img src="https://github.com/ranieremenezes/ranieremenezes/blob/main/bmc-button.png" alt="Buy Me A Coffee" style="height: 58px !important;width: 208px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
 
-### Status 
+### Current release 
+[![DOI](https://zenodo.org/badge/775611173.svg)](https://doi.org/10.5281/zenodo.15732788)
+
 [![CI](https://github.com/ranieremenezes/easyspec/actions/workflows/ci.yml/badge.svg)](https://github.com/ranieremenezes/easyspec/actions/workflows/ci.yml)
 
 # Requirements
