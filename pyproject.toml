@@ -38,16 +38,15 @@ dependencies = [
     "ccdproc==2.4.0",
     "scipy==1.9.1",
     "dust_extinction==1.2",
-    "notebook==6.4.4",
     "tqdm==4.64.1",
 ]
 dynamic = ["version"]
 
 [tool.setuptools_scm]
-write_to = "/easyspec/_version.py"
+write_to = "src/easyspec/_version.py"
 
 [tool.setuptools.packages.find]
-where = ["easyspec"]
+where = ["src"]
 
 [tool.setuptools.package-data]
 "resources.ebl" = ["*.fits.gz", "*.fits"]
