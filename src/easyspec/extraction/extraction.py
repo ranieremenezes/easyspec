@@ -145,8 +145,9 @@ class extraction:
             Matrix containing the target spectral image.
         method: string
             The method to be adopted in finding the trace. Options are "argmax" or "moments" if you want to extract only the strongest spectrum in the image, or "multi" if you
-            want to extract more than one spectrum. The option "argmax" works very well although is limited by the pixel size. The option "moments" is suited only for spectra 
-            with a very high signal-to-noise ratio. The option "multi" will use the "argmax" method to look for several spectra in a single image.
+            want to extract more than one spectrum. The option "argmax" works very well, although it is limited by the pixel size. The option "moments" is suited only for spectra 
+            with a very high signal-to-noise ratio. The option "multi" will use the scipy function signal.find_peaks() to take the 1-D array of weighted averaged x-axis image
+            values and find all local maxima by direct comparison with neighboring values.
         y_pixel_range: integer
             Y-axis range of pixels to be used to extract a specific spectrum. The total y-axis interval adopted is 2*y_pixel_range.
         xlims: list or array
