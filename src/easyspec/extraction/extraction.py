@@ -13,6 +13,7 @@ from astropy import units as u
 from scipy.signal import medfilt
 from dust_extinction.parameter_averages import F99
 import warnings
+import copy
 
 plt.rcParams.update({'font.size': 12})
 
@@ -132,6 +133,7 @@ class extraction:
             return self.target_spec_data
     
         self.wavelengths_fit_std_list = None  # To be filled with the function extraction.wavelength_calibration()
+        self.spec_systematic_error_list = None  # To be filled with the function extraction.extracting()
         
     def tracing(self, target_spec_data, method = "argmax", y_pixel_range = 15, xlims = None, poly_order = 2, trace_half_width = 7, peak_height = 100, distance = 50, Number_of_slices = 20, peak_dispersion_limit = 3, main_plot = True, plot_residuals = True):
 
@@ -328,10 +330,13 @@ class extraction:
         return fitted_polymodel_list
     
     
-    def extracting(self, target_spec_data, fitted_polymodel_list, master_lamp_data = None, trace_half_width = 7, shift_y_pixels = 30, lamp_peak_height = None, peak_distance = None, diagnostic_plots = True, spec_plots = True):
+    def extracting(self, target_spec_data, fitted_polymodel_list, data_type, MC_steps = 50, master_lamp_data = None, trace_half_width = 7, shift_y_pixels = 30, lamp_peak_height = None, peak_distance = None, diagnostic_plots = True, spec_plots = True):
 
         """
         This function takes the traces as input to extract one or more spectra from the image with a Gaussian-weighted model.
+        Here we also compute the systematic uncertainty in the counts extraction with a Monte Carlo simulation. These uncertainties
+        are saved in the data file at the end of the calibration process.
+
 
         In case you need references for the lamp peaks, here are some databases you can use (as of 12 September, 2024):
          * TNG DOLORES spectrograph reference lamps can be found in table 1 here: https://www.tng.iac.es/instruments/lrs/
@@ -344,6 +349,11 @@ class extraction:
             Matrix containing the target spectral image.
         fitted_polymodel_list: string
             List with the fitted spine for one or more spectra in the target spectral image. This is the output of the function extraction.tracing().
+        data_type: string
+            Options are "target" or "std_star". We use this information to correctly select the airmass for the extinction correction.
+        MC_steps: int
+            Number of Monte Carlo simulations for estimating the error. Default is 50. The larger this number, the longer it takes to run this function.
+            Minimum value is 3.
         master_lamp_data: string
             Optional. The path to the master lamp data file. This file can be produced with the easyspec cleaning() class.
         trace_half_width: integer
@@ -376,6 +386,11 @@ class extraction:
         except:
             raise NameError("The variable self.aspect_ratio does not exist. Please load your data with the function extraction.import_data() to avoid this issue.")
 
+        if isinstance(MC_steps,int):
+            if MC_steps < 3:
+                MC_steps = 3
+        else:
+            MC_steps = 50
 
         individual_spec_shift = False
         if isinstance(shift_y_pixels, int):
@@ -399,6 +414,8 @@ class extraction:
         xvals = np.arange(np.shape(target_spec_data)[1])
 
         spec_list = []
+        if data_type == "target":
+            self.spec_systematic_error_list = []
         lamp_spec_list = []
         lamp_peak_positions_list = []
         lamp_peak_heights_list = []
@@ -434,9 +451,12 @@ class extraction:
             mean_trace_profile = (cutouts - background.T[:,:np.shape(cutouts)[1]]).mean(axis=0)  # Here we also transpose and crop the background matrix just to fit the size of "cutouts"
             trace_profile_xaxis = np.arange(-trace_half_width, trace_half_width)
 
-            lmfitter = LevMarLSQFitter()
+            lmfitter = LevMarLSQFitter(calc_uncertainties=True)
             guess = Gaussian1D(amplitude=mean_trace_profile.max(), mean=0, stddev=trace_half_width/2)
             fitted_trace_profile = lmfitter(model=guess, x=trace_profile_xaxis, y=mean_trace_profile)
+            amplitude_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[0][0])
+            mean_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[1][1])
+            std_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[2][2])
             model_trace_profile = fitted_trace_profile(trace_profile_xaxis)
 
             # Lamp spectral extraction:
@@ -460,6 +480,22 @@ class extraction:
             gaussian_trace_avg_spectrum = np.array([np.average(
             target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval] - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval],
             weights=model_trace_profile) for yval, xval in zip(trace_center, xvals)])
+
+            # Target extraction systematic error estimation:
+            if data_type == "target":
+                gaussian_trace_avg_spectrum_sys_error = np.zeros((MC_steps,len(gaussian_trace_avg_spectrum)))
+                for i in range(MC_steps):
+                    fitted_trace_profile_sys_error = copy.deepcopy(fitted_trace_profile)
+                    fitted_trace_profile_sys_error.amplitude = fitted_trace_profile.amplitude.value + np.random.choice((-1, 1))*amplitude_sys_error*np.random.random()
+                    fitted_trace_profile_sys_error.mean = fitted_trace_profile.mean.value + np.random.choice((-1, 1))*mean_sys_error*np.random.random()
+                    fitted_trace_profile_sys_error.stddev = fitted_trace_profile.stddev.value + np.random.choice((-1, 1))*std_sys_error*np.random.random()
+                    model_trace_profile_sys_error = fitted_trace_profile_sys_error(trace_profile_xaxis)
+                    gaussian_trace_avg_spectrum_sys_error[i] = np.array([np.average(
+                        target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval] - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval],
+                        weights=model_trace_profile_sys_error) for yval, xval in zip(trace_center, xvals)])
+                
+                systematic_error = np.std(gaussian_trace_avg_spectrum_sys_error,axis=0)
+                self.spec_systematic_error_list.append(systematic_error)
 
             # Sky spectra:
             trace_center_sky = fitted_polymodel(xvals) + shift_y_pixels_up - trace_half_width
@@ -527,7 +563,7 @@ class extraction:
 
         if spec_plots or diagnostic_plots:
             plt.show()
-        
+
         if master_lamp_data is None:
             return spec_list
         else:           
@@ -693,6 +729,7 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
             extinction = airmass_extinction[:,1]
 
         spec_atm_corrected_list = []
+        counter = 0
         for spec, wavelength in zip(spec_list,wavelengths_list):
             wavelength_min_index = self.find_nearest(extinction_wavelength, wavelength.value.min())
             wavelength_max_index = self.find_nearest(extinction_wavelength, wavelength.value.max())
@@ -703,6 +740,11 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
 
             spec_atm_corrected = spec*2.51188643151**( airmass * interpolate.splev(wavelength.value, tck))  # The numerical factor here is 100**(1/5), which is the increase in flux when the magnitude decreases 1.
             spec_atm_corrected_list.append(spec_atm_corrected)
+
+            if self.spec_systematic_error_list is not None and data_type=="target":
+                self.spec_systematic_error_list[counter] = self.spec_systematic_error_list[counter]*2.51188643151**( airmass * interpolate.splev(wavelength.value, tck))
+                counter = counter + 1
+
 
             if plots:
                 plt.figure(figsize=(12,5)) 
@@ -980,15 +1022,22 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
         if Rv is None:
             Rv = 3.1
         
+        calibrated_spec_systematic_error_list = copy.deepcopy(self.spec_systematic_error_list)
+
         dust_extinction_model = F99(Rv=Rv)  # F99 is the Fitzpatrick (1999) Milky Way R(V) dependent model
 
         calibrated_flux_list = []
         wavelengths_sliced_list = []
+        counter = 0
         for wavelengths,spec_atm_corrected in zip(wavelengths_list,spec_atm_corrected_list):
             if reddening is not None:
                 calibrated_flux_list.append((spec_atm_corrected*correction_factor/self.exposure_target)/dust_extinction_model.extinguish(wavelengths,Ebv=reddening))
+                if calibrated_spec_systematic_error_list is not None:
+                    calibrated_spec_systematic_error_list[counter] = (calibrated_spec_systematic_error_list[counter]*correction_factor/self.exposure_target)/dust_extinction_model.extinguish(wavelengths,Ebv=reddening)
             else:
                 calibrated_flux_list.append(spec_atm_corrected*correction_factor/self.exposure_target)
+                if calibrated_spec_systematic_error_list is not None:
+                    calibrated_spec_systematic_error_list[counter] = (calibrated_spec_systematic_error_list[counter]*correction_factor/self.exposure_target)
 
             if wavelength_cuts is None:
                 wavelength_min_index = None
@@ -997,10 +1046,13 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
                 wavelength_min_index = self.find_nearest(wavelengths, wavelength_cuts[0])
                 wavelength_max_index = self.find_nearest(wavelengths, wavelength_cuts[1])
 
+
             wavelengths = wavelengths[wavelength_min_index:wavelength_max_index]
             wavelengths_sliced_list.append(wavelengths)
             calibrated_flux_list[-1] = calibrated_flux_list[-1][wavelength_min_index:wavelength_max_index]
             spec_number = len(calibrated_flux_list)-1
+            calibrated_spec_systematic_error_list[-1] = calibrated_spec_systematic_error_list[-1][wavelength_min_index:wavelength_max_index]
+
 
             if plot:
                 plt.figure(figsize=(12,5))
@@ -1017,14 +1069,17 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
                 plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
                 plt.legend()
                 
-        
+
             if save_spec:
                 output_directory = Path(output_directory)
-                if self.wavelengths_fit_std_list is None:
+                if self.wavelengths_fit_std_list is None and calibrated_spec_systematic_error_list is None:
                     np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
-                else:
+                elif calibrated_spec_systematic_error_list is None:
                     np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value, self.wavelengths_fit_std_list[-1]*np.ones(len(wavelengths.value))], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom)")
-
+                elif self.wavelengths_fit_std_list is None:
+                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value, calibrated_spec_systematic_error_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic flux error (erg/cm2/s/Angstrom)")
+                else:
+                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value, self.wavelengths_fit_std_list[-1]*np.ones(len(wavelengths.value)), calibrated_spec_systematic_error_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom), Systematic flux error (erg/cm2/s/Angstrom)")
 
         if plot:
             plt.show()
