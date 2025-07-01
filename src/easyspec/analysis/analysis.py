@@ -141,7 +141,7 @@ class analysis:
         self.target_name = target_name
 
         data = np.loadtxt(calibrated_spec_data)
-        wavelengths, flux_density, wavelength_systematic_error = data[:,0]*u.angstrom, data[:,1]*u.erg / u.cm**2 / u.s / u.AA, data[:,2][0]*u.angstrom  # Angstrom, erg/cm2/s/Angstrom, Angstrom
+        wavelengths, flux_density, wavelength_systematic_error, flux_density_sys_error = data[:,0]*u.angstrom, data[:,1]*u.erg / u.cm**2 / u.s / u.AA, data[:,2][0]*u.angstrom, data[:,3]*u.erg / u.cm**2 / u.s / u.AA  # Angstrom, erg/cm2/s/Angstrom, Angstrom, erg/cm2/s/Angstrom
 
         if plot:
             plt.figure(figsize=(12,5))
@@ -157,6 +157,8 @@ class analysis:
             plt.show()
 
         self.wavelength_systematic_error = wavelength_systematic_error
+        self.flux_systematic_error = flux_density_sys_error
+        self.wavelengths = wavelengths
 
         return wavelengths, flux_density
 
@@ -901,7 +903,7 @@ class analysis:
             plt.savefig(outputdir+"/"+title+"_line.png")
         return
 
-    def merge_fit_results(self, target_name,list_of_files=None, wavelength_systematic_error = None, output_dir="./"):
+    def merge_fit_results(self, target_name, list_of_files=None, output_dir="./"):
         
         """
         This function merges the individual data files for each line into a single merged data file.
@@ -950,8 +952,11 @@ class analysis:
             else:
                 f.write(", "+parameter_name+", "+parameter_name+"_error_down, "+parameter_name+"_error_up")
         
-        if wavelength_systematic_error is not None:
+        if self.wavelength_systematic_error is not None:
             f.write(", Systematic wavelength error [Ang]")
+
+        if self.flux_systematic_error is not None:
+            f.write(", Systematic amplitude error (erg/cm2/s/Angstrom)")
 
         # Writing down the parameters and filling the empty spaces with zeros:
         for i in range(len(data_list)):
@@ -974,8 +979,13 @@ class analysis:
                     except:
                         f.write(", 0, 0, 0")
 
-            if wavelength_systematic_error is not None:
-                f.write(f", {wavelength_systematic_error}")
+            if self.wavelength_systematic_error is not None:
+                f.write(f", {self.wavelength_systematic_error.value}")
+            
+            index = extraction.find_nearest(self.wavelengths.value,float(line_array[1][1]))
+
+            if self.flux_systematic_error is not None:
+                f.write(f", {self.flux_systematic_error.value[index]}")
 
         f.close()
         return
@@ -1488,13 +1498,8 @@ class analysis:
             if save_results:
                 plt.savefig(self.output_dir+f"/{self.target_name}_spec.pdf",bbox_inches='tight')
 
-
-
         if save_results:
-            try:
-                self.merge_fit_results(self.target_name,list_of_files=None, wavelength_systematic_error=self.wavelength_systematic_error.value,output_dir=self.output_dir)
-            except: # This line here allows to work with spectrum data files that have no systematic_error column:
-                self.merge_fit_results(self.target_name,list_of_files=None,output_dir=self.output_dir)
+            self.merge_fit_results(self.target_name,list_of_files=None,output_dir=self.output_dir)
             list_of_files = glob.glob(self.output_dir+"/*_line_fit_results.csv")
             for file in list_of_files:
                 os.remove(file)
