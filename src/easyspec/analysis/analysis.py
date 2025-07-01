@@ -141,8 +141,12 @@ class analysis:
         self.target_name = target_name
 
         data = np.loadtxt(calibrated_spec_data)
-        wavelengths, flux_density, wavelength_systematic_error, flux_density_sys_error = data[:,0]*u.angstrom, data[:,1]*u.erg / u.cm**2 / u.s / u.AA, data[:,2][0]*u.angstrom, data[:,3]*u.erg / u.cm**2 / u.s / u.AA  # Angstrom, erg/cm2/s/Angstrom, Angstrom, erg/cm2/s/Angstrom
-
+        try:
+            wavelengths, flux_density, wavelength_systematic_error, flux_density_sys_error = data[:,0]*u.angstrom, data[:,1]*u.erg / u.cm**2 / u.s / u.AA, data[:,2][0]*u.angstrom, data[:,3]*u.erg / u.cm**2 / u.s / u.AA  # Angstrom, erg/cm2/s/Angstrom, Angstrom, erg/cm2/s/Angstrom
+            self.wavelength_systematic_error = wavelength_systematic_error
+            self.flux_systematic_error = flux_density_sys_error
+        except:
+            wavelengths, flux_density = data[:,0]*u.angstrom, data[:,1]*u.erg / u.cm**2 / u.s / u.AA  # Angstrom, erg/cm2/s/Angstrom
         if plot:
             plt.figure(figsize=(12,5))
             plt.minorticks_on()
@@ -156,8 +160,7 @@ class analysis:
             plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
             plt.show()
 
-        self.wavelength_systematic_error = wavelength_systematic_error
-        self.flux_systematic_error = flux_density_sys_error
+        
         self.wavelengths = wavelengths
 
         return wavelengths, flux_density
