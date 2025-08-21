@@ -77,5 +77,5 @@ The documentation of `easyspec` can be found in the header of all the functions,
 
 # Acknowledgments
 
-To acknowledge `easyspec` in a publication, please cite de Menezes et al., 2025 (coming soon...) and the DOI in [Zenodo](https://zenodo.org/records/15732789).
+To acknowledge `easyspec` in a publication, please cite de Menezes et al., 2025 (https://iopscience.iop.org/article/10.3847/1538-3881/adf220) and the DOI in [Zenodo](https://zenodo.org/records/15732789).
 
