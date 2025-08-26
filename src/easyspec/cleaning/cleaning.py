@@ -56,7 +56,7 @@ class cleaning:
                 self.bias_list = np.sort(glob.glob(str(Path(bias).resolve())+'/*.fit*')).tolist()
                 self.all_images_list = self.all_images_list + self.bias_list
             else:
-                raise TypeError("Invalid diretory for bias files.")
+                raise TypeError("Invalid directory for bias files.")
         else:
             self.bias_list = []
 
@@ -66,7 +66,7 @@ class cleaning:
                 self.flat_list = np.sort(glob.glob(str(Path(flats).resolve())+'/*.fit*')).tolist()
                 self.all_images_list = self.all_images_list + self.flat_list
             else:
-                raise TypeError("Invalid diretory for flat files.")
+                raise TypeError("Invalid directory for flat files.")
         else:
             self.flat_list = []
 
@@ -76,7 +76,7 @@ class cleaning:
                 self.lamp_list = np.sort(glob.glob(str(Path(lamp).resolve())+'/*.fit*')).tolist()
                 self.all_images_list = self.all_images_list + self.lamp_list
             else:
-                raise TypeError("Invalid diretory for lamp files.")
+                raise TypeError("Invalid directory for lamp files.")
         else:
             self.lamp_list = []
 
@@ -86,7 +86,7 @@ class cleaning:
                 self.std_list = np.sort(glob.glob(str(Path(standard_star).resolve())+'/*.fit*')).tolist()
                 self.all_images_list = self.all_images_list + self.std_list
             else:
-                raise TypeError("Invalid diretory for standard star files.")
+                raise TypeError("Invalid directory for standard star files.")
         else:
             self.std_list = []
 
@@ -98,7 +98,7 @@ class cleaning:
                     self.target_list = np.sort(glob.glob(str(Path(targets).resolve())+'/*.fit*')).tolist()
                     self.all_images_list = self.all_images_list + self.target_list
                 else:
-                    raise TypeError("Invalid diretory for target files.")
+                    raise TypeError("Invalid directory for target files.")
             elif isinstance(targets,list):
                 self.target_list = []
                 for target in targets:
@@ -106,7 +106,7 @@ class cleaning:
                         # Make a list with the raw science images:
                         self.target_list = self.target_list + np.sort(glob.glob(str(Path(target).resolve())+'/*.fit*')).tolist()
                     else:
-                        raise TypeError("Invalid diretory for target files.")
+                        raise TypeError("Invalid directory for target files.")
                 
                 self.all_images_list = self.all_images_list + self.target_list
             else:
@@ -121,7 +121,7 @@ class cleaning:
                 self.darks_list = np.sort(glob.glob(str(Path(darks).resolve())+'/*.fit*')).tolist()
                 self.all_images_list = self.all_images_list + self.darks_list
             else:
-                raise TypeError("Invalid diretory for dark files.")
+                raise TypeError("Invalid directory for dark files.")
         else:
             self.darks_list = []
 
