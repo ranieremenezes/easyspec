@@ -570,7 +570,7 @@ class extraction:
             return spec_list, lamp_spec_list, lamp_peak_positions_list
 
 
-    def wavelength_calibration(self, lamp_peak_positions_list, corresponding_wavelengths, poly_order = 2, diagnostic_plots = True):
+    def wavelength_calibration(self, lamp_peak_positions_list, corresponding_wavelengths, data_type, poly_order = 2, diagnostic_plots = True):
 
         """
         This function takes the list of lamp spectral peak positions (in pixels) and their corresponding wavelengths, and returns a list with
@@ -589,6 +589,8 @@ class extraction:
         corresponding_wavelengths: list
             List with wavelengths (in *Angstroms*) corresponding to each peak given in lamp_peak_positions_list. Even if the peak positions are slightly different
             for different traces, a single list with the corresponding wavelengths will do the job here.
+        data_type: string
+            Options are "target" or "std_star". We use this information to correctly select the airmass for the extinction correction.
         poly_order: integer
             The order of the polynomial used to find the wavelength solution.
         diagnostic_plots: boolean
@@ -651,8 +653,9 @@ class extraction:
         if diagnostic_plots:
             plt.show()
         
-        self.wavelengths_fit_std_list = wavelengths_fit_std_list
-
+        if data_type == "target":
+            self.wavelengths_fit_std_list = copy.deepcopy(wavelengths_fit_std_list)
+        
         return wavelengths_list, wavelengths_fit_std_list
     
     def extinction_correction(self, spec_list, wavelengths_list, observatory, data_type, custom_observatory = None, spline_order = 1, plots = True):
@@ -1038,6 +1041,7 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
                 calibrated_flux_list.append(spec_atm_corrected*correction_factor/self.exposure_target)
                 if calibrated_spec_systematic_error_list is not None:
                     calibrated_spec_systematic_error_list[counter] = (calibrated_spec_systematic_error_list[counter]*correction_factor/self.exposure_target)
+           
 
             if wavelength_cuts is None:
                 wavelength_min_index = None
@@ -1049,23 +1053,22 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
 
             wavelengths = wavelengths[wavelength_min_index:wavelength_max_index]
             wavelengths_sliced_list.append(wavelengths)
-            calibrated_flux_list[-1] = calibrated_flux_list[-1][wavelength_min_index:wavelength_max_index]
+            calibrated_flux_list[counter] = calibrated_flux_list[counter][wavelength_min_index:wavelength_max_index]
             spec_number = len(calibrated_flux_list)-1
-            calibrated_spec_systematic_error_list[-1] = calibrated_spec_systematic_error_list[-1][wavelength_min_index:wavelength_max_index]
-
+            calibrated_spec_systematic_error_list[counter] = calibrated_spec_systematic_error_list[counter][wavelength_min_index:wavelength_max_index]
 
             if plot:
                 plt.figure(figsize=(12,5))
                 if reddening is not None:
-                    plt.plot(wavelengths, calibrated_flux_list[-1], color='orange', label=f'Spec {spec_number}, E(B-V)={reddening}, R(V)={Rv}')
+                    plt.plot(wavelengths, calibrated_flux_list[counter], color='orange', label=f'Spec {spec_number}, E(B-V)={reddening}, R(V)={Rv}')
                 else:
-                    plt.plot(wavelengths, calibrated_flux_list[-1], color='orange', label=f'Spec {spec_number}, not corrected for reddening')
+                    plt.plot(wavelengths, calibrated_flux_list[counter], color='orange', label=f'Spec {spec_number}, not corrected for reddening')
                 plt.minorticks_on()
                 plt.grid(which="both",linestyle=":")
                 plt.xlim(wavelengths.value.min(),wavelengths.value.max())
-                plt.ylim(0,calibrated_flux_list[-1].value.max()*1.2)
+                plt.ylim(0,calibrated_flux_list[counter].value.max()*1.2)
                 plt.title(f"Calibrated spec {spec_number} - "+self.target_name+" field")
-                plt.ylabel("F$_{\lambda}$ "+f"[{calibrated_flux_list[-1].unit}]",fontsize=12)
+                plt.ylabel("F$_{\lambda}$ "+f"[{calibrated_flux_list[counter].unit}]",fontsize=12)
                 plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
                 plt.legend()
                 
@@ -1073,13 +1076,15 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
             if save_spec:
                 output_directory = Path(output_directory)
                 if self.wavelengths_fit_std_list is None and calibrated_spec_systematic_error_list is None:
-                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
+                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
                 elif calibrated_spec_systematic_error_list is None:
-                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value, self.wavelengths_fit_std_list[-1]*np.ones(len(wavelengths.value))], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom)")
+                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value, self.wavelengths_fit_std_list[counter]*np.ones(len(wavelengths.value))], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom)")
                 elif self.wavelengths_fit_std_list is None:
-                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value, calibrated_spec_systematic_error_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic flux error (erg/cm2/s/Angstrom)")
+                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value, calibrated_spec_systematic_error_list[counter].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic flux error (erg/cm2/s/Angstrom)")
                 else:
-                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[-1].value, self.wavelengths_fit_std_list[-1]*np.ones(len(wavelengths.value)), calibrated_spec_systematic_error_list[-1].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom), Systematic flux error (erg/cm2/s/Angstrom)")
+                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value, self.wavelengths_fit_std_list[counter]*np.ones(len(wavelengths.value)), calibrated_spec_systematic_error_list[counter].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom), Systematic flux error (erg/cm2/s/Angstrom)")
+            
+            counter = counter + 1
 
         if plot:
             plt.show()
