@@ -27,7 +27,7 @@ libpath = Path(__file__).parent.resolve() / Path("lines")
 extraction = extraction()
 
 
-easyspec_analysis_version = "1.0.0"
+easyspec_analysis_version = "1.0.1"
 
 
 class analysis:
@@ -188,7 +188,7 @@ class analysis:
             The 'powerlaw' method is better in case you have large emission/absorption lines. The method "median_filter" is excellent
             for extracting the continuum of a spectrum with narrow emission/absorption lines.
         continuum_regions: list (float)
-            The continuum will be computed only within these wavelength regions and then extrapolated everywhere else. E.g.: continuum_regions = [[3000,6830],[6930,7500]].
+            The continuum, in Angstroms, will be computed only within these wavelength regions and then extrapolated everywhere else. E.g.: continuum_regions = [[3000,6830],[6930,7500]].
             If None, then all the wavelength range will be used.
         pl_order: int
             Polynomial order for the power law fit. Used only if input variable method="powerlaw" (or "pl").
@@ -217,7 +217,7 @@ class analysis:
         """
 
         continuum_baseline, continuum_std_deviation = self.continuum_fit(flux_density.value, wavelengths.value, method = method, continuum_regions = continuum_regions, pl_order = pl_order, smooth_window = smooth_window) 
-        
+
         peak_heights = np.asarray([])
         peak_position_index = np.asarray([])
         line_significance = np.asarray([])
@@ -227,10 +227,17 @@ class analysis:
             plt.figure(figsize=(12,4))
             plt.ylabel("F$_{\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
             plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
-            plt.title("The continuum noise is independently estimated for each one of these regions")
+            if continuum_regions is None:
+                plt.title("Using the full wavelength range to estimate the continuum")
+            else:
+                plt.title("The continuum noise is independently estimated in each one of the vertical strips")
             plt.minorticks_on()
             plt.grid(which="both",linestyle=":")
             plt.xlim(wavelengths.value.min(),wavelengths.value.max())
+            plt.ylim(-1.2*np.abs(np.min(flux_density.value-continuum_baseline)),1.2*np.max(flux_density.value-continuum_baseline))
+        
+        if continuum_regions is None:
+            continuum_regions = [[np.min(wavelengths.value),np.max(wavelengths.value)]]
 
         # Below we do a loop over the values of standard deviation for the selected continuum regions. The line significance is estimated based on the standard deviation of the closest continuum region.
         ylim_min = 0
@@ -247,7 +254,8 @@ class analysis:
                 index = np.where(wavelengths.value > (continuum_regions[number-1][1] + continuum_regions[number][0])/2)[0]
             continuum_removed_flux = flux_density.value[index]-continuum_baseline[index]
             if plot_regions:
-                plt.plot(wavelengths.value[index], continuum_removed_flux) 
+                plt.plot(wavelengths.value[index], continuum_removed_flux)
+                plt.fill_betweenx(np.linspace(-1.2*np.abs(np.min(flux_density.value-continuum_baseline)),1.2*np.max(flux_density.value-continuum_baseline),10), continuum_regions[number][0],continuum_regions[number][1],alpha=0.3)#,color="gray")
             # Emission lines:
             local_peak_position_index, local_peak_heights = scipy.signal.find_peaks(continuum_removed_flux,height=peak_height,distance = peak_distance, width = peak_width)
             peak_heights = np.concatenate([peak_heights,local_peak_heights["peak_heights"]])
