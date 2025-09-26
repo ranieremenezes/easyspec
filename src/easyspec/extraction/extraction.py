@@ -21,7 +21,7 @@ libpath = Path(__file__).parent.resolve() / Path("airmass")
 libpath_std = Path(__file__).parent.resolve() / Path("standards")
 cleaning = cleaning()
 
-easyspec_extraction_version = "1.0.0"
+easyspec_extraction_version = "1.0.1"
 
 
 class extraction:

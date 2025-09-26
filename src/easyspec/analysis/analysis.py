@@ -352,61 +352,111 @@ class analysis:
                   "GaussianLorentzLorentz" : self.model_Gauss_Lorentz_Lorentz , "GaussianVoigtVoigt" : self.model_Gauss_Voigt_Voigt,
                   "GaussianVoigtLorentz" : self.model_Gauss_Voigt_Lorentz, "GaussianLorentzVoigt" : self.model_Gauss_Lorentz_Voigt,
                   "GaussianGaussianVoigt" : self.model_Gauss_Gauss_Voigt, "GaussianVoigtGaussian" : self.model_Gauss_Voigt_Gauss,
+                  "GaussianGaussianGaussianGaussian" : self.model_Gauss_Gauss_Gauss_Gauss, "GaussianGaussianGaussianGaussianGaussian" : self.model_Gauss_Gauss_Gauss_Gauss_Gauss,
                   "LorentzLorentz" : self.model_Lorentz_Lorentz, "LorentzGaussian" : self.model_Lorentz_Gauss,
                   "LorentzVoigt" : self.model_Lorentz_Voigt, "LorentzGaussianGaussian": self.model_Lorentz_Gauss_Gauss,
                   "LorentzLorentzLorentz" : self.model_Lorentz_Lorentz_Lorentz, "LorentzVoigtVoigt" : self.model_Lorentz_Voigt_Voigt,
                   "LorentzLorentzGaussian" : self.model_Lorentz_Lorentz_Gauss, "LorentzGaussianLorentz" : self.model_Lorentz_Gauss_Lorentz,
                   "LorentzVoigtLorentz" : self.model_Lorentz_Voigt_Lorentz, "LorentzLorentzVoigt" : self.model_Lorentz_Lorentz_Voigt,
                   "LorentzGaussianVoigt" : self.model_Lorentz_Gauss_Voigt, "LorentzVoigtGaussian" : self.model_Lorentz_Voigt_Gauss,
+                  "LorentzLorentzLorentzLorentz" : self.model_Lorentz_Lorentz_Lorentz_Lorentz, "LorentzLorentzLorentzLorentzLorentz" : self.model_Lorentz_Lorentz_Lorentz_Lorentz_Lorentz,
                   "VoigtVoigt" : self.model_Voigt_Voigt, "VoigtGaussian" : self.model_Voigt_Gauss, "VoigtLorentz" : self.model_Voigt_Lorentz,
                   "VoigtGaussianGaussian" : self.model_Voigt_Gauss_Gauss, "VoigtLorentzLorentz" : self.model_Voigt_Lorentz_Lorentz,
                   "VoigtVoigtVoigt" : self.model_Voigt_Voigt_Voigt, "VoigtLorentzGaussian" : self.model_Voigt_Lorentz_Gauss,
                   "VoigtGaussianLorentz" : self.model_Voigt_Gauss_Lorentz, "VoigtVoigtLorentz" : self.model_Voigt_Voigt_Lorentz,
                   "VoigtLorentzVoigt" : self.model_Voigt_Lorentz_Voigt, "VoigtGaussianVoigt" : self.model_Voigt_Gauss_Voigt,
-                  "VoigtVoigtGaussian" : self.model_Voigt_Voigt_Gauss, "custom" : custom_function}
+                  "VoigtVoigtGaussian" : self.model_Voigt_Voigt_Gauss, "VoigtVoigtVoigtVoigt" : self.model_Voigt_Voigt_Voigt_Voigt,
+                  "VoigtVoigtVoigtVoigtVoigt" : self.model_Voigt_Voigt_Voigt_Voigt_Voigt, "custom" : custom_function}
         if model_name not in models.keys():
             raise Exception(f"Invalid model_name '{model_name}'. Valid names are Gaussian, Lorentz, Voigt, or combinations of these names, such as 'LorentzGaussian'.")
         return models[model_name]
-
-    def model_Gauss(self, theta,x):
+    
+    def model_Gauss(self,theta, x):
         mean, amplitude, std = theta
-        a = Gaussian1D(amplitude, mean, std)
-        return a(x)
+        return amplitude * np.exp(-0.5 * ((x - mean) / std) ** 2)
 
-    def model_Gauss_Gauss(self,theta,x):
-        mean, amplitude, std, mean2, amplitude2, std2 = theta
-        a = Gaussian1D(amplitude, mean, std) + Gaussian1D(amplitude2, mean2, std2)
-        return a(x)
+    def model_Gauss_Gauss(self,theta, x):
+        """
+        Sum of 2 Gaussian profiles
+        theta = [mean1, amp1, std1, mean2, amp2, std2]
+        """
+        mean1, amp1, std1, mean2, amp2, std2 = theta
+        g1 = amp1 * np.exp(-0.5 * ((x - mean1) / std1) ** 2)
+        g2 = amp2 * np.exp(-0.5 * ((x - mean2) / std2) ** 2)
+        return g1 + g2
 
-    def model_Gauss_Lorentz(self,theta,x):
-        mean, amplitude, std, mean_L, amplitude_L, fwhm_L = theta
-        a = Gaussian1D(amplitude, mean, std) + Lorentz1D(amplitude_L, mean_L, fwhm_L)
-        return a(x)
+    def model_Gauss_Lorentz(self, theta, x):
+        """
+        Sum of Gaussian and Lorentzian profiles
+        theta = [mean_G, amp_G, std_G, mean_L, amp_L, fwhm_L]
+        """
+        mean_G, amp_G, std_G, mean_L, amp_L, fwhm_L = theta
+        gaussian = amp_G * np.exp(-0.5 * ((x - mean_G) / std_G) ** 2)
+        gamma = fwhm_L / 2.0
+        lorentzian = amp_L * (gamma**2) / ((x - mean_L) ** 2 + gamma**2)
+        return gaussian + lorentzian
     
     def model_Gauss_Voigt(self,theta,x):
         mean, amplitude, std, x_0, amplitude_L, fwhm_G, fwhm_L = theta
         a = Gaussian1D(amplitude, mean, std) + Voigt1D(x_0, amplitude_L, fwhm_L, fwhm_G)
         return a(x)
     
-    def model_Gauss_Gauss_Gauss(self,theta,x):
-        mean, amplitude, std, mean2, amplitude2, std2, mean3, amplitude3, std3 = theta
-        a = Gaussian1D(amplitude=amplitude, mean=mean, stddev=std) + Gaussian1D(amplitude=amplitude2, mean=mean2, stddev=std2) + Gaussian1D(amplitude=amplitude3, mean=mean3, stddev=std3)
-        return a(x)
+    def model_Gauss_Gauss_Gauss(theta, x):
+        """
+        Sum of 3 Gaussian profiles
+        theta = [mean1, amp1, std1, mean2, amp2, std2, mean3, amp3, std3]
+        """
+        mean1, amp1, std1, mean2, amp2, std2, mean3, amp3, std3 = theta
+        g1 = amp1 * np.exp(-0.5 * ((x - mean1) / std1) ** 2)
+        g2 = amp2 * np.exp(-0.5 * ((x - mean2) / std2) ** 2)
+        g3 = amp3 * np.exp(-0.5 * ((x - mean3) / std3) ** 2)
+        return g1 + g2 + g3
 
-    def model_Gauss_Lorentz_Gauss(self,theta,x):
-        mean, amplitude, std, mean_L, amplitude_L, fwhm_L, mean2, amplitude2, std2 = theta
-        a = Gaussian1D(amplitude, mean, std) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Gaussian1D(amplitude2, mean2, std2)
-        return a(x)
+    def model_Gauss_Lorentz_Gauss(self, theta, x):
+        """
+        Sum of Gaussian + Lorentzian + Gaussian profiles
+        theta = [mean_G1, amp_G1, std_G1, mean_L, amp_L, fwhm_L, mean_G2, amp_G2, std_G2]
+        """
+        mean_G1, amp_G1, std_G1, mean_L, amp_L, fwhm_L, mean_G2, amp_G2, std_G2 = theta
+        # First Gaussian component
+        gaussian1 = amp_G1 * np.exp(-0.5 * ((x - mean_G1) / std_G1) ** 2)
+        # Lorentzian component
+        gamma = fwhm_L / 2.0
+        lorentzian = amp_L * (gamma**2) / ((x - mean_L) ** 2 + gamma**2)
+        # Second Gaussian component
+        gaussian2 = amp_G2 * np.exp(-0.5 * ((x - mean_G2) / std_G2) ** 2)
+        return gaussian1 + lorentzian + gaussian2
 
-    def model_Gauss_Gauss_Lorentz(self,theta,x):
-        mean, amplitude, std, mean2, amplitude2, std2, mean_L, amplitude_L, fwhm_L = theta
-        a = Gaussian1D(amplitude, mean, std) + Gaussian1D(amplitude2, mean2, std2) + Lorentz1D(amplitude_L, mean_L, fwhm_L)
-        return a(x)
+    def model_Gauss_Gauss_Lorentz(self, theta, x):
+        """
+        Sum of Gaussian + Gaussian + Lorentzian profiles
+        theta = [mean_G1, amp_G1, std_G1, mean_G2, amp_G2, std_G2, mean_L, amp_L, fwhm_L]
+        """
+        mean_G1, amp_G1, std_G1, mean_G2, amp_G2, std_G2, mean_L, amp_L, fwhm_L = theta
+        # First Gaussian component
+        gaussian1 = amp_G1 * np.exp(-0.5 * ((x - mean_G1) / std_G1) ** 2)
+        # Second Gaussian component
+        gaussian2 = amp_G2 * np.exp(-0.5 * ((x - mean_G2) / std_G2) ** 2)
+        # Lorentzian component
+        gamma = fwhm_L / 2.0
+        lorentzian = amp_L * (gamma**2) / ((x - mean_L) ** 2 + gamma**2)
+        return gaussian1 + gaussian2 + lorentzian
 
-    def model_Gauss_Lorentz_Lorentz(self,theta,x):
-        mean, amplitude, std, mean_L, amplitude_L, fwhm_L, mean_L2, amplitude_L2, fwhm_L2 = theta
-        a = Gaussian1D(amplitude, mean, std) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Lorentz1D(amplitude_L2, mean_L2, fwhm_L2)
-        return a(x)
+    def model_Gauss_Lorentz_Lorentz(self, theta, x):
+        """
+        Sum of Gaussian + Lorentzian + Lorentzian profiles
+        theta = [mean_G, amp_G, std_G, mean_L1, amp_L1, fwhm_L1, mean_L2, amp_L2, fwhm_L2]
+        """
+        mean_G, amp_G, std_G, mean_L1, amp_L1, fwhm_L1, mean_L2, amp_L2, fwhm_L2 = theta
+        # Gaussian component
+        gaussian = amp_G * np.exp(-0.5 * ((x - mean_G) / std_G) ** 2)
+        # First Lorentzian component
+        gamma1 = fwhm_L1 / 2.0
+        lorentzian1 = amp_L1 * (gamma1**2) / ((x - mean_L1) ** 2 + gamma1**2)
+        # Second Lorentzian component
+        gamma2 = fwhm_L2 / 2.0
+        lorentzian2 = amp_L2 * (gamma2**2) / ((x - mean_L2) ** 2 + gamma2**2)
+        return gaussian + lorentzian1 + lorentzian2
     
     def model_Gauss_Voigt_Voigt(self,theta,x):
         mean, amplitude, std, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, x_02, amplitude_Voigt2, fwhm_G2, fwhm_L_Voigt2 = theta
@@ -432,51 +482,140 @@ class analysis:
         mean, amplitude, std, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, mean2, amplitude2, std2 = theta
         a = Gaussian1D(amplitude, mean, std) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Gaussian1D(amplitude2, mean2, std2)
         return a(x)
-
-    def model_Lorentz(self, theta,x):
-        mean, amplitude, fwhm = theta
-        a = Lorentz1D(amplitude, mean, fwhm)
-        return a(x)
-
-    def model_Lorentz_Lorentz(self, theta,x):
-        mean, amplitude, fwhm, mean2, amplitude2, fwhm2 = theta
-        a = Lorentz1D(amplitude, mean, fwhm) + Lorentz1D(amplitude2, mean2, fwhm2)
-        return a(x)
     
-    def model_Lorentz_Gauss(self, theta,x):
-        mean, amplitude, fwhm, mean2, amplitude2, std = theta
-        a = Lorentz1D(amplitude, mean, fwhm) + Gaussian1D(amplitude2, mean2, std)
-        return a(x)
+    def model_Gauss_Gauss_Gauss_Gauss(self, theta, x):
+        """
+        Sum of 4 Gaussian profiles
+        theta = [mean1, amp1, std1, mean2, amp2, std2, mean3, amp3, std3, mean4, amp4, std4]
+        """
+        mean1, amp1, std1, mean2, amp2, std2, mean3, amp3, std3, mean4, amp4, std4 = theta
+        g1 = amp1 * np.exp(-0.5 * ((x - mean1) / std1) ** 2)
+        g2 = amp2 * np.exp(-0.5 * ((x - mean2) / std2) ** 2)
+        g3 = amp3 * np.exp(-0.5 * ((x - mean3) / std3) ** 2)
+        g4 = amp4 * np.exp(-0.5 * ((x - mean4) / std4) ** 2)
+        return g1 + g2 + g3 + g4
+
+    def model_Gauss_Gauss_Gauss_Gauss_Gauss(self, theta, x):
+        """
+        Sum of 5 Gaussian profiles
+        theta = [mean1, amp1, std1, mean2, amp2, std2, mean3, amp3, std3, mean4, amp4, std4, mean5, amp5, std5]
+        """
+        mean1, amp1, std1, mean2, amp2, std2, mean3, amp3, std3, mean4, amp4, std4, mean5, amp5, std5 = theta
+        g1 = amp1 * np.exp(-0.5 * ((x - mean1) / std1) ** 2)
+        g2 = amp2 * np.exp(-0.5 * ((x - mean2) / std2) ** 2)
+        g3 = amp3 * np.exp(-0.5 * ((x - mean3) / std3) ** 2)
+        g4 = amp4 * np.exp(-0.5 * ((x - mean4) / std4) ** 2)
+        g5 = amp5 * np.exp(-0.5 * ((x - mean5) / std5) ** 2)
+        return g1 + g2 + g3 + g4 + g5
+
+    def model_Lorentz(self, theta, x):
+        """
+        Single Lorentzian profile
+        theta = [mean, amplitude, fwhm]
+        """
+        mean, amplitude, fwhm = theta
+        gamma = fwhm / 2.0
+        lorentzian = amplitude * (gamma**2) / ((x - mean) ** 2 + gamma**2)
+        return lorentzian
+
+    def model_Lorentz_Lorentz(self, theta, x):
+        """
+        Sum of 2 Lorentzian profiles
+        theta = [mean1, amplitude1, fwhm1, mean2, amplitude2, fwhm2]
+        """
+        mean1, amplitude1, fwhm1, mean2, amplitude2, fwhm2 = theta
+        gamma1 = fwhm1 / 2.0
+        gamma2 = fwhm2 / 2.0
+        l1 = amplitude1 * (gamma1**2) / ((x - mean1) ** 2 + gamma1**2)
+        l2 = amplitude2 * (gamma2**2) / ((x - mean2) ** 2 + gamma2**2)
+        return l1 + l2
+
+    def model_Lorentz_Gauss(self, theta, x):
+        """
+        Sum of Lorentzian and Gaussian profiles
+        theta = [mean_L, amplitude_L, fwhm_L, mean_G, amplitude_G, std_G]
+        """
+        mean_L, amplitude_L, fwhm_L, mean_G, amplitude_G, std_G = theta
+        # Lorentzian component
+        gamma = fwhm_L / 2.0
+        lorentzian = amplitude_L * (gamma**2) / ((x - mean_L) ** 2 + gamma**2)
+        # Gaussian component
+        gaussian = amplitude_G * np.exp(-0.5 * ((x - mean_G) / std_G) ** 2)
+        return lorentzian + gaussian
 
     def model_Lorentz_Voigt(self, theta,x):
         mean, amplitude, fwhm, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt = theta
         a = Lorentz1D(amplitude, mean, fwhm) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G)
         return a(x)
     
-    def model_Lorentz_Gauss_Gauss(self,theta,x):
-        mean_L, amplitude_L, fwhm_L, mean, amplitude, std, mean2, amplitude2, std2 = theta
-        a = Lorentz1D(amplitude_L, mean_L, fwhm_L) + Gaussian1D(amplitude, mean, std) + Gaussian1D(amplitude2, mean2, std2)
-        return a(x)
-    
-    def model_Lorentz_Lorentz_Lorentz(self,theta,x):
-        mean_L0, amplitude_L0, fwhm_L0, mean_L, amplitude_L, fwhm_L, mean_L2, amplitude_L2, fwhm_L2 = theta
-        a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Lorentz1D(amplitude_L2, mean_L2, fwhm_L2)
-        return a(x)
+    def model_Lorentz_Gauss_Gauss(self, theta, x):
+        """
+        Sum of Lorentzian + Gaussian + Gaussian profiles
+        theta = [mean_L, amplitude_L, fwhm_L, mean_G1, amplitude_G1, std_G1, mean_G2, amplitude_G2, std_G2]
+        """
+        mean_L, amplitude_L, fwhm_L, mean_G1, amplitude_G1, std_G1, mean_G2, amplitude_G2, std_G2 = theta
+        # Lorentzian component
+        gamma = fwhm_L / 2.0
+        lorentzian = amplitude_L * (gamma**2) / ((x - mean_L) ** 2 + gamma**2)
+        # First Gaussian component
+        gaussian1 = amplitude_G1 * np.exp(-0.5 * ((x - mean_G1) / std_G1) ** 2)
+        # Second Gaussian component
+        gaussian2 = amplitude_G2 * np.exp(-0.5 * ((x - mean_G2) / std_G2) ** 2)
+        return lorentzian + gaussian1 + gaussian2
+
+    def model_Lorentz_Lorentz_Lorentz(self, theta, x):
+        """
+        Sum of 3 Lorentzian profiles
+        theta = [mean_L1, amplitude_L1, fwhm_L1, mean_L2, amplitude_L2, fwhm_L2, mean_L3, amplitude_L3, fwhm_L3]
+        """
+        mean_L1, amplitude_L1, fwhm_L1, mean_L2, amplitude_L2, fwhm_L2, mean_L3, amplitude_L3, fwhm_L3 = theta
+        # First Lorentzian component
+        gamma1 = fwhm_L1 / 2.0
+        lorentzian1 = amplitude_L1 * (gamma1**2) / ((x - mean_L1) ** 2 + gamma1**2)
+        # Second Lorentzian component
+        gamma2 = fwhm_L2 / 2.0
+        lorentzian2 = amplitude_L2 * (gamma2**2) / ((x - mean_L2) ** 2 + gamma2**2)
+        # Third Lorentzian component
+        gamma3 = fwhm_L3 / 2.0
+        lorentzian3 = amplitude_L3 * (gamma3**2) / ((x - mean_L3) ** 2 + gamma3**2)
+        return lorentzian1 + lorentzian2 + lorentzian3
     
     def model_Lorentz_Voigt_Voigt(self,theta,x):
         mean_L0, amplitude_L0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, x_02, amplitude_Voigt2, fwhm_G2, fwhm_L_Voigt2 = theta
         a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Voigt1D(x_02, amplitude_Voigt2, fwhm_L_Voigt2, fwhm_G2)
         return a(x)
 
-    def model_Lorentz_Lorentz_Gauss(self,theta,x):
-        mean_L0, amplitude_L0, fwhm_L0, mean_L, amplitude_L, fwhm_L, mean2, amplitude2, std2 = theta
-        a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Lorentz1D(amplitude_L, mean_L, fwhm_L) + Gaussian1D(amplitude2, mean2, std2)
-        return a(x)
+    def model_Lorentz_Lorentz_Gauss(self, theta, x):
+        """
+        Sum of Lorentzian + Lorentzian + Gaussian profiles
+        theta = [mean_L1, amplitude_L1, fwhm_L1, mean_L2, amplitude_L2, fwhm_L2, mean_G, amplitude_G, std_G]
+        """
+        mean_L1, amplitude_L1, fwhm_L1, mean_L2, amplitude_L2, fwhm_L2, mean_G, amplitude_G, std_G = theta
+        # First Lorentzian component
+        gamma1 = fwhm_L1 / 2.0
+        lorentzian1 = amplitude_L1 * (gamma1**2) / ((x - mean_L1) ** 2 + gamma1**2)
+        # Second Lorentzian component
+        gamma2 = fwhm_L2 / 2.0
+        lorentzian2 = amplitude_L2 * (gamma2**2) / ((x - mean_L2) ** 2 + gamma2**2)
+        # Gaussian component
+        gaussian = amplitude_G * np.exp(-0.5 * ((x - mean_G) / std_G) ** 2)
+        return lorentzian1 + lorentzian2 + gaussian
 
-    def model_Lorentz_Gauss_Lorentz(self,theta,x):
-        mean_L0, amplitude_L0, fwhm_L0, mean2, amplitude2, std2, mean_L, amplitude_L, fwhm_L = theta
-        a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Gaussian1D(amplitude2, mean2, std2) + Lorentz1D(amplitude_L, mean_L, fwhm_L)
-        return a(x)
+    def model_Lorentz_Gauss_Lorentz(self, theta, x):
+        """
+        Sum of Lorentzian + Gaussian + Lorentzian profiles
+        theta = [mean_L1, amplitude_L1, fwhm_L1, mean_G, amplitude_G, std_G, mean_L2, amplitude_L2, fwhm_L2]
+        """
+        mean_L1, amplitude_L1, fwhm_L1, mean_G, amplitude_G, std_G, mean_L2, amplitude_L2, fwhm_L2 = theta
+        # First Lorentzian component
+        gamma1 = fwhm_L1 / 2.0
+        lorentzian1 = amplitude_L1 * (gamma1**2) / ((x - mean_L1) ** 2 + gamma1**2)
+        # Gaussian component
+        gaussian = amplitude_G * np.exp(-0.5 * ((x - mean_G) / std_G) ** 2)
+        # Second Lorentzian component
+        gamma2 = fwhm_L2 / 2.0
+        lorentzian2 = amplitude_L2 * (gamma2**2) / ((x - mean_L2) ** 2 + gamma2**2)
+        return lorentzian1 + gaussian + lorentzian2
     
     def model_Lorentz_Voigt_Lorentz(self,theta,x):
         mean_L0, amplitude_L0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, mean_L, amplitude_L, fwhm_L = theta
@@ -497,6 +636,49 @@ class analysis:
         mean_L0, amplitude_L0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, mean2, amplitude2, std2 = theta
         a = Lorentz1D(amplitude_L0, mean_L0, fwhm_L0) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Gaussian1D(amplitude2, mean2, std2)
         return a(x)
+
+    def model_Lorentz_Lorentz_Lorentz_Lorentz(self, theta, x):
+        """
+        Sum of 4 Lorentzian profiles
+        theta = [mean_L1, amplitude_L1, fwhm_L1, mean_L2, amplitude_L2, fwhm_L2, mean_L3, amplitude_L3, fwhm_L3, mean_L4, amplitude_L4, fwhm_L4]
+        """
+        mean_L1, amplitude_L1, fwhm_L1, mean_L2, amplitude_L2, fwhm_L2, mean_L3, amplitude_L3, fwhm_L3, mean_L4, amplitude_L4, fwhm_L4 = theta
+        # First Lorentzian component
+        gamma1 = fwhm_L1 / 2.0
+        lorentzian1 = amplitude_L1 * (gamma1**2) / ((x - mean_L1) ** 2 + gamma1**2)
+        # Second Lorentzian component
+        gamma2 = fwhm_L2 / 2.0
+        lorentzian2 = amplitude_L2 * (gamma2**2) / ((x - mean_L2) ** 2 + gamma2**2)
+        # Third Lorentzian component
+        gamma3 = fwhm_L3 / 2.0
+        lorentzian3 = amplitude_L3 * (gamma3**2) / ((x - mean_L3) ** 2 + gamma3**2)
+        # Fourth Lorentzian component
+        gamma4 = fwhm_L4 / 2.0
+        lorentzian4 = amplitude_L4 * (gamma4**2) / ((x - mean_L4) ** 2 + gamma4**2)
+        return lorentzian1 + lorentzian2 + lorentzian3 + lorentzian4
+
+    def model_Lorentz_Lorentz_Lorentz_Lorentz_Lorentz(self, theta, x):
+        """
+        Sum of 5 Lorentzian profiles
+        theta = [mean_L1, amplitude_L1, fwhm_L1, mean_L2, amplitude_L2, fwhm_L2, mean_L3, amplitude_L3, fwhm_L3, mean_L4, amplitude_L4, fwhm_L4, mean_L5, amplitude_L5, fwhm_L5]
+        """
+        mean_L1, amplitude_L1, fwhm_L1, mean_L2, amplitude_L2, fwhm_L2, mean_L3, amplitude_L3, fwhm_L3, mean_L4, amplitude_L4, fwhm_L4, mean_L5, amplitude_L5, fwhm_L5 = theta
+        # First Lorentzian component
+        gamma1 = fwhm_L1 / 2.0
+        lorentzian1 = amplitude_L1 * (gamma1**2) / ((x - mean_L1) ** 2 + gamma1**2)
+        # Second Lorentzian component
+        gamma2 = fwhm_L2 / 2.0
+        lorentzian2 = amplitude_L2 * (gamma2**2) / ((x - mean_L2) ** 2 + gamma2**2)
+        # Third Lorentzian component
+        gamma3 = fwhm_L3 / 2.0
+        lorentzian3 = amplitude_L3 * (gamma3**2) / ((x - mean_L3) ** 2 + gamma3**2)
+        # Fourth Lorentzian component
+        gamma4 = fwhm_L4 / 2.0
+        lorentzian4 = amplitude_L4 * (gamma4**2) / ((x - mean_L4) ** 2 + gamma4**2)
+        # Fifth Lorentzian component
+        gamma5 = fwhm_L5 / 2.0
+        lorentzian5 = amplitude_L5 * (gamma5**2) / ((x - mean_L5) ** 2 + gamma5**2)
+        return lorentzian1 + lorentzian2 + lorentzian3 + lorentzian4 + lorentzian5
 
     def model_Voigt(self, theta,x):
         x_0, amplitude_L, fwhm_G, fwhm_L = theta
@@ -562,6 +744,16 @@ class analysis:
         x_00, amplitude_L0, fwhm_G0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, mean2, amplitude2, std2 = theta
         a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Gaussian1D(amplitude2, mean2, std2)
         return a(x)
+    
+    def model_Voigt_Voigt_Voigt_Voigt(self,theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, x_02, amplitude_Voigt2, fwhm_G2, fwhm_L_Voigt2, x_03, amplitude_Voigt3, fwhm_G3, fwhm_L_Voigt3 = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Voigt1D(x_02, amplitude_Voigt2, fwhm_L_Voigt2, fwhm_G2) + Voigt1D(x_03, amplitude_Voigt3, fwhm_L_Voigt3, fwhm_G3)
+        return a(x)
+    
+    def model_Voigt_Voigt_Voigt_Voigt_Voigt(self,theta,x):
+        x_00, amplitude_L0, fwhm_G0, fwhm_L0, x_0, amplitude_Voigt, fwhm_G, fwhm_L_Voigt, x_02, amplitude_Voigt2, fwhm_G2, fwhm_L_Voigt2, x_03, amplitude_Voigt3, fwhm_G3, fwhm_L_Voigt3, x_04, amplitude_Voigt4, fwhm_G4, fwhm_L_Voigt4 = theta
+        a = Voigt1D(x_00, amplitude_L0, fwhm_L0, fwhm_G0) + Voigt1D(x_0, amplitude_Voigt, fwhm_L_Voigt, fwhm_G) + Voigt1D(x_02, amplitude_Voigt2, fwhm_L_Voigt2, fwhm_G2) + Voigt1D(x_03, amplitude_Voigt3, fwhm_L_Voigt3, fwhm_G3) + Voigt1D(x_04, amplitude_Voigt4, fwhm_L_Voigt4, fwhm_G4)
+        return a(x)
 
     
 
@@ -572,12 +764,12 @@ class analysis:
         """
         
         return -0.5 * np.sum(((y - model(theta, x)) / yerr) ** 2)
-        
+
     def lnprior(self, theta, priors):
-        
+
         """
         This function checks if the input parameters satisfy the prior conditions.
-        """
+        Alternative (slower) form:
 
         for i in range(len(theta)):
             if priors[i][0] < theta[i] < priors[i][1]:
@@ -586,6 +778,14 @@ class analysis:
                 return -np.inf
         
         return 0.0
+
+        """
+        if np.all((priors[:,0] < theta) & (theta < priors[:,1])):
+            return 0.0
+        else:
+            return -np.inf
+    
+
         
     def lnprob(self, theta, priors, x, y, yerr, model):
         lp = self.lnprior(theta, priors)
@@ -607,6 +807,10 @@ class analysis:
         adopted_model = tuple([adopted_model])  # The adopted model is transformed into a tuple containing only one element
         metadata = priors + data + adopted_model
         
+        if "Voigt" not in model_name:
+            if ncores > 1:
+                ncores = 1
+
         if ncores > 1:
             if OS_name == "Darwin":
                 warnings.warn("Multiprocessing may not work well in MacOS. If you have problems, try to do the single-core processing, i.e. ncores = 1.")
@@ -1114,7 +1318,7 @@ class analysis:
 
     def fit_lines(self, wavelengths, flux_density, continuum_baseline, wavelength_peak_positions, rest_frame_line_wavelengths, peak_heights, line_std_deviation,
                   blended_line_min_separation = 50, which_models="Lorentz", line_names = None, overplot_archival_lines = ["H"], priors = None, MCMC_walkers = 250,
-                  MCMC_iterations = 400, N_cores = 1, plot_spec = True, plot_MCMC = False, overplot_median_model = False, save_results = True):
+                  MCMC_iterations = 400, N_cores_Voigt = 1, plot_spec = True, plot_MCMC = False, overplot_median_model = False, save_results = True):
 
         """
         This function uses a Markov-chain Monte Carlo to estimate the line parameters and their errors.
@@ -1162,8 +1366,9 @@ class analysis:
             This is the number of walkers for the MCMC.
         MCMC_iterations: int
             This is the number of iterations for the MCMC.
-        N_cores: int
-            This is the number of cores in case you want to run this analysis in parallel.
+        N_cores_Voigt: int
+            This is the number of cores in case you want to run this analysis in parallel. It is useful only if you are modeling your lines with the Voigt profile.
+            For Gaussian and Lorentzian, the parallelization actually makes things slower.
         plot_spec: boolean
             If True, a plot of the spectrum with the lines requested in the input variable overplot_archival_lines will be shown.
         plot_MCMC: boolean
@@ -1329,7 +1534,7 @@ class analysis:
                 blended_rest_frame_line_wavelengths = []
                 blended_labels = []
                 if blended_line[number+1] is False:
-                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number], ncores=N_cores)
+                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number], ncores=N_cores_Voigt)
                     samples = sampler.flatchain
                     samples_list.append(samples)
                     theta_max = samples[np.argmax(sampler.flatlnprobability)]
@@ -1384,7 +1589,7 @@ class analysis:
 
                     
 
-                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number], ncores=N_cores)
+                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number], ncores=N_cores_Voigt)
                     samples = sampler.flatchain
                     samples_list.append(samples)
                     theta_max = samples[np.argmax(sampler.flatlnprobability)]
