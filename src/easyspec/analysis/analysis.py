@@ -930,15 +930,125 @@ class analysis:
         norm_height = (peak_height - continuum_baseline[index])/local_normalization
 
         return norm_height
+    
+    def _validate_line_names(self, line_names):
+        """Validate that line names are unique if provided."""
+        if line_names is not None and len(line_names) != len(set(line_names)):
+            raise ValueError("Duplicate line names detected. Each line must have a unique name.")
 
+    def _ensure_numpy_array(self, data, param_name):
+        """
+        Convert input to consistent numpy array format.
+        
+        Handles astropy Quantity, scalar values, lists, and ensures proper array shape.
+        """
+        # Extract value if it's an astropy Quantity
+        if hasattr(data, 'value'):
+            data = data.value
+        
+        # Handle scalar inputs by converting to 1D array
+        if np.isscalar(data):
+            data = np.array([data])
+        elif isinstance(data, list):
+            data = np.array(data)
+        elif not isinstance(data, np.ndarray):
+            raise TypeError(f"Parameter '{param_name}' must be a scalar, list, or numpy array")
+        
+        # Ensure 1D array
+        if data.ndim == 0:
+            data = data.reshape(1)
+        elif data.ndim > 1:
+            raise ValueError(f"Parameter '{param_name}' must be 1-dimensional")
+        
+        return data
+
+    def _validate_models(self, which_models, n_lines):
+        """Validate and expand model specifications."""
+        
+        if isinstance(which_models, str):
+            # Apply same model to all lines
+            which_models = [which_models] * n_lines
+        elif isinstance(which_models, list):
+            # Validate list length matches number of lines
+            if len(which_models) != n_lines:
+                raise ValueError(
+                    f"Number of models ({len(which_models)}) must match number of lines ({n_lines})"
+                )
+        else:
+            raise TypeError("'which_models' must be a string or list of strings")
+        
+        # Validate each model type
+        valid_models = {"Gaussian", "Lorentz", "Voigt"}
+        for i, model in enumerate(which_models):
+            if model not in valid_models:
+                raise ValueError(f"Invalid model '{model}' at index {i}. Must be one of: {valid_models}")
+        
+        return which_models
+
+    def _generate_line_names(self, line_names, length):
+        """Generate default line names if not provided."""
+        if line_names is None:
+            return [f"line_{i}" for i in range(length)]
+        return line_names
+
+    def _calculate_continuum_subtracted_heights(self, wavelengths, peak_positions, peak_heights, continuum_baseline):
+        """Calculate peak heights relative to local continuum."""
+        # Find indices closest to each peak position
+        continuum_indices = [
+            extraction.find_nearest(wavelengths.value, pos) 
+            for pos in peak_positions
+        ]
+        
+        # Subtract continuum baseline from peak heights
+        continuum_values = continuum_baseline[continuum_indices]
+        return peak_heights - continuum_values
+
+    def _calculate_line_region(self, peak_positions, number, total_lines):
+        """Calculate minimum and maximum wavelength bounds for a line region."""
+        # Default 100 Angstrom window around the peak
+        line_region_min = peak_positions[number] - 100
+        line_region_max = peak_positions[number] + 100
+        
+        # Adjust lower bound based on previous peak
+        if number > 0:
+            midpoint_prev = (peak_positions[number-1] + peak_positions[number]) / 2
+            line_region_min = max(line_region_min, midpoint_prev)
+        
+        # Adjust upper bound based on next peak
+        if number < total_lines - 1:
+            midpoint_next = (peak_positions[number] + peak_positions[number+1]) / 2
+            line_region_max = min(line_region_max, midpoint_next)
+        
+        return line_region_min, line_region_max
+
+    def _parse_custom_priors(self, priors, peak_position, peak_height):
+        """Parse user-provided priors for line fitting."""
+        # Handle different prior formats
+        user_priors = np.asarray(priors, dtype="object")
+        
+        # Create initial values from priors
+        if len(user_priors) == 3:
+            initial = np.array([peak_position, peak_height, np.mean(user_priors[2])])
+        else:  # Voigt profile case
+            initial = np.array([peak_position, peak_height, np.mean(user_priors[2]), np.mean(user_priors[3])])
+        
+        line_region_min, line_region_max = user_priors[0]
+        
+        # Return only the values we can determine
+        return initial, user_priors, line_region_min, line_region_max
 
     def fit_lines(self, wavelengths, flux_density, continuum_baseline, wavelength_peak_positions, rest_frame_line_wavelengths, peak_heights, line_std_deviation,
                   blended_line_min_separation = 50, which_models="Lorentz", line_names = None, overplot_archival_lines = ["H"], priors = None, MCMC_walkers = 250,
                   MCMC_iterations = 400, N_cores_Voigt = 1, plot_spec = True, plot_MCMC = False, overplot_median_model = False, save_results = True):
 
         """
-        This function uses a Markov-chain Monte Carlo to estimate the line parameters and their errors.
-
+        Perform Markov Chain Monte Carlo (MCMC) fitting of spectral lines to estimate 
+        line parameters and their uncertainties.
+        
+        This function fits Gaussian, Lorentzian, or Voigt profiles to spectral lines 
+        using MCMC methods, with support for blended lines and parallel processing 
+        for Voigt profile calculations.
+        
         Parameters
         ----------
         wavelengths: numpy.ndarray (astropy.units Angstrom)
@@ -1012,57 +1122,34 @@ class analysis:
             function analysis.load_calibrated_data(). "XXXXXXX" here stands for the target's name.
         """
 
-        # If we have repeated line names, raise an error:
-        if len(line_names) != len(set(line_names)):
-            raise RuntimeError("There are duplicated line names given as the input variable 'line_names'. Please give a unique name for every single line.")
+        # Validate and preprocess input parameters
+        self._validate_line_names(line_names)
+                
+        # Convert all inputs to consistent numpy arrays with proper shape handling
+        wavelength_peak_positions = self._ensure_numpy_array(wavelength_peak_positions, 'wavelength_peak_positions')
+        peak_heights = self._ensure_numpy_array(peak_heights, 'peak_heights')
+        line_std_deviation = self._ensure_numpy_array(line_std_deviation, 'line_std_deviation')
+        rest_frame_line_wavelengths = self._ensure_numpy_array(rest_frame_line_wavelengths, 'rest_frame_line_wavelengths')
 
-        if isinstance(wavelength_peak_positions, u.quantity.Quantity):
-            wavelength_peak_positions = wavelength_peak_positions.value
-        
-        if isinstance(wavelength_peak_positions,float) or isinstance(wavelength_peak_positions,int):
-            wavelength_peak_positions = [wavelength_peak_positions]
+        # Validate and expand model specifications
+        which_models = self._validate_models(which_models, n_lines = len(rest_frame_line_wavelengths))
+        copy_which_models = which_models.copy()
 
-        if isinstance(peak_heights, u.quantity.Quantity):
-            peak_heights = peak_heights.value
-
-        if isinstance(peak_heights,float) or isinstance(peak_heights,int):
-            peak_heights = np.asarray([peak_heights])
-        elif isinstance(peak_heights,list):
-            peak_heights = np.asarray(peak_heights)
-        
-        if isinstance(line_std_deviation,float) or isinstance(line_std_deviation,int):
-            line_std_deviation = np.asarray([line_std_deviation])
-        elif isinstance(line_std_deviation,list):
-            line_std_deviation = np.asarray(line_std_deviation)
-
-        if isinstance(rest_frame_line_wavelengths,u.quantity.Quantity):
-            rest_frame_line_wavelengths = rest_frame_line_wavelengths.value
-
-        if isinstance(rest_frame_line_wavelengths,float) or isinstance(rest_frame_line_wavelengths,int):
-            rest_frame_line_wavelengths = [rest_frame_line_wavelengths]
-
-        if isinstance(which_models,str):
-            which_models = [which_models]*len(rest_frame_line_wavelengths)
-        elif isinstance(which_models,list):
-            if len(which_models) != len(rest_frame_line_wavelengths) or len(which_models) != len(wavelength_peak_positions):
-                raise RuntimeError("Input variables 'which_models', 'rest_frame_line_wavelengths', and 'wavelength_peak_positions' must have the same size.")
-        copy_which_models = list(np.copy(which_models))
-
-        if line_names is None:
-            line_names = []
-            for number, _ in enumerate(rest_frame_line_wavelengths): 
-                line_names.append(f"line_{number}")
-
+        # Generate default line names if not provided
+        line_names = self._generate_line_names(line_names, len(rest_frame_line_wavelengths))
         self.line_names = line_names
 
-        local_continuum_index = []
-        for wavelength in wavelength_peak_positions:
-            local_continuum_index.append(extraction.find_nearest(wavelengths.value, wavelength))
-        peak_heights = peak_heights - continuum_baseline[local_continuum_index]
-        local_normalization = 10**round(np.log10(np.median(flux_density.value - 0.9*continuum_baseline)))
+        # Calculate continuum-subtracted peak heights
+        peak_heights = self._calculate_continuum_subtracted_heights(
+            wavelengths, wavelength_peak_positions, peak_heights, continuum_baseline
+        )
 
+        # Calculate normalization factor for the spectrum
+        local_normalization = 10**round(np.log10(np.median(flux_density.value - 0.9 * continuum_baseline)))
+
+        # Initialize default priors if none provided
         if priors is None:
-            priors = [None]*len(wavelength_peak_positions)
+            priors = [None] * len(wavelength_peak_positions)
 
         # Here we identify the blended lines:
         peak_distances = np.diff(wavelength_peak_positions)
@@ -1083,32 +1170,22 @@ class analysis:
             local_line_std_deviation = line_std_deviation[number]/local_normalization
 
             if priors is None or priors[number] is None:
-                line_region_min = wavelength_peak_positions[number] - 100
-                if number > 0:
-                    mean_point = (wavelength_peak_positions[number-1] + wavelength_peak_positions[number])/2
-                    if mean_point > line_region_min:
-                        line_region_min = mean_point
+                 # Automatic priors: calculate line region from peak positions
+                line_region_min, line_region_max = self._calculate_line_region(wavelength_peak_positions, number, len(rest_frame_line_wavelengths))
                 line_region_min_cache.append(line_region_min)
-
-                line_region_max = wavelength_peak_positions[number] + 100
-                if number < (len(rest_frame_line_wavelengths)-1):
-                    mean_point = (wavelength_peak_positions[number] + wavelength_peak_positions[number+1])/2
-                    if mean_point < line_region_max:
-                        line_region_max = mean_point
-
-                initial, local_priors, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, line_region_min, line_region_max)
+                
+                initial, local_priors, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number],
+                                                                                     peak_height, line_region_min, line_region_max)
             else:
-                _, _, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, line_region_min=None, line_region_max=None)
-                if len(priors[number]) == 3:
-                    initial = np.array([wavelength_peak_positions[number], peak_height, np.mean(priors[number][2])])
-                else:
-                    initial = np.array([wavelength_peak_positions[number], peak_height, np.mean(priors[number][2]), np.mean(priors[number][3])])
-                local_priors = np.asarray(priors[number],dtype="object")
                 # In the case of a single-line analysis, if the user inputs priors=[[7500,7700],[0.1],[2,50]] instead of priors=[ [[7500,7700],[0.1],[2,50]] ], the analysis will work anyway.
-                if isinstance(local_priors[0],float) or isinstance(local_priors[0],int):
-                    local_priors = np.asarray(priors,dtype="object")
-                line_region_min = local_priors[0][0]
-                line_region_max = local_priors[0][1]
+                if np.isscalar(priors[number][0]) or isinstance(priors[number][0], (int, float)):
+                    priors = [priors]
+                # User-provided priors - get basic values first
+                initial, local_priors, line_region_min, line_region_max = self._parse_custom_priors(priors[number], wavelength_peak_positions[number], peak_height)
+                
+                # Then call automatic_priors separately
+                _, _, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, 
+                                                                    line_region_min=None, line_region_max=None)
             
             # Reseting wavelength windows for blended lines:
             if number < (len(rest_frame_line_wavelengths)-1) and priors[number] is None:
