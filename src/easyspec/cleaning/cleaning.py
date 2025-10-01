@@ -25,7 +25,7 @@ class cleaning:
         print("easyspec-cleaning version: ",easyspec_cleaning_version)
 
 
-    def data_paths(self,bias=None,flats=None,lamp=None,standard_star=None,targets=None,darks=None):
+    def data_paths(self,bias=None,flats=None,lamp=None,standard_star=None,targets=None,darks=None,data_file_extension="fits"):
 
         """
         This function collects the paths for all data files (bias, flats, lamp, standard star, and targets), as long as they have the extension ".fit*".
@@ -41,6 +41,8 @@ class cleaning:
         targets: string or list of strings
             You can pass a single directory path as a string or a list of paths. E.g. targets = "./spectra_target1" or targets = ["./spectra_target1","./spectra_target2"].
 
+        data_file_extension: string
+            Extension of the data files. Default = "fits"
         Returns
         -------
         all_raw_data: dict
@@ -53,7 +55,7 @@ class cleaning:
         if bias is not None:
             if Path(bias).is_dir():
                 # Make a list with the bias files:
-                self.bias_list = np.sort(glob.glob(str(Path(bias).resolve())+'/*.fit*')).tolist()
+                self.bias_list = np.sort(glob.glob(str(Path(bias).resolve())+f'/*.{data_file_extension}')).tolist()
                 self.all_images_list = self.all_images_list + self.bias_list
             else:
                 raise TypeError("Invalid directory for bias files.")
@@ -63,7 +65,7 @@ class cleaning:
         if flats is not None:
             if Path(flats).is_dir():
                 # Make a list with the flat images:
-                self.flat_list = np.sort(glob.glob(str(Path(flats).resolve())+'/*.fit*')).tolist()
+                self.flat_list = np.sort(glob.glob(str(Path(flats).resolve())+f'/*.{data_file_extension}')).tolist()
                 self.all_images_list = self.all_images_list + self.flat_list
             else:
                 raise TypeError("Invalid directory for flat files.")
@@ -73,7 +75,7 @@ class cleaning:
         if lamp is not None:
             if Path(lamp).is_dir():
                 # Make a list with the lamp images:
-                self.lamp_list = np.sort(glob.glob(str(Path(lamp).resolve())+'/*.fit*')).tolist()
+                self.lamp_list = np.sort(glob.glob(str(Path(lamp).resolve())+f'/*.{data_file_extension}')).tolist()
                 self.all_images_list = self.all_images_list + self.lamp_list
             else:
                 raise TypeError("Invalid directory for lamp files.")
@@ -83,7 +85,7 @@ class cleaning:
         if standard_star is not None:
             if Path(standard_star).is_dir():
                 # Make a list with the standard star images:
-                self.std_list = np.sort(glob.glob(str(Path(standard_star).resolve())+'/*.fit*')).tolist()
+                self.std_list = np.sort(glob.glob(str(Path(standard_star).resolve())+f'/*.{data_file_extension}')).tolist()
                 self.all_images_list = self.all_images_list + self.std_list
             else:
                 raise TypeError("Invalid directory for standard star files.")
@@ -95,7 +97,7 @@ class cleaning:
             if isinstance(targets,str):
                 if Path(targets).is_dir():
                     # Make a list with the raw science images:
-                    self.target_list = np.sort(glob.glob(str(Path(targets).resolve())+'/*.fit*')).tolist()
+                    self.target_list = np.sort(glob.glob(str(Path(targets).resolve())+f'/*.{data_file_extension}')).tolist()
                     self.all_images_list = self.all_images_list + self.target_list
                 else:
                     raise TypeError("Invalid directory for target files.")
@@ -104,7 +106,7 @@ class cleaning:
                 for target in targets:
                     if Path(target).is_dir():
                         # Make a list with the raw science images:
-                        self.target_list = self.target_list + np.sort(glob.glob(str(Path(target).resolve())+'/*.fit*')).tolist()
+                        self.target_list = self.target_list + np.sort(glob.glob(str(Path(target).resolve())+f'/*.{data_file_extension}')).tolist()
                     else:
                         raise TypeError("Invalid directory for target files.")
                 
@@ -118,7 +120,7 @@ class cleaning:
         if darks is not None:
             if Path(darks).is_dir():
                 # Make a list with the dark files:
-                self.darks_list = np.sort(glob.glob(str(Path(darks).resolve())+'/*.fit*')).tolist()
+                self.darks_list = np.sort(glob.glob(str(Path(darks).resolve())+f'/*.{data_file_extension}')).tolist()
                 self.all_images_list = self.all_images_list + self.darks_list
             else:
                 raise TypeError("Invalid directory for dark files.")

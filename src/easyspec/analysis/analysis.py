@@ -19,6 +19,8 @@ from scipy.integrate import quad
 from astropy.constants import c
 from astropy.cosmology import FlatLambdaCDM
 from .line_models import *
+from .aux_fit_lines import *
+import re
 
 OS_name = platform.system()
 plt.rcParams.update({'font.size': 12})
@@ -28,6 +30,35 @@ extraction = extraction()
 
 easyspec_analysis_version = "1.0.1"
 
+class CombinedModel:
+    """A picklable class that acts like a function representing one line model or combinations of line models"""
+    
+    def __init__(self, model_names):
+        self.model_names = model_names
+        self.param_counts = {
+            'Gaussian': 3,  # mean, amplitude, std
+            'Lorentz': 3,   # mean, amplitude, fwhm  
+            'Voigt': 4      # x_0, amplitude, fwhm_G, fwhm_L
+        }
+    
+    def __call__(self, theta, x):
+        """Make the class callable like a function. This is important for emcee"""
+        final_model = 0
+        param_index = 0
+        
+        for name in self.model_names:
+            num_params = self.param_counts[name]
+            comp_theta = theta[param_index:param_index + num_params]
+            param_index += num_params
+            
+            if name == "Gaussian":
+                final_model += model_Gauss(comp_theta, x)
+            elif name == "Lorentz":
+                final_model += model_Lorentz(comp_theta, x)
+            elif name == "Voigt":
+                final_model += model_Voigt(comp_theta, x)
+        
+        return final_model
 
 class analysis:
 
@@ -325,53 +356,12 @@ class analysis:
         return continuum_baseline, line_std_deviation, wavelength_peak_positions, peak_heights, line_significance
     
 
-
-
-    def all_models(self, model_name, custom_function=None):
+    def all_models(self, model_name):
         """
-        This function is used to select a specific line model. E.g.: Gaussian, Lorentz, GaussianLorentzGaussian, and so on.
-        All these models are defined in the file line_models.py, located in the same directory as analysis.py.
-
-        Parameters
-        ----------
-        model_name: string
-            The name of the line model, e.g. "Gaussian".
-        custom_function: method
-            Optional. You can input a custom model here.
-
-        Returns
-        -------
-        models[model_name]: method
-            returns a function with the desired line model.
+        Returns a picklable CombinedModel instance
         """
-        
-        models = {"Gaussian" : model_Gauss, "Lorentz" : model_Lorentz, "Voigt" : model_Voigt,
-                  "GaussianGaussian": model_Gauss_Gauss, "GaussianLorentz" : model_Gauss_Lorentz,
-                  "GaussianVoigt" : model_Gauss_Voigt, "GaussianGaussianGaussian" : model_Gauss_Gauss_Gauss,
-                  "GaussianLorentzGaussian" : model_Gauss_Lorentz_Gauss, "GaussianGaussianLorentz" : model_Gauss_Gauss_Lorentz,
-                  "GaussianLorentzLorentz" : model_Gauss_Lorentz_Lorentz , "GaussianVoigtVoigt" : model_Gauss_Voigt_Voigt,
-                  "GaussianVoigtLorentz" : model_Gauss_Voigt_Lorentz, "GaussianLorentzVoigt" : model_Gauss_Lorentz_Voigt,
-                  "GaussianGaussianVoigt" : model_Gauss_Gauss_Voigt, "GaussianVoigtGaussian" : model_Gauss_Voigt_Gauss,
-                  "GaussianGaussianGaussianGaussian" : model_Gauss_Gauss_Gauss_Gauss, "GaussianGaussianGaussianGaussianGaussian" : model_Gauss_Gauss_Gauss_Gauss_Gauss,
-                  "LorentzLorentz" : model_Lorentz_Lorentz, "LorentzGaussian" : model_Lorentz_Gauss,
-                  "LorentzVoigt" : model_Lorentz_Voigt, "LorentzGaussianGaussian": model_Lorentz_Gauss_Gauss,
-                  "LorentzLorentzLorentz" : model_Lorentz_Lorentz_Lorentz, "LorentzVoigtVoigt" : model_Lorentz_Voigt_Voigt,
-                  "LorentzLorentzGaussian" : model_Lorentz_Lorentz_Gauss, "LorentzGaussianLorentz" : model_Lorentz_Gauss_Lorentz,
-                  "LorentzVoigtLorentz" : model_Lorentz_Voigt_Lorentz, "LorentzLorentzVoigt" : model_Lorentz_Lorentz_Voigt,
-                  "LorentzGaussianVoigt" : model_Lorentz_Gauss_Voigt, "LorentzVoigtGaussian" : model_Lorentz_Voigt_Gauss,
-                  "LorentzLorentzLorentzLorentz" : model_Lorentz_Lorentz_Lorentz_Lorentz, "LorentzLorentzLorentzLorentzLorentz" : model_Lorentz_Lorentz_Lorentz_Lorentz_Lorentz,
-                  "VoigtVoigt" : model_Voigt_Voigt, "VoigtGaussian" : model_Voigt_Gauss, "VoigtLorentz" : model_Voigt_Lorentz,
-                  "VoigtGaussianGaussian" : model_Voigt_Gauss_Gauss, "VoigtLorentzLorentz" : model_Voigt_Lorentz_Lorentz,
-                  "VoigtVoigtVoigt" : model_Voigt_Voigt_Voigt, "VoigtLorentzGaussian" : model_Voigt_Lorentz_Gauss,
-                  "VoigtGaussianLorentz" : model_Voigt_Gauss_Lorentz, "VoigtVoigtLorentz" : model_Voigt_Voigt_Lorentz,
-                  "VoigtLorentzVoigt" : model_Voigt_Lorentz_Voigt, "VoigtGaussianVoigt" : model_Voigt_Gauss_Voigt,
-                  "VoigtVoigtGaussian" : model_Voigt_Voigt_Gauss, "VoigtVoigtVoigtVoigt" : model_Voigt_Voigt_Voigt_Voigt,
-                  "VoigtVoigtVoigtVoigtVoigt" : model_Voigt_Voigt_Voigt_Voigt_Voigt, "custom" : custom_function}
-        if model_name not in models.keys():
-            raise Exception(f"Invalid model_name '{model_name}'. Valid names are Gaussian, Lorentz, Voigt, or combinations of these names, such as 'LorentzGaussian'.")
-        return models[model_name]
-
-    
+        model_name_list = re.findall('[A-Z][a-z]*', model_name)
+        return CombinedModel(model_name_list)
 
     def lnlike(self, theta, x, y, yerr, model):
         
@@ -409,7 +399,7 @@ class analysis:
             return -np.inf
         return lp + self.lnlike(theta, x, y, yerr, model)
 
-    def line_MCMC(self, p0, priors, nwalkers, niter, initial, lnprob, data, model_name, custom_function=None, burn_in=100, ncores=1):
+    def line_MCMC(self, p0, priors, nwalkers, niter, initial, lnprob, data, model_name, custom_function=None, burn_in=100):
 
         """This function runs a MCMC approach for one line (singular or blended) for a given a model."""
         
@@ -419,43 +409,23 @@ class analysis:
             if not callable(custom_function):
                 raise Exception("Parameter custom_function is not callable. This parameter must be a function to work properly.")
                 
-        adopted_model = self.all_models(model_name, custom_function)  # Here we choose a function for the fit
+        adopted_model = self.all_models(model_name)  # Here we choose a function for the fit
         adopted_model = tuple([adopted_model])  # The adopted model is transformed into a tuple containing only one element
         metadata = priors + data + adopted_model
         
-        if "Voigt" not in model_name:
-            if ncores > 1:
-                ncores = 1
+        sampler = emcee.EnsembleSampler(nwalkers, len(initial), lnprob, args=metadata)
+        
+        start = time.time()
+        print("Running burn-in...")
+        p0, _, _ = sampler.run_mcmc(p0, burn_in, progress=True)
+        sampler.reset()
 
-        if ncores > 1:
-            if OS_name == "Darwin":
-                warnings.warn("Multiprocessing may not work well in MacOS. If you have problems, try to do the single-core processing, i.e. ncores = 1.")
+        print("Running production...")
+        pos, prob, state = sampler.run_mcmc(p0, niter, progress=True)
+        end = time.time()
+        serial_time = end - start
+        print("Single-core processing took {0:.1f} seconds".format(serial_time))
 
-            with Pool(ncores) as pool:
-                sampler = emcee.EnsembleSampler(nwalkers, len(initial), lnprob, args=metadata, pool=pool)
-                start = time.time()
-                print("Running burn-in...")
-                p0, _, _ = sampler.run_mcmc(p0, burn_in, progress=True)
-                sampler.reset()
-                
-                print("Running production...")
-                pos, prob, state = sampler.run_mcmc(p0, niter, progress=True)
-                end = time.time()
-                multi_time = end - start
-                print("Multiprocessing took {0:.1f} seconds".format(multi_time))
-        else:
-            sampler = emcee.EnsembleSampler(nwalkers, len(initial), lnprob, args=metadata)
-            
-            start = time.time()
-            print("Running burn-in...")
-            p0, _, _ = sampler.run_mcmc(p0, burn_in, progress=True)
-            sampler.reset()
-
-            print("Running production...")
-            pos, prob, state = sampler.run_mcmc(p0, niter, progress=True)
-            end = time.time()
-            serial_time = end - start
-            print("Single-core processing took {0:.1f} seconds".format(serial_time))
         return sampler, pos, prob, state
     
 
@@ -464,7 +434,7 @@ class analysis:
         """In this function we plot the 'hairs' (i.e. alternative models) around the maximum likelihood model estimated with the MCMC method."""
                 
         samples = sampler.flatchain
-        adopted_model = self.all_models(model_name, custom_function=None)
+        adopted_model = self.all_models(model_name)
         
         x_plot = np.linspace(x.min(),x.max(),1000)
         for theta in samples[np.random.randint(len(samples), size=100)]:
@@ -490,7 +460,7 @@ class analysis:
         models = []
         draw = np.floor(np.random.uniform(0,len(samples),size=nsamples)).astype(int)
         thetas = samples[draw]  # Each element of thetas contain the N parameters of the assumed model
-        adopted_model = self.all_models(model_name, custom_function)
+        adopted_model = self.all_models(model_name)
         for theta in thetas:
             mod = adopted_model(theta,x)
             models.append(mod)
@@ -931,67 +901,7 @@ class analysis:
 
         return norm_height
     
-    def _validate_line_names(self, line_names):
-        """Validate that line names are unique if provided."""
-        if line_names is not None and len(line_names) != len(set(line_names)):
-            raise ValueError("Duplicate line names detected. Each line must have a unique name.")
-
-    def _ensure_numpy_array(self, data, param_name):
-        """
-        Convert input to consistent numpy array format.
-        
-        Handles astropy Quantity, scalar values, lists, and ensures proper array shape.
-        """
-        # Extract value if it's an astropy Quantity
-        if hasattr(data, 'value'):
-            data = data.value
-        
-        # Handle scalar inputs by converting to 1D array
-        if np.isscalar(data):
-            data = np.array([data])
-        elif isinstance(data, list):
-            data = np.array(data)
-        elif not isinstance(data, np.ndarray):
-            raise TypeError(f"Parameter '{param_name}' must be a scalar, list, or numpy array")
-        
-        # Ensure 1D array
-        if data.ndim == 0:
-            data = data.reshape(1)
-        elif data.ndim > 1:
-            raise ValueError(f"Parameter '{param_name}' must be 1-dimensional")
-        
-        return data
-
-    def _validate_models(self, which_models, n_lines):
-        """Validate and expand model specifications."""
-        
-        if isinstance(which_models, str):
-            # Apply same model to all lines
-            which_models = [which_models] * n_lines
-        elif isinstance(which_models, list):
-            # Validate list length matches number of lines
-            if len(which_models) != n_lines:
-                raise ValueError(
-                    f"Number of models ({len(which_models)}) must match number of lines ({n_lines})"
-                )
-        else:
-            raise TypeError("'which_models' must be a string or list of strings")
-        
-        # Validate each model type
-        valid_models = {"Gaussian", "Lorentz", "Voigt"}
-        for i, model in enumerate(which_models):
-            if model not in valid_models:
-                raise ValueError(f"Invalid model '{model}' at index {i}. Must be one of: {valid_models}")
-        
-        return which_models
-
-    def _generate_line_names(self, line_names, length):
-        """Generate default line names if not provided."""
-        if line_names is None:
-            return [f"line_{i}" for i in range(length)]
-        return line_names
-
-    def _calculate_continuum_subtracted_heights(self, wavelengths, peak_positions, peak_heights, continuum_baseline):
+    def calculate_continuum_subtracted_heights(self,wavelengths, peak_positions, peak_heights, continuum_baseline):
         """Calculate peak heights relative to local continuum."""
         # Find indices closest to each peak position
         continuum_indices = [
@@ -1003,43 +913,9 @@ class analysis:
         continuum_values = continuum_baseline[continuum_indices]
         return peak_heights - continuum_values
 
-    def _calculate_line_region(self, peak_positions, number, total_lines):
-        """Calculate minimum and maximum wavelength bounds for a line region."""
-        # Default 100 Angstrom window around the peak
-        line_region_min = peak_positions[number] - 100
-        line_region_max = peak_positions[number] + 100
-        
-        # Adjust lower bound based on previous peak
-        if number > 0:
-            midpoint_prev = (peak_positions[number-1] + peak_positions[number]) / 2
-            line_region_min = max(line_region_min, midpoint_prev)
-        
-        # Adjust upper bound based on next peak
-        if number < total_lines - 1:
-            midpoint_next = (peak_positions[number] + peak_positions[number+1]) / 2
-            line_region_max = min(line_region_max, midpoint_next)
-        
-        return line_region_min, line_region_max
-
-    def _parse_custom_priors(self, priors, peak_position, peak_height):
-        """Parse user-provided priors for line fitting."""
-        # Handle different prior formats
-        user_priors = np.asarray(priors, dtype="object")
-        
-        # Create initial values from priors
-        if len(user_priors) == 3:
-            initial = np.array([peak_position, peak_height, np.mean(user_priors[2])])
-        else:  # Voigt profile case
-            initial = np.array([peak_position, peak_height, np.mean(user_priors[2]), np.mean(user_priors[3])])
-        
-        line_region_min, line_region_max = user_priors[0]
-        
-        # Return only the values we can determine
-        return initial, user_priors, line_region_min, line_region_max
-
     def fit_lines(self, wavelengths, flux_density, continuum_baseline, wavelength_peak_positions, rest_frame_line_wavelengths, peak_heights, line_std_deviation,
                   blended_line_min_separation = 50, which_models="Lorentz", line_names = None, overplot_archival_lines = ["H"], priors = None, MCMC_walkers = 250,
-                  MCMC_iterations = 400, N_cores_Voigt = 1, plot_spec = True, plot_MCMC = False, overplot_median_model = False, save_results = True):
+                  MCMC_iterations = 400, plot_spec = True, plot_MCMC = False, overplot_median_model = False, save_results = True):
 
         """
         Perform Markov Chain Monte Carlo (MCMC) fitting of spectral lines to estimate 
@@ -1092,9 +968,6 @@ class analysis:
             This is the number of walkers for the MCMC.
         MCMC_iterations: int
             This is the number of iterations for the MCMC.
-        N_cores_Voigt: int
-            This is the number of cores in case you want to run this analysis in parallel. It is useful only if you are modeling your lines with the Voigt profile.
-            For Gaussian and Lorentzian, the parallelization actually makes things slower.
         plot_spec: boolean
             If True, a plot of the spectrum with the lines requested in the input variable overplot_archival_lines will be shown.
         plot_MCMC: boolean
@@ -1123,24 +996,24 @@ class analysis:
         """
 
         # Validate and preprocess input parameters
-        self._validate_line_names(line_names)
+        aux_validate_line_names(line_names)
                 
         # Convert all inputs to consistent numpy arrays with proper shape handling
-        wavelength_peak_positions = self._ensure_numpy_array(wavelength_peak_positions, 'wavelength_peak_positions')
-        peak_heights = self._ensure_numpy_array(peak_heights, 'peak_heights')
-        line_std_deviation = self._ensure_numpy_array(line_std_deviation, 'line_std_deviation')
-        rest_frame_line_wavelengths = self._ensure_numpy_array(rest_frame_line_wavelengths, 'rest_frame_line_wavelengths')
+        wavelength_peak_positions = aux_ensure_numpy_array(wavelength_peak_positions, 'wavelength_peak_positions')
+        peak_heights = aux_ensure_numpy_array(peak_heights, 'peak_heights')
+        line_std_deviation = aux_ensure_numpy_array(line_std_deviation, 'line_std_deviation')
+        rest_frame_line_wavelengths = aux_ensure_numpy_array(rest_frame_line_wavelengths, 'rest_frame_line_wavelengths')
 
         # Validate and expand model specifications
-        which_models = self._validate_models(which_models, n_lines = len(rest_frame_line_wavelengths))
+        which_models = aux_validate_models(which_models, n_lines = len(rest_frame_line_wavelengths))
         copy_which_models = which_models.copy()
 
         # Generate default line names if not provided
-        line_names = self._generate_line_names(line_names, len(rest_frame_line_wavelengths))
+        line_names = aux_generate_line_names(line_names, len(rest_frame_line_wavelengths))
         self.line_names = line_names
 
         # Calculate continuum-subtracted peak heights
-        peak_heights = self._calculate_continuum_subtracted_heights(
+        peak_heights = self.calculate_continuum_subtracted_heights(
             wavelengths, wavelength_peak_positions, peak_heights, continuum_baseline
         )
 
@@ -1171,7 +1044,7 @@ class analysis:
 
             if priors is None or priors[number] is None:
                  # Automatic priors: calculate line region from peak positions
-                line_region_min, line_region_max = self._calculate_line_region(wavelength_peak_positions, number, len(rest_frame_line_wavelengths))
+                line_region_min, line_region_max = aux_calculate_line_region(wavelength_peak_positions, number, len(rest_frame_line_wavelengths))
                 line_region_min_cache.append(line_region_min)
                 
                 initial, local_priors, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number],
@@ -1181,35 +1054,14 @@ class analysis:
                 if np.isscalar(priors[number][0]) or isinstance(priors[number][0], (int, float)):
                     priors = [priors]
                 # User-provided priors - get basic values first
-                initial, local_priors, line_region_min, line_region_max = self._parse_custom_priors(priors[number], wavelength_peak_positions[number], peak_height)
+                initial, local_priors, line_region_min, line_region_max = aux_parse_custom_priors(priors[number], wavelength_peak_positions[number], peak_height)
                 
                 # Then call automatic_priors separately
                 _, _, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, 
                                                                     line_region_min=None, line_region_max=None)
             
             # Reseting wavelength windows for blended lines:
-            if number < (len(rest_frame_line_wavelengths)-1) and priors[number] is None:
-                counter = 0
-                for i in blended_line[number+1:]:
-                    if i is False:
-                        break
-                    else:
-                        counter = counter + 1
-                        
-                line_region_max = wavelength_peak_positions[number+counter] + 100
-                if (number+counter) < (len(rest_frame_line_wavelengths)-1):
-                    mean_point = (wavelength_peak_positions[number+counter] + wavelength_peak_positions[number+counter+1])/2
-                    if mean_point < line_region_max:
-                        line_region_max = mean_point
-
-            if blended_line[number] is True and priors[number] is None:
-                counter = 1
-                for i in np.flip(blended_line[:number]):
-                    if bool(i) is True:
-                        counter = counter + 1
-                    else:
-                        break
-                line_region_min = line_region_min_cache[-counter-1]
+            line_region_min, line_region_max = aux_resetting_wavelength_windows(number,rest_frame_line_wavelengths,priors,blended_line,wavelength_peak_positions,line_region_min_cache, line_region_min, line_region_max)
 
 
             line_windows.append([line_region_min, line_region_max])
@@ -1227,7 +1079,7 @@ class analysis:
                 blended_rest_frame_line_wavelengths = []
                 blended_labels = []
                 if blended_line[number+1] is False:
-                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number], ncores=N_cores_Voigt)
+                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number])
                     samples = sampler.flatchain
                     samples_list.append(samples)
                     theta_max = samples[np.argmax(sampler.flatlnprobability)]
@@ -1282,7 +1134,7 @@ class analysis:
 
                     
 
-                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number], ncores=N_cores_Voigt)
+                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number])
                     samples = sampler.flatchain
                     samples_list.append(samples)
                     theta_max = samples[np.argmax(sampler.flatlnprobability)]
