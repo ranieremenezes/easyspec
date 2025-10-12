@@ -159,7 +159,8 @@ The final implemented model uses the parameters:
 * :math:`\gamma` - Lorentzian HWHM  
 * :math:`\eta` - Skewness parameter
 
-This parameterization makes the fitting more physically intuitive, as :math:`\lambda_{\mathrm{peak}}` directly corresponds to the observable line peak.
+This parameterization makes the fitting more physically intuitive, as :math:`\lambda_{\mathrm{peak}}` directly corresponds to the observable line peak. An example of a skewed Lorentzian profile applied to the CIV line of the AGN PKS J0049-5738 is shown below:
 
 
-
+.. image:: ./images/Skewed_lorentzian.png
+  :width: 700
