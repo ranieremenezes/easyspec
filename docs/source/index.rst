@@ -33,6 +33,7 @@ Contents
    :caption: Contents:
    
    data_cleaning
+   line_models
    modules
 
 
