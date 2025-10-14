@@ -54,7 +54,10 @@ def aux_validate_models(which_models, n_lines):
         raise TypeError("'which_models' must be a string or list of strings")
     
     # Validate each model type
-    valid_models = {"Gaussian","gaussian","Gauss","gauss","Lorentzian", "lorentzian", "Lorentz", "lorentz", "Voigt", "voigt"}
+    valid_models = {"Gaussian","gaussian","Gauss","gauss","Lorentzian", "lorentzian", "Lorentz", "lorentz", "Voigt", "voigt",
+                    "skewed_gaussian","Skewed_Gaussian","Skewed_gaussian","skewed_Gaussian","Skewedgaussian","SkewedGaussian","skewedgaussian",
+                    "skewedGaussian", "skewed_lorentzian","Skewed_Lorentzian","Skewed_lorentzian","skewed_Lorentzian","Skewedlorentzian",
+                    "SkewedLorentzian", "skewedlorentzian", "skewedLorentzian"}
     for i, model in enumerate(which_models):
         if model not in valid_models:
             raise ValueError(f"Invalid model '{model}' at index {i}. Must be one of: {valid_models}")
@@ -64,6 +67,10 @@ def aux_validate_models(which_models, n_lines):
             which_models[i] = "Lorentz"
         elif model=="voigt":
             which_models[i] = "Voigt"
+        elif model=="skewed_gaussian" or model=="Skewed_gaussian" or model=="skewed_Gaussian" or model=="Skewed_Gaussian" or model=="SkewedGaussian" or model=="skewedgaussian" or model=="skewedGaussian":
+            which_models[i] = "Skewedgaussian"
+        elif model=="skewed_lorentzian" or model=="Skewed_lorentzian" or model=="skewed_Lorentzian" or model=="Skewed_Lorentzian" or model=="SkewedLorentzian" or model=="skewedlorentzian" or model=="skewedLorentzian":
+            which_models[i] = "Skewedlorentzian"
     return which_models
 
 def aux_generate_line_names(line_names, length):
@@ -131,3 +138,4 @@ def aux_resetting_wavelength_windows(number,rest_frame_line_wavelengths,priors,b
                 break
         line_region_min = line_region_min_cache[-counter-1]
     return line_region_min, line_region_max
+

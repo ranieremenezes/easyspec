@@ -5,7 +5,6 @@ import emcee
 import corner
 import glob
 from pathlib import Path
-from multiprocessing import Pool
 import time
 import warnings
 from matplotlib.ticker import AutoMinorLocator
@@ -21,6 +20,7 @@ from astropy.cosmology import FlatLambdaCDM
 from .line_models import *
 from .aux_fit_lines import *
 import re
+import types
 
 OS_name = platform.system()
 plt.rcParams.update({'font.size': 12})
@@ -28,7 +28,7 @@ libpath = Path(__file__).parent.resolve() / Path("lines")
 extraction = extraction()
 
 
-easyspec_analysis_version = "1.0.1"
+easyspec_analysis_version = "1.2.0"
 
 class CombinedModel:
     """A picklable class that acts like a function representing one line model or combinations of line models"""
@@ -38,7 +38,9 @@ class CombinedModel:
         self.param_counts = {
             'Gaussian': 3,  # mean, amplitude, std
             'Lorentz': 3,   # mean, amplitude, fwhm  
-            'Voigt': 4      # x_0, amplitude, fwhm_G, fwhm_L
+            'Voigt': 4,     # x_0, amplitude, fwhm_G, fwhm_L
+            'Skewedgaussian': 4,  # peak location, amplitude, std, skewness
+            'Skewedlorentzian': 4  # peak location, amplitude, fwhm, skewness
         }
     
     def __call__(self, theta, x):
@@ -57,6 +59,10 @@ class CombinedModel:
                 final_model += model_Lorentz(comp_theta, x)
             elif name == "Voigt":
                 final_model += model_Voigt(comp_theta, x)
+            elif name == "Skewedgaussian":
+                final_model += model_skewed_gaussian(comp_theta, x)
+            elif name == "Skewedlorentzian":
+                final_model += model_skewed_lorentzian(comp_theta, x)
         
         return final_model
 
@@ -67,6 +73,14 @@ class analysis:
     def __init__(self): 
         # Print the current version of easyspec-extraction       
         print("easyspec-analysis version: ",easyspec_analysis_version)
+
+        self.line_models = types.SimpleNamespace()
+        self.line_models.model_Gauss = model_Gauss
+        self.line_models.model_Lorentz = model_Lorentz
+        self.line_models.model_Voigt = model_Voigt
+        self.line_models.model_skewed_gaussian = model_skewed_gaussian
+        self.line_models.model_skewed_lorentzian = model_skewed_lorentzian
+
     
     def continuum_fit(self,flux, wavelengths, continuum_regions, method = "powerlaw", pl_order=2, smooth_window=111):
     
@@ -360,7 +374,7 @@ class analysis:
         """
         Returns a picklable CombinedModel instance
         """
-        model_name_list = re.findall('[A-Z][a-z]*', model_name)
+        model_name_list = re.findall('[A-Z][a-z_]*', model_name)
         return CombinedModel(model_name_list)
 
     def lnlike(self, theta, x, y, yerr, model):
@@ -375,16 +389,6 @@ class analysis:
 
         """
         This function checks if the input parameters satisfy the prior conditions.
-        Alternative (slower) form:
-
-        for i in range(len(theta)):
-            if priors[i][0] < theta[i] < priors[i][1]:
-                continue
-            else:
-                return -np.inf
-        
-        return 0.0
-
         """
         if np.all((priors[:,0] < theta) & (theta < priors[:,1])):
             return 0.0
@@ -399,7 +403,7 @@ class analysis:
             return -np.inf
         return lp + self.lnlike(theta, x, y, yerr, model)
 
-    def line_MCMC(self, p0, priors, nwalkers, niter, initial, lnprob, data, model_name, custom_function=None, burn_in=100):
+    def line_MCMC(self, p0, priors, nwalkers, niter, initial, lnprob, data, model_name, custom_function=None, burn_in=100, show_progress=True):
 
         """This function runs a MCMC approach for one line (singular or blended) for a given a model."""
         
@@ -417,11 +421,11 @@ class analysis:
         
         start = time.time()
         print("Running burn-in...")
-        p0, _, _ = sampler.run_mcmc(p0, burn_in, progress=True)
+        p0, _, _ = sampler.run_mcmc(p0, burn_in, progress=show_progress)
         sampler.reset()
 
         print("Running production...")
-        pos, prob, state = sampler.run_mcmc(p0, niter, progress=True)
+        pos, prob, state = sampler.run_mcmc(p0, niter, progress=show_progress)
         end = time.time()
         serial_time = end - start
         print("Single-core processing took {0:.1f} seconds".format(serial_time))
@@ -504,7 +508,7 @@ class analysis:
         zerror_up = (q_84-q_50)/air_wavelength_line
         return z, zerror_down, zerror_up
 
-    def parameter_estimation(self, samples, model_name, air_wavelength_line=None, quantiles=[0.16, 0.5, 0.84], normalization = 1, parlabels=None, line_names="", output_dir=".", savefile=True):
+    def parameter_estimation(self, samples, air_wavelength_line=None, quantiles=[0.16, 0.5, 0.84], normalization = 1, parlabels=None, line_names="", output_dir=".", savefile=True):
         
         """
         In this function we estimate the parameter values and corresponding errors based on the 16%, 50%, and 84% quantiles of the
@@ -514,8 +518,6 @@ class analysis:
         ----------
         samples: list
             A list containing the MCMC posterior distributions.
-        model_name: string
-            The current model adopted in the fit.
         air_wavelength_line: float
             The line rest-frame wavelength used to compute the redshift.
         quantiles: list
@@ -546,10 +548,6 @@ class analysis:
         
         if isinstance(parlabels[0],str):
             parlabels = [parlabels]
-
-        if model_name == "custom":
-            if parlabels is None:
-                raise Exception("For a custom model, it is mandatory to input the list 'parlabels'.")
             
         output_dir = str(Path(output_dir))
         
@@ -563,8 +561,6 @@ class analysis:
             else:
                 raise Exception("The input value for air_wavelength_line must be a float, an integer, a list, or a numpy array.")
         
-        lambda_peak_names = ["Mean"]*len(air_wavelength_line)
-
         # Checking line_names:
         if isinstance(line_names,str):
                 line_names = [line_names]
@@ -577,12 +573,9 @@ class analysis:
         par_values = []
         par_values_errors = []
         par_names = []
-        for i in range(len(lambda_peak_names)):
+        for i in range(len(air_wavelength_line)):
             if savefile:
-                if model_name == "custom":
-                    f = open(f'{output_dir}/{self.target_name}_{line_names[i]}_line_fit_results_custom_model.csv','w')
-                else:
-                    f = open(f'{output_dir}/{self.target_name}_{line_names[i]}_line_fit_results.csv','w')
+                f = open(f'{output_dir}/{self.target_name}_{line_names[i]}_line_fit_results.csv','w')
                 f.write("# Parameter name, value, error_down, error_up\n")
             ndim = len(parlabels[i])  # number of dimensions/parameters
             parlabels[i] = list(parlabels[i])
@@ -591,13 +584,14 @@ class analysis:
                 q_16, q_50, q_84 = corner.quantile(samples[:,j+previous_j], quantiles)
                 dx_down, dx_up = q_50-q_16, q_84-q_50
                 # Computing the redshift of the line:
-                if parlabels[i][j] == lambda_peak_names[i] and air_wavelength_line is not None:
+                if parlabels[i][j] == "Location" and air_wavelength_line is not None:
                     z, zerror_down, zerror_up = self.redshift_calculator(q_16,q_50,q_84,air_wavelength_line[i])
                     if savefile:
                         f.write(f"z, {z}, {zerror_down}, {zerror_up}\n")
                     par_values.append(z)
                     par_values_errors.append([zerror_down, zerror_up])
                     par_names.append("redshift")
+
                 if parlabels[i][j][0:9] == "Amplitude":  # If the variable is the amplitude, then we have to normalize the data
                     par_values.append(q_50*normalization)
                     par_values_errors.append([dx_down*normalization, dx_up*normalization])
@@ -695,7 +689,7 @@ class analysis:
         
         if isinstance(parlabels,list):
             parlabels = np.asarray(parlabels)
-        peak_indexes = np.where(parlabels=="Mean")[0]
+        peak_indexes = np.where(parlabels=="Location")[0]
 
         for i in peak_indexes:
             plt.vlines(theta_max[i],y.min()-0.1*y.max(),10000, colors="k", linewidth=0.5)
@@ -703,6 +697,22 @@ class analysis:
         if savefig:
             plt.savefig(outputdir+"/"+title+"_line.png")
         return
+
+    def insert_rows(self, array, indices, row):
+        """Insert one or more copies of 'row' into 'array' at given indices (axis=0)."""
+        array = np.asarray(array)
+        row = np.asarray(row)
+
+        # Ensure indices are sorted descending
+        indices = np.sort(indices)[::-1]
+
+        # Clamp indices that are out of range
+        indices = np.clip(indices, 0, len(array))
+
+        for idx in indices:
+            array = np.insert(array, idx, row, axis=0)
+
+        return array
 
     def merge_fit_results(self, target_name, list_of_files=None, output_dir="./"):
         
@@ -739,17 +749,19 @@ class analysis:
 
         # Write header:
         parameter_names = np.asarray(data_list[index_maximum_number_of_pars][:,0])
-        minimum_list_of_parameter_names = np.asarray(['z','Mean','Amplitude','fwhm_Lorentz','fwhm_Gauss'])
+        minimum_list_of_parameter_names = np.asarray(['z','Location','Amplitude','fwhm_Lorentz','fwhm_Gauss','skewness'])
         if len(parameter_names) < len(minimum_list_of_parameter_names):
             parameter_names = minimum_list_of_parameter_names
         f.write("# Line name")
         for parameter_name in parameter_names:
-            if parameter_name[0:4] == "Mean":
+            if parameter_name == "Location":
                 f.write(", obs_"+parameter_name+" [Ang], obs_"+parameter_name+"_error_down, obs_"+parameter_name+"_error_up")
-            elif parameter_name[0:4] == "Ampl":
+            elif parameter_name == "Amplitude":
                 f.write(", obs_"+parameter_name+" (flux_dens - continuum) [erg cm-2 s-1 Ang-1], obs_"+parameter_name+"_error_down, obs_"+parameter_name+"_error_up")
             elif parameter_name[0:4] == "fwhm":
                 f.write(", obs_"+parameter_name+" [Ang], obs_"+parameter_name+"_error_down, obs_"+parameter_name+"_error_up")
+            elif parameter_name == "skewness":
+                f.write(", obs_"+parameter_name+", obs_"+parameter_name+"_error_down, obs_"+parameter_name+"_error_up")
             else:
                 f.write(", "+parameter_name+", "+parameter_name+"_error_down, "+parameter_name+"_error_up")
         
@@ -765,20 +777,24 @@ class analysis:
             f.write("\n"+line_names[i])
             line_array = np.asarray(data_list[i])
 
-            for number,parameter in enumerate(line_array):
-                if parameter[0] in parameter_names:
-                    index = np.where(parameter_names == parameter[0])[0][0]
-                    if index == number:
-                        f.write(", "+parameter[1]+", "+str(np.abs(float(parameter[2])))+", "+str(np.abs(float(parameter[3]))))
-                    else:
-                        f.write(", 0, 0, 0, "+parameter[1]+", "+str(np.abs(float(parameter[2])))+", "+str(np.abs(float(parameter[3]))))
-                    
-                if parameter[0][0:12] == "fwhm_Lorentz":
-                    try:
-                        if line_array[number+1][0][0:10] != "fwhm_Gauss": # Here it could be different from anything. It is just a generic condition.
-                            f.write(", 0, 0, 0")
-                    except:
-                        f.write(", 0, 0, 0")
+            mask_in_par_names = np.isin(parameter_names, line_array[:,0])
+            # Invert mask to get elements missing in parameter_names
+            mask_not_in_par_names = ~mask_in_par_names
+
+            # Indices in parameter_names of elements NOT in line_array[:,0]
+            idx_missing = np.where(mask_not_in_par_names)[0]
+            
+
+            # Insert element 3 at index 2
+            new_row = np.array(["missing","0","0","0"])
+            # Repeat the new row
+
+            # Sort indices descending to avoid shifting
+            line_array = self.insert_rows(line_array, idx_missing, new_row)
+
+            for parameter in line_array:
+                f.write(", "+parameter[1]+", "+str(np.abs(float(parameter[2])))+", "+str(np.abs(float(parameter[3]))))
+                
 
             if self.wavelength_systematic_error is not None:
                 f.write(f", {self.wavelength_systematic_error.value}")
@@ -837,69 +853,48 @@ class analysis:
             A function with the adopted model, i.e., a "Gaussian", "Lorentz" or "Voigt".
         """
         
-        if which_model == "Gaussian" or which_model == "gaussian":
+        if which_model == "Gaussian":
             initial = np.array([observed_wavelength, peak_height, 10])
             if peak_height > 0:  # This step is necessay because the priors must always go fro mthe smallest value up to the largest.
                 priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150]])
             else:
                 priors = np.array([[line_region_min,line_region_max],[10*peak_height,0.1*peak_height],[0.1,150]])
-            labels = ["Mean", "Amplitude", "std"]
+            labels = ["Location", "Amplitude", "std"]
             adopted_model = model_Gauss
-        elif which_model == "Lorentz" or which_model == "lorentz":
+        elif which_model == "Lorentz":
             initial = np.array([observed_wavelength, peak_height, 10])
             if peak_height > 0:
                 priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150]])
             else:
                 priors = np.array([[line_region_min,line_region_max],[10*peak_height,0.1*peak_height],[0.1,150]])
-            labels = ["Mean", "Amplitude", "fwhm_Lorentz"]
+            labels = ["Location", "Amplitude", "fwhm_Lorentz"]
             adopted_model = model_Lorentz
-        elif which_model == "Voigt" or which_model == "voigt":
+        elif which_model == "Voigt":
             initial = np.array([observed_wavelength, peak_height, 10, 10])
             if peak_height > 0:
                 priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150],[0.1,150]])
             else:
                 priors = np.array([[line_region_min,line_region_max],[10*peak_height,0.1*peak_height],[0.1,150],[0.1,150]])
-            labels = ["Mean", "Amplitude", "fwhm_Lorentz", "fwhm_Gauss"]
+            labels = ["Location", "Amplitude", "fwhm_Lorentz", "fwhm_Gauss"]
             adopted_model = model_Voigt
-
+        elif which_model == "Skewedgaussian":
+            initial = np.array([observed_wavelength, peak_height, 10, 0])
+            if peak_height > 0:
+                priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150],[-50,50]])
+            else:
+                priors = np.array([[line_region_min,line_region_max],[10*peak_height,0.1*peak_height],[0.1,150],[-50,50]])
+            labels = ["Location", "Amplitude", "std", "skewness"]
+            adopted_model = model_skewed_gaussian
+        elif which_model == "Skewedlorentzian":
+            initial = np.array([observed_wavelength, peak_height, 10, 0])
+            if peak_height > 0:
+                priors = np.array([[line_region_min,line_region_max],[0.1*peak_height, 10*peak_height],[0.1,150],[-50,50]])
+            else:
+                priors = np.array([[line_region_min,line_region_max],[10*peak_height,0.1*peak_height],[0.1,150],[-50,50]])
+            labels = ["Location", "Amplitude", "fwhm_Lorentz", "skewness"]
+            adopted_model = model_skewed_lorentzian
         
         return initial, priors, labels, adopted_model
-
-    def estimate_norm_height(self, wavelengths, flux_density, continuum_baseline, wavelength_peak_position, peak_height):
-
-        """
-        Funtion to estimate the normalized height of a peak to set the priors for the MCMC.
-
-        Parameters
-        ----------
-        wavelengths: numpy.ndarray (astropy.units Angstrom)
-            The wavelength solution for the given spectrum.
-        flux_density: numpy.ndarray (astropy.units erg/cm2/s/A)
-            The calibrated spectrum in flux density.
-        continuum_baseline: numpy.ndarray (float)
-            An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
-        wavelength_peak_position: astropy.units Angstrom
-            The position of the peak in the wavelength axis in Angstroms.
-        peak_height: astropy.units erg/cm2/s/A
-            The height of the peak in erg/cm2/s/A.
-
-        Returns
-        -------
-        norm_height: float
-            The estimated normalized height of the input peak. This value can be set to estimate priors for the MCMC.
-        
-        """
-
-        if isinstance(wavelength_peak_position, u.quantity.Quantity):
-            wavelength_peak_position = wavelength_peak_position.value
-
-        index = extraction.find_nearest(wavelengths.value, wavelength_peak_position)
-
-        local_normalization = 10**round(np.log10(np.median(flux_density.value - 0.9*continuum_baseline)))
-
-        norm_height = (peak_height - continuum_baseline[index])/local_normalization
-
-        return norm_height
     
     def calculate_continuum_subtracted_heights(self,wavelengths, peak_positions, peak_heights, continuum_baseline):
         """Calculate peak heights relative to local continuum."""
@@ -914,8 +909,8 @@ class analysis:
         return peak_heights - continuum_values
 
     def fit_lines(self, wavelengths, flux_density, continuum_baseline, wavelength_peak_positions, rest_frame_line_wavelengths, peak_heights, line_std_deviation,
-                  blended_line_min_separation = 50, which_models="Lorentz", line_names = None, overplot_archival_lines = ["H"], priors = None, MCMC_walkers = 250,
-                  MCMC_iterations = 400, plot_spec = True, plot_MCMC = False, overplot_median_model = False, save_results = True):
+                  blended_line_min_separation = 50, which_models="Lorentz", line_names = None, overplot_archival_lines = ["H"], priors = None, MCMC_walkers = 100,
+                  MCMC_iterations = 200, MCMC_burn_in=100, MCMC_show_progress=True, plot_spec = True, plot_MCMC = False, overplot_median_model = False, save_results = True):
 
         """
         Perform Markov Chain Monte Carlo (MCMC) fitting of spectral lines to estimate 
@@ -965,9 +960,13 @@ class analysis:
             intervals, i.e. the position of the peak, the peak heigh in terms of the continuum level and the fwhm. For the Voigt model, the input variable would
             be  priors = [None, None,[[7496,7696],[0.1, 150],[2,150],[1,150]], None]. Of course you can set up the ranges for all lines.
         MCMC_walkers: int
-            This is the number of walkers for the MCMC.
+            This is the number of walkers for the MCMC. Default = 100.
         MCMC_iterations: int
-            This is the number of iterations for the MCMC.
+            This is the number of iterations for the MCMC. Default = 200.
+        MCMC_burn_in: int
+            The MCMC burn-in is the initial phase of the simulation where the early iterations are discarded. Default = 100.
+        MCMC_show_progress: boolean
+            If True, the progess bars for the MCMC are shown. Default = True.
         plot_spec: boolean
             If True, a plot of the spectrum with the lines requested in the input variable overplot_archival_lines will be shown.
         plot_MCMC: boolean
@@ -1079,12 +1078,12 @@ class analysis:
                 blended_rest_frame_line_wavelengths = []
                 blended_labels = []
                 if blended_line[number+1] is False:
-                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number])
+                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number], burn_in=MCMC_burn_in, show_progress=MCMC_show_progress)
                     samples = sampler.flatchain
                     samples_list.append(samples)
                     theta_max = samples[np.argmax(sampler.flatlnprobability)]
 
-                    par_values, par_values_errors, par_names = self.parameter_estimation(samples, copy_which_models[number], air_wavelength_line = rest_frame_line_wavelengths[number],
+                    par_values, par_values_errors, par_names = self.parameter_estimation(samples, air_wavelength_line = rest_frame_line_wavelengths[number],
                                                                                         normalization=local_normalization, parlabels = list.copy(labels), line_names=line_names[number],
                                                                                         output_dir = self.output_dir, savefile=save_results)
                     par_values_list.append(par_values)
@@ -1134,12 +1133,12 @@ class analysis:
 
                     
 
-                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number])
+                    sampler, _, _, _ = self.line_MCMC(p0, local_priors, MCMC_walkers, MCMC_iterations, initial, self.lnprob, data, copy_which_models[number], burn_in=MCMC_burn_in, show_progress=MCMC_show_progress)
                     samples = sampler.flatchain
                     samples_list.append(samples)
                     theta_max = samples[np.argmax(sampler.flatlnprobability)]
 
-                    par_values, par_values_errors, par_names = self.parameter_estimation(samples, copy_which_models[number], air_wavelength_line = blended_rest_frame_line_wavelengths,
+                    par_values, par_values_errors, par_names = self.parameter_estimation(samples, air_wavelength_line = blended_rest_frame_line_wavelengths,
                                                                                         normalization=local_normalization, parlabels = list.copy(labels), line_names=blended_line_names,
                                                                                         output_dir = self.output_dir, savefile=save_results)
 
@@ -1275,7 +1274,7 @@ class analysis:
         """
         
         This function estimates the line dispersion (aka the rms width of the line), the profile equivalent width, and the FWHM. All measures are independent
-        on the line model (i.e. Gaussian, Lorentz or Voigt) and dependent on the interpolated line profile.
+        on the line model (i.e. Gaussian, Lorentz, Voigt, or skewed models) and dependent on the interpolated line profile.
 
         Parameters
         ----------
@@ -1439,6 +1438,101 @@ class analysis:
         return line_dispersion, profile_equiv_width, profile_FWHM, line_disp_error, equiv_width_error, fwhm_error
 
 
+    def line_dispersion_skewed_models(self, par_values, theta_error, model="Lorentz"):
+
+        """
+        
+        This function estimates the line dispersion (aka the rms width of the line) and the FWHM for the skwede line models.
+
+        Parameters
+        ----------
+        par_values: list
+            Array with the best-fit line parameters.
+        theta_error: numpy.ndarray
+            Array with the asymmetrical errors for each parameter.
+        model: string
+            The type of skewed function. Options are "Gauss" or "Lorentz".
+        
+        Returns
+        -------
+        line_dispersion: float
+            The line dispersion is well defined for skewed line profiles. The result here is given in the observed frame.
+        model_FWHM: float
+            The skewed model FWHM.
+        line_disp_error: float
+            The error on the line dispersion computed with a Monte Carlo approach.
+        fwhm_error: float
+            The error on the FWHM computed with a Monte Carlo approach.
+        """
+        
+        theta = np.asarray(par_values[1:])
+
+        if model == "Lorentz":
+            theta[2] = theta[2]/2
+            theta_error[2] = theta_error[2]/2
+            def lambda_P(wavelengths_window,theta):
+                return model_skewed_lorentzian(theta,wavelengths_window)*wavelengths_window
+            
+            def lambda2_P(wavelengths_window,theta):
+                return model_skewed_lorentzian(theta,wavelengths_window)*(wavelengths_window-first_moment)**2
+            
+            def Intensity(wavelengths_window,theta):
+                return model_skewed_lorentzian(theta,wavelengths_window)
+        else:
+            theta[2] = theta[2]/(2*np.sqrt(2 * np.log(2))) # Gaussian component FWHM to sigma
+            theta_error[2] = theta_error[2]/(2*np.sqrt(2 * np.log(2)))
+            def lambda_P(wavelengths_window,theta):
+                return model_skewed_gaussian(theta,wavelengths_window)*wavelengths_window
+            
+            def lambda2_P(wavelengths_window,theta):
+                return model_skewed_gaussian(theta,wavelengths_window)*(wavelengths_window-first_moment)**2
+            
+            def Intensity(wavelengths_window,theta):
+                return model_skewed_gaussian(theta,wavelengths_window)
+        
+        
+        Normalization_factor_for_integration = 10**round(np.log10(theta[1]))
+        theta[1] = theta[1]/Normalization_factor_for_integration
+
+        x = np.linspace(theta[0]- 10*theta[2],theta[0]+ 10*theta[2])
+        
+        numerator = np.trapz(lambda_P(x,theta), x)*Normalization_factor_for_integration
+        denominator = np.trapz(Intensity(x,theta), x)*Normalization_factor_for_integration
+
+        first_moment = numerator/denominator
+
+        second_moment = np.trapz(lambda2_P(x,theta), x)*Normalization_factor_for_integration/denominator
+        line_dispersion = np.sqrt(second_moment)
+
+        wavelength_range_0 = np.linspace(theta[0]-10*theta[2],theta[0],1000)
+        wavelength_range_1 = np.linspace(theta[0],theta[0]+10*theta[2],1000)
+        lambda_0_index = extraction.find_nearest(Intensity(wavelength_range_0,theta), theta[1]/2)
+        lambda_1_index = extraction.find_nearest(Intensity(wavelength_range_1,theta), theta[1]/2)
+        model_FWHM = np.abs(wavelength_range_1[lambda_1_index]-wavelength_range_0[lambda_0_index])
+
+        # Error estimate:
+        theta_error = np.mean(theta_error,axis=1)
+        line_disp_error = []
+        fwhm_error = []
+        for n in range(100):
+            noise = np.random.normal(scale=theta_error,size=len(theta))
+            noisy_theta = theta+noise
+            wavelength_range_0 = np.linspace(noisy_theta[0]-10*noisy_theta[2],noisy_theta[0],1000)
+            wavelength_range_1 = np.linspace(noisy_theta[0],noisy_theta[0]+10*noisy_theta[2],1000)
+            lambda_0_index = extraction.find_nearest(Intensity(wavelength_range_0,noisy_theta), noisy_theta[1]/2)
+            lambda_1_index = extraction.find_nearest(Intensity(wavelength_range_1,noisy_theta), noisy_theta[1]/2)
+            fwhm_error.append(np.abs(wavelength_range_1[lambda_1_index]-wavelength_range_0[lambda_0_index]))
+
+            denominator = np.trapz(Intensity(x,noisy_theta), x)*Normalization_factor_for_integration
+            second_moment = np.trapz(lambda2_P(x,noisy_theta), x)*Normalization_factor_for_integration/denominator
+            line_disp_error.append(np.sqrt(second_moment))
+
+        line_disp_error = np.nanstd(np.asarray(line_disp_error))
+        fwhm_error = np.nanstd(np.asarray(fwhm_error))
+
+        return line_dispersion, model_FWHM, line_disp_error, fwhm_error
+    
+
     def error_propagation_voigt(self,FWHM_Lorentz,FWHM_Gauss,error_lorentz,error_gauss):
 
         """
@@ -1467,10 +1561,10 @@ class analysis:
         return fwhm_error_voigt
 
 
-    def equiv_width_error(self,integrand,line_window,line_parameters,line_par_errors):
+    def equiv_width_error(self,integrand,line_window,line_parameters,line_par_errors, n_samples=100, n_points=300):
 
         """
-        In this function we estimate the modeled equivalent width error for a line based on a Monte Carlo simulation.
+        In this function, we estimate the modeled equivalent width error for a line based on a Monte Carlo simulation.
 
         Parameters
         ----------
@@ -1482,6 +1576,10 @@ class analysis:
             A list with the line best-fit parameters obtained with the MCMC method.
         line_par_errors: list
             A list with the asymmetrical parameter errors.
+        n_samples: int
+            Number of MC iterations.
+        n_points: int
+            Resolution of the wavelength axis.
         
         Returns
         -------
@@ -1492,25 +1590,37 @@ class analysis:
         """
 
 
+        line_parameters = np.asarray(line_parameters)
         line_par_errors = np.asarray(line_par_errors)
-        EQW_error_down = []
-        EQW_error_up = []
-        for n in range(100):
-            parameters_down = line_parameters + np.random.uniform(size=len(line_parameters))*line_par_errors[:,0]
-            parameters_up = line_parameters + np.random.uniform(size=len(line_parameters))*line_par_errors[:,1]
-            EQW_error_down.append(quad(integrand,line_window[0],line_window[1],args=parameters_down)[0])
-            EQW_error_up.append(quad(integrand,line_window[0],line_window[1],args=parameters_up)[0])
 
-        EQW_error_down = np.std(np.asarray(EQW_error_down))
-        EQW_error_up = np.std(np.asarray(EQW_error_up))
+        # Create wavelength grid
+        lam = np.linspace(line_window[0], line_window[1], n_points)
 
+        # Generate random samples for lower and upper error bounds
+        rand = np.random.uniform(size=(n_samples, len(line_parameters)))
+        params_down = line_parameters + rand * line_par_errors[:, 0]
+        params_up   = line_parameters + rand * line_par_errors[:, 1]
+
+        # Evaluate integrand and integrate using the trapezoidal rule
+        eqw_down = np.array([
+            np.trapz(integrand(lam, p), lam)
+            for p in params_down
+        ])
+        eqw_up = np.array([
+            np.trapz(integrand(lam, p), lam)
+            for p in params_up
+        ])
+
+        # Return standard deviations as uncertainties
+        EQW_error_down = float(np.std(eqw_down))
+        EQW_error_up = float(np.std(eqw_up))
         return EQW_error_down, EQW_error_up
         
 
     def line_physics(self, wavelengths, flux_density, continuum_baseline, par_values_list, par_values_errors_list, par_names_list, line_windows, line_std_deviation, plot = True, save_file = True):
 
         """
-        In this function we compute several physical properties for the fitted lines.
+        In this function, we compute several physical properties for the fitted lines.
 
         OBS 1: For the Voigt model, we assume independent variables when propagating the FWHM error. If this is not the case (you can check this in the MCMC
         corner plots), we recommend that you use the Gaussian or Lorentzian models.
@@ -1617,23 +1727,64 @@ class analysis:
             
             # Computing the equivalent width from best-fit line models:
             if len(line_parameters) == 5:
-                # Voigt case:
-                def integrand(x,theta):
-                    return -1*model_Voigt(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
+                if par_names_list[number][4] == 'fwhm_Gauss':
+                    # Voigt case:
+                    def integrand(x,theta):
+                        return -1*model_Voigt(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
+                    
+                    equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=line_parameters[1:])
+                    EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],line_parameters[1:],par_values_errors_list[number][1:])
+                    FWHM_Voigt = 0.5346*line_parameters[3] + np.sqrt(0.2166*line_parameters[3]**2 + line_parameters[4]**2)
+                    disp_velocity = c.to("km/s").value*FWHM_Voigt/(peak_position*2*np.sqrt(2 * np.log(2)))
+                    fwhm_error_down = self.error_propagation_voigt(par_values_list[number][3],par_values_list[number][4],par_values_errors_list[number][3][0],par_values_errors_list[number][4][0])
+                    fwhm_error_up = self.error_propagation_voigt(par_values_list[number][3],par_values_list[number][4],par_values_errors_list[number][3][1],par_values_errors_list[number][4][1])
+                    disp_velocity_err_down = c.to("km/s").value*fwhm_error_down/(peak_position*2*np.sqrt(2 * np.log(2)))
+                    disp_velocity_err_up = c.to("km/s").value*fwhm_error_up/(peak_position*2*np.sqrt(2 * np.log(2)))
+                    fwhm_error_down = np.sqrt( (fwhm_error_down/(1+z))**2   +  (FWHM_Voigt*par_values_errors_list[number][0][0]/((1+z)**2))**2      )
+                    fwhm_error_up = np.sqrt( (fwhm_error_up/(1+z))**2   +  (FWHM_Voigt*par_values_errors_list[number][0][1]/((1+z)**2))**2      )
+                    fwhm_rest_frame = FWHM_Voigt/(1+z)
+                elif par_names_list[number][3] == 'fwhm_Gauss':
+                    # Skewed Gaussian case:
+                    def integrand(x,theta):
+                        return -1*model_skewed_gaussian(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
+                    
+                    skewed_gaussian_parameters = line_parameters[1:]
+                    skewed_gaussian_parameters[2] = skewed_gaussian_parameters[2]/(2*np.sqrt(2 * np.log(2)))  # This is necessary because the last Gaussian parameter saved in par_values_list is the FWHM and not the standard deviation.
+                    equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=skewed_gaussian_parameters)
+                    skewed_gaussian_parameters_errors = np.asarray(par_values_errors_list[number][1:])
+                    skewed_gaussian_parameters_errors[2] = skewed_gaussian_parameters_errors[2]/(2*np.sqrt(2 * np.log(2)))
+                    EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],skewed_gaussian_parameters,skewed_gaussian_parameters_errors)
                 
-                equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=line_parameters[1:])
-                EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],line_parameters[1:],par_values_errors_list[number][1:])
-                FWHM_Voigt = 0.5346*line_parameters[3] + np.sqrt(0.2166*line_parameters[3]**2 + line_parameters[4]**2)
-                disp_velocity = c.to("km/s").value*FWHM_Voigt/(peak_position*2*np.sqrt(2 * np.log(2)))
-                fwhm_error_down = self.error_propagation_voigt(par_values_list[number][3],par_values_list[number][4],par_values_errors_list[number][3][0],par_values_errors_list[number][4][0])
-                fwhm_error_up = self.error_propagation_voigt(par_values_list[number][3],par_values_list[number][4],par_values_errors_list[number][3][1],par_values_errors_list[number][4][1])
-                disp_velocity_err_down = c.to("km/s").value*fwhm_error_down/(peak_position*2*np.sqrt(2 * np.log(2)))
-                disp_velocity_err_up = c.to("km/s").value*fwhm_error_up/(peak_position*2*np.sqrt(2 * np.log(2)))
-                fwhm_error_down = np.sqrt( (fwhm_error_down/(1+z))**2   +  (FWHM_Voigt*par_values_errors_list[number][0][0]/((1+z)**2))**2      )
-                fwhm_error_up = np.sqrt( (fwhm_error_up/(1+z))**2   +  (FWHM_Voigt*par_values_errors_list[number][0][1]/((1+z)**2))**2      )
-                fwhm_rest_frame = FWHM_Voigt/(1+z)
+                    line_dispersion, model_FWHM, line_disp_error, fwhm_error = self.line_dispersion_skewed_models(par_values_list[number], skewed_gaussian_parameters_errors, model="Gauss")
+                    
+                    disp_velocity = c.to("km/s").value*line_dispersion/peak_position 
+                    fwhm_rest_frame = model_FWHM/(1+z)
+                    disp_velocity_err_down = c.to("km/s").value*line_disp_error/peak_position
+                    disp_velocity_err_up = disp_velocity_err_down
+                    fwhm_error_down = fwhm_error/(1+z)
+                    fwhm_error_up = fwhm_error_down
                 
+                elif par_names_list[number][3] == 'fwhm_Lorentz':
+                    # Skewed Lorentzian case:
+                    def integrand(x,theta):
+                        return -1*model_skewed_lorentzian(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
+                    
+                    skewed_lorentzian_parameters = line_parameters[1:]
+                    skewed_lorentzian_parameters[2] = skewed_lorentzian_parameters[2]/2  # This is necessary because the last Lorentzian parameter saved in par_values_list is the FWHM and not the HWHM.
+                    equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=skewed_lorentzian_parameters)
+                    skewed_lorentzian_parameters_errors = np.asarray(par_values_errors_list[number][1:])
+                    skewed_lorentzian_parameters_errors[2] = skewed_lorentzian_parameters_errors[2]/2
+                    EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],skewed_lorentzian_parameters,skewed_lorentzian_parameters_errors)
                 
+                    line_dispersion, model_FWHM, line_disp_error, fwhm_error = self.line_dispersion_skewed_models(par_values_list[number], skewed_lorentzian_parameters_errors, model="Lorentz")
+                    
+                    disp_velocity = c.to("km/s").value*line_dispersion/peak_position 
+                    fwhm_rest_frame = model_FWHM/(1+z)
+                    disp_velocity_err_down = c.to("km/s").value*line_disp_error/peak_position
+                    disp_velocity_err_up = disp_velocity_err_down
+                    fwhm_error_down = fwhm_error/(1+z)
+                    fwhm_error_up = fwhm_error_down
+
             elif par_names_list[number][3] == 'fwhm_Lorentz':
                 # Lorentzian case:
                 def integrand(x,theta):
