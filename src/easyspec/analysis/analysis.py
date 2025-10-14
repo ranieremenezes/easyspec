@@ -28,8 +28,6 @@ libpath = Path(__file__).parent.resolve() / Path("lines")
 extraction = extraction()
 
 
-easyspec_analysis_version = "1.2.0"
-
 class CombinedModel:
     """A picklable class that acts like a function representing one line model or combinations of line models"""
     
@@ -71,8 +69,6 @@ class analysis:
     """This class contains all the functions necessary to perform the analysis of calibrated spectral data."""
 
     def __init__(self): 
-        # Print the current version of easyspec-extraction       
-        print("easyspec-analysis version: ",easyspec_analysis_version)
 
         self.line_models = types.SimpleNamespace()
         self.line_models.model_Gauss = model_Gauss

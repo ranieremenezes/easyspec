@@ -111,7 +111,7 @@ using Brent's method. The solution :math:`x_{\mathrm{peak}}` gives us the offset
 The final implemented model uses the parameters:
 
 * :math:`\lambda_{\mathrm{peak}}` - Peak wavelength position (observed maximum)
-* :math:`A` - Amplitude
+* :math:`A` - Amplitude of the Gaussian symmetrical component
 * :math:`\sigma` - Standard deviation
 * :math:`\alpha` - Skewness parameter
 
@@ -155,7 +155,7 @@ The solution :math:`x_{\mathrm{peak}}` gives us the offset between :math:`\lambd
 The final implemented model uses the parameters:
 
 * :math:`\lambda_{\mathrm{peak}}` - Peak wavelength position (observable maximum)
-* :math:`A` - Amplitude
+* :math:`A` - Amplitude of the Lorentzian symmetrical component
 * :math:`\gamma` - Lorentzian HWHM  
 * :math:`\eta` - Skewness parameter
 

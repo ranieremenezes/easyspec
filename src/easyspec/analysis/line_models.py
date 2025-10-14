@@ -7,7 +7,7 @@ In this file we collect all line models accepted by easyspec.
 import numpy as np
 from scipy.special import erf
 from scipy.special import wofz
-from scipy.optimize import brentq
+from scipy.optimize import brentq, minimize_scalar
 
 
 def model_Gauss(theta, x):
@@ -42,30 +42,30 @@ def model_Voigt(theta, x):
     return Voigt_profile
 
 
-def xpeak_for_s(s, x_min, x_max):
+def xpeak_for_s(s, x_min=-50.0, x_max=50.0):
     """
-    Solve (s/sqrt(pi)) * exp(-s^2 x^2) * (1+x^2) - x*(1+erf(s x)) = 0
-    for x, given s. Returns the root x_peak.
+    Find x_peak solving f(x)=0 for given s, or fallback to maximum of g(x).
     """
     def f(x):
-        return (s/np.sqrt(np.pi)) * np.exp(- (s**2)*(x**2)) * (1.0 + x**2) - x * (1.0 + erf(s*x))
-    # bracket search if sign at ends is same -> expand bounds
-    a, b = x_min, x_max
-    fa, fb = f(a), f(b)
-    if fa == 0:
-        return a
-    if fb == 0:
-        return b
-    # expand bounds if needed
-    while fa * fb > 0:
-        a *= 2.0
-        b *= 2.0
-        fa, fb = f(a), f(b)
-        # safety
-        if abs(a) > 1e6 or abs(b) > 1e6:
-            raise RuntimeError("Could not bracket root for xpeak")
-    x_root = brentq(f, a, b, maxiter=200)
-    return x_root
+        return (s/np.sqrt(np.pi)) * np.exp(-(s*x)**2) * (1+x**2) - x*(1+erf(s*x))
+
+    # sample on grid to find sign change
+    xs = np.linspace(x_min, x_max, 5001)
+    ys = f(xs)
+    signs = np.sign(ys)
+    flip = np.where(signs[:-1]*signs[1:] < 0)[0]
+
+    if flip.size > 0:
+        # use brentq between first sign change
+        i = flip[0]
+        return brentq(f, xs[i], xs[i+1])
+    else:
+        # fallback: directly maximize profile function
+        g = lambda x: - (1 + erf(s*x)) / (1 + x**2)
+        res = minimize_scalar(g, bounds=(x_min, x_max), method='bounded')
+        if res.success:
+            return res.x
+        return 0.0
 
 def model_skewed_lorentzian(theta, x):
     """
@@ -95,36 +95,34 @@ def model_skewed_lorentzian(theta, x):
     
 
 
-def xpeak_for_s_gaussian(s, x_min, x_max):
+def xpeak_for_s_gaussian(s, x_min=-50.0, x_max=50.0):
     """
-    Solve for the peak position in a skewed Gaussian.
-    For a skewed Gaussian: f(x) = (1/sqrt(2*pi)) * exp(-x**2/2) * [1 + erf(sx)]
-    The peak satisfies: -x * (1 + erf(sx)) + (2s/sqrt(pi)) * exp(-s**2*x**2) = 0
+    Find the peak position x for a skewed Gaussian defined by:
+        f(x) = exp(-x^2/2) * (1 + erf(sx))
+    The derivative f'(x) = 0 is solved analytically or numerically.
+    If no sign change is found in the derivative, a direct maximization is used.
     """
-    def f(x):
+    def fprime(x):
+        # derivative of f(x)
         term1 = -x * (1.0 + erf(s * x))
-        term2 = (2 * s / np.sqrt(np.pi)) * np.exp(-(s**2) * (x**2))
+        term2 = (2 * s / np.sqrt(np.pi)) * np.exp(-(s * x) ** 2)
         return term1 + term2
-    
-    # bracket search
-    a, b = x_min, x_max
-    fa, fb = f(a), f(b)
-    
-    if fa == 0:
-        return a
-    if fb == 0:
-        return b
-    
-    # expand bounds if needed
-    while fa * fb > 0:
-        a *= 2.0
-        b *= 2.0
-        fa, fb = f(a), f(b)
-        if abs(a) > 1e6 or abs(b) > 1e6:
-            raise RuntimeError("Could not bracket root for xpeak in Gaussian")
-    
-    x_root = brentq(f, a, b, maxiter=200)
-    return x_root
+
+    # sample to detect zero crossings
+    xs = np.linspace(x_min, x_max, 4001)
+    ys = fprime(xs)
+    signs = np.sign(ys)
+    flip = np.where(signs[:-1] * signs[1:] < 0)[0]
+
+    if flip.size > 0:
+        # root exists, use brentq between first sign change
+        i = flip[0]
+        return brentq(fprime, xs[i], xs[i + 1])
+    else:
+        # fallback: numerically maximize f(x)
+        f = lambda x: - np.exp(-0.5 * x**2) * (1 + erf(s * x))
+        res = minimize_scalar(f, bounds=(x_min, x_max), method='bounded')
+        return res.x if res.success else 0.0
 
 def model_skewed_gaussian(theta, x):
     """
