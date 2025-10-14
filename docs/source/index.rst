@@ -12,7 +12,7 @@ Welcome to easyspec's documentation!
 Tutorials
 ---------
 
-The instructions on how to use ``easyspec`` can be found in the GitHub directory "Tutorials".
+The instructions on how to use `easyspec <https://github.com/ranieremenezes/easyspec/tree/main>`_ can be found in the GitHub directory "Tutorials".
 
 The main tutorials are:
 
