@@ -68,7 +68,7 @@ The main tutorials are:
 * [spectroscopy\_tracing\_easyspec](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/spectroscopy_tracing_easyspec.ipynb): here we will show you how to extract your spectra and calibrate them in wavelegnth and flux.
 * [spectral\_analysis\_easyspec](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/spectral_analysis_easyspec.ipynb): finally, we show you how to fit a model to each line of your spectrum with a MCMC approach and recover physical quantities such as redshift, dispersion velocity, FWHM, line flux and many more.
 
-For a more advanced analysis, we recommend the tutorials
+For more advanced analyses, we recommend the tutorials
 * [spectral\_analysis\_fitting\_a\_line\_with\_two\_Gaussians](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/spectral_analysis_fitting_a_line_with_two_Gaussians.ipynb): here we fit the Hbeta line with two Gaussian components and also explore the MCMC posterior distributions.
 * [asymmetrical\_lines\_easyspec](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/asymmetrical_lines_easyspec.ipynb): here, we fit a skewed Lorentzian model to a C IV emission line, demonstrate how to construct a synthetic spectrum, and show how to manually define MCMC priors.
 
