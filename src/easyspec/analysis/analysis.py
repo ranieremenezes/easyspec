@@ -892,6 +892,39 @@ class analysis:
         
         return initial, priors, labels, adopted_model
     
+    def estimate_norm_height(self, flux_density, continuum_baseline, wavelength_peak_position, peak_height):
+
+        """
+        Funtion to estimate the normalized height of a peak to set the priors for the MCMC.
+
+        Parameters
+        ----------
+        flux_density: numpy.ndarray (astropy.units erg/cm2/s/A)
+            The calibrated spectrum in flux density.
+        continuum_baseline: numpy.ndarray (float)
+            An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
+        wavelength_peak_position: astropy.units Angstrom
+            The position of the peak in the wavelength axis in Angstroms.
+        peak_height: astropy.units erg/cm2/s/A
+            The height of the peak in erg/cm2/s/A.
+
+        Returns
+        -------
+        norm_height: float
+            The estimated normalized height of the input peak. This value can be set to estimate priors for the MCMC.
+        
+        """
+
+        if isinstance(wavelength_peak_position, u.quantity.Quantity):
+            wavelength_peak_position = wavelength_peak_position.value
+
+        local_normalization = 10**round(np.log10(np.median(flux_density.value - 0.9 * continuum_baseline)))
+
+        norm_height = peak_height/local_normalization
+
+        return norm_height
+    
+
     def calculate_continuum_subtracted_heights(self,wavelengths, peak_positions, peak_heights, continuum_baseline):
         """Calculate peak heights relative to local continuum."""
         # Find indices closest to each peak position
@@ -1008,9 +1041,7 @@ class analysis:
         self.line_names = line_names
 
         # Calculate continuum-subtracted peak heights
-        peak_heights = self.calculate_continuum_subtracted_heights(
-            wavelengths, wavelength_peak_positions, peak_heights, continuum_baseline
-        )
+        peak_heights = self.calculate_continuum_subtracted_heights(wavelengths, wavelength_peak_positions, peak_heights, continuum_baseline)
 
         # Calculate normalization factor for the spectrum
         local_normalization = 10**round(np.log10(np.median(flux_density.value - 0.9 * continuum_baseline)))
@@ -1044,13 +1075,14 @@ class analysis:
                 
                 initial, local_priors, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number],
                                                                                      peak_height, line_region_min, line_region_max)
+
             else:
                 # In the case of a single-line analysis, if the user inputs priors=[[7500,7700],[0.1],[2,50]] instead of priors=[ [[7500,7700],[0.1],[2,50]] ], the analysis will work anyway.
                 if np.isscalar(priors[number][0]) or isinstance(priors[number][0], (int, float)):
                     priors = [priors]
                 # User-provided priors - get basic values first
                 initial, local_priors, line_region_min, line_region_max = aux_parse_custom_priors(priors[number], wavelength_peak_positions[number], peak_height)
-                
+
                 # Then call automatic_priors separately
                 _, _, labels, adopted_model = self.automatic_priors(copy_which_models[number], wavelength_peak_positions[number], peak_height, 
                                                                     line_region_min=None, line_region_max=None)

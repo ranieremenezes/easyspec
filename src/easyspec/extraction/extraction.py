@@ -134,8 +134,38 @@ class extraction:
     
         self.wavelengths_fit_std_list = None  # To be filled with the function extraction.wavelength_calibration()
         self.spec_systematic_error_list = None  # To be filled with the function extraction.extracting()
+    
+    def _repeat_trace(self, fitted_polymodel_list, final_peak_positions, ymin, ymax, bad_pixels, yvals, repeat_trace_at):
+
+        """This auxiliary function duplicates a given trace. The parameter descriptions are identical to those provided
+        in the documentation of the tracing() function."""
+
+        for spec_key in repeat_trace_at.keys():
+            trace_index_to_be_repeated = int(spec_key.split("_")[1])
+            new_trace = copy.deepcopy(fitted_polymodel_list[trace_index_to_be_repeated])
+            new_trace.c0 = new_trace.c0 + repeat_trace_at[spec_key]
+            fitted_polymodel_list.append(new_trace)
+            final_peak_positions = np.append(final_peak_positions,final_peak_positions[trace_index_to_be_repeated] + repeat_trace_at[spec_key])
+            ymin.append(ymin[trace_index_to_be_repeated]+repeat_trace_at[spec_key])
+            ymax.append(ymax[trace_index_to_be_repeated]+repeat_trace_at[spec_key])
+            bad_pixels.append(bad_pixels[trace_index_to_be_repeated])
+            yvals.append(yvals[trace_index_to_be_repeated] + repeat_trace_at[spec_key])
+
+        unordered_c0 = []
+        for unordered_trace in fitted_polymodel_list:
+            unordered_c0.append(unordered_trace.c0.value)
         
-    def tracing(self, target_spec_data, method = "argmax", y_pixel_range = 15, xlims = None, poly_order = 2, trace_half_width = 7, peak_height = 100, distance = 50, Number_of_slices = 20, peak_dispersion_limit = 3, main_plot = True, plot_residuals = True):
+        ordered_indexes = np.argsort(unordered_c0)
+        fitted_polymodel_list = list(np.asarray(fitted_polymodel_list)[ordered_indexes])
+        final_peak_positions = final_peak_positions[ordered_indexes]
+        ymin = list(np.asarray(ymin)[ordered_indexes])
+        ymax = list(np.asarray(ymax)[ordered_indexes])
+        bad_pixels = list(np.asarray(bad_pixels)[ordered_indexes])
+        yvals = list(np.asarray(yvals)[ordered_indexes])
+        return fitted_polymodel_list, final_peak_positions, ymin, ymax, bad_pixels, yvals
+
+
+    def tracing(self, target_spec_data, method = "argmax", y_pixel_range = 15, xlims = None, poly_order = 2, trace_half_width = 7, peak_height = 100, distance = 50, Number_of_slices = 20, peak_dispersion_limit = 3, repeat_trace_at = None, main_plot = True, plot_residuals = True):
 
         """
         This function detects all the spectra available in an image and fits a polynomial to recover the trace of each one of them. 
@@ -172,6 +202,10 @@ class extraction:
             Useful only for the "multi" mode. This parameter sets the dispersion limit (with respect to the trace slice of minimum dispersion) of a trace slice such that we can
             use this slice to fit the trace, i.e. if the trace dispersion in a slice is larger than peak_dispersion_limit*minimum_dispersion, this slice will be ignored in the
             fit, where the term 'minimum_dispersion' stands for the dispersion in the slice with minimum trace dispersion.
+        repeat_trace_at: dict
+            This variable allows the user to duplicate a specific trace and place the copy at an arbitrary position along the y-axis. For example, if two spectra are detected,
+            you can replicate one or both using a dictionary such as repeat_trace_at = {"spec_0": 75, "spec_1": -50}, where the numerical values represent the vertical shifts (in pixels)
+            relative to the original spec_0 and/or spec_1 traces. This feature is particularly useful when analyzing spectra without a clear continuum, such as those from H II regions.
         main_plot: boolean
             If True, easyspec will plot all the traces over all the spectra (or the main spectra) in the image.
         plot_residuals: boolean
@@ -216,7 +250,6 @@ class extraction:
             yvals = []
             yaxis = np.repeat(np.arange(ymin[0], ymax[0])[:,None], target_spec_data[:,:].shape[1], axis=1)
 
-
             background1 = [] 
             background2 = []
             for i in range(np.shape(target_spec_data)[1]):
@@ -253,7 +286,6 @@ class extraction:
             
             peaks_histogram = np.histogram(flat_multi_peaks, bins=np.shape(target_spec_data)[0])
             final_peak_positions = scipy.signal.find_peaks(peaks_histogram[0],height=peak_height,distance=distance)[0]
-            print("Total number of spectra: ", len(final_peak_positions),", centered at y-pixels ", final_peak_positions)
 
             fitted_polymodel_list = []
             ymin = []
@@ -294,6 +326,11 @@ class extraction:
                 fitted_polymodel_list.append(linfitter(polymodel, xvals[~bad_pixels[-1]], yvals[-1][~bad_pixels[-1]]))
         else:
             raise RuntimeError("Wrong method name. Accepted entries: 'argmax', 'moments' or 'multi'.")
+
+        # Repeat a trace at a position "y":
+        if repeat_trace_at is not None:
+            fitted_polymodel_list, final_peak_positions, ymin, ymax, bad_pixels, yvals = self._repeat_trace(fitted_polymodel_list, final_peak_positions, ymin, ymax, bad_pixels, yvals, repeat_trace_at)
+
 
         if main_plot:
             plt.figure(figsize=(12,12*self.aspect_ratio)) 
@@ -444,7 +481,8 @@ class extraction:
             background2 = background2.reshape(np.shape(target_spec_data))
             background = (background1+background2)/2
 
-            # Here we select only the region around the spine:
+            # Here we select only the region around the spine and linearize the spectrum:
+            # cutouts contains the linearized image of the spectrum between +-trace_half_width. You can see it with plt.imshow(cutouts)
             cutouts = np.array([target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval]
                         for yval, xval in zip(trace_center, xvals)])
             
@@ -457,8 +495,13 @@ class extraction:
             amplitude_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[0][0])
             mean_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[1][1])
             std_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[2][2])
-            model_trace_profile = fitted_trace_profile(trace_profile_xaxis)
 
+            if std_sys_error > trace_half_width/2:
+                warnings.warn(f"Spec_{number} has no significant counts. Skipping it...")
+                print(f"Spec_{number} has no significant counts. Skipping it...")
+                continue
+
+            model_trace_profile = fitted_trace_profile(trace_profile_xaxis)
             # Lamp spectral extraction:
             if master_lamp_data is not None:
                 lamp_image = fits.open(master_lamp_data)

@@ -46,6 +46,10 @@ def xpeak_for_s(s, x_min=-50.0, x_max=50.0):
     """
     Find x_peak solving f(x)=0 for given s, or fallback to maximum of g(x).
     """
+
+    if abs(s) < 1e-10:  # symmetric case
+        return 0.0
+    
     def f(x):
         return (s/np.sqrt(np.pi)) * np.exp(-(s*x)**2) * (1+x**2) - x*(1+erf(s*x))
 
@@ -102,6 +106,10 @@ def xpeak_for_s_gaussian(s, x_min=-50.0, x_max=50.0):
     The derivative f'(x) = 0 is solved analytically or numerically.
     If no sign change is found in the derivative, a direct maximization is used.
     """
+
+    if abs(s) < 1e-10:  # symmetric case
+        return 0.0
+    
     def fprime(x):
         # derivative of f(x)
         term1 = -x * (1.0 + erf(s * x))
