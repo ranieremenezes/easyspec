@@ -70,11 +70,14 @@ The main tutorials are:
 
 For more advanced analyses, we recommend the tutorials
 * [spectral\_analysis\_fitting\_a\_line\_with\_two\_Gaussians](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/spectral_analysis_fitting_a_line_with_two_Gaussians.ipynb): here we fit the Hbeta line with two Gaussian components and also explore the MCMC posterior distributions.
-* [asymmetrical\_lines\_easyspec](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/asymmetrical_lines_easyspec.ipynb): here, we fit a skewed Lorentzian model to a C IV emission line, demonstrate how to construct a synthetic spectrum, and show how to manually define MCMC priors.
-
+* [asymmetrical\_lines\_easyspec](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/asymmetrical_lines_easyspec.ipynb): here, we fit a skewed Lorentzian model to a C IV emission line, demonstrate how to construct a synthetic spectrum, and show how to manually define MCMC priors. 
 
 The documentation of `easyspec` can be found in the header of all the functions, and at [this link](https://easyspec.readthedocs.io/en/latest/index.html).
 
+
+### Overview about the software
+
+An overview seminar on `easyspec`, presented in August 2025 at the University of São Paulo, is [available on YouTube](https://www.youtube.com/watch?v=o31VQCPTvWs).
 
 # Acknowledgments
 
