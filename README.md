@@ -83,3 +83,7 @@ An overview seminar on `easyspec`, presented in August 2025 at the University of
 
 To acknowledge `easyspec` in a publication, please cite de Menezes et al., 2025 (https://iopscience.iop.org/article/10.3847/1538-3881/adf220) and the DOI in [Zenodo](https://zenodo.org/records/17211465).
 
+# News
+
+[![Check out easyspec news!](cover.jpg)](https://github.com/ranieremenezes/easyspec/News/easyspec_News___October_2025.pdf)
+
