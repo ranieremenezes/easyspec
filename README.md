@@ -85,5 +85,5 @@ To acknowledge `easyspec` in a publication, please cite de Menezes et al., 2025 
 
 # News
 
-[![Check out easyspec news!](cover.jpg)](https://github.com/ranieremenezes/easyspec/News/easyspec_News___October_2025.pdf)
+[![Check out easyspec news!](https://github.com/ranieremenezes/easyspec/blob/main/News/cover.jpg)](https://github.com/ranieremenezes/easyspec/blob/main/News/easyspec_News___October_2025.pdf)
 
