@@ -193,7 +193,7 @@ class extraction:
         peak_height: float
             The required height of the peaks. The smaller this value, the more spectra you will find in your image.
         distance: float
-            Required minimal distance (>= 1) in pixels between neighbouring peaks in the y-axis. Default is 20 pixels. If you set this value too high with respect to the y-axis
+            Required minimal distance (>= 1) in pixels between neighbouring peaks in the y-axis. Default is 50 pixels. If you set this value too high with respect to the y-axis
             resolultion of your image, this function will return undesired results.
         Number_of_slices: integer
             Useful only for the "multi" mode. This is the number of slices in which every spectra in the image is divided in the x-axis. It is used to set the best x-axis interval

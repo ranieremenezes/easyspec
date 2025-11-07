@@ -187,6 +187,8 @@ class analysis:
             self.flux_systematic_error = flux_density_sys_error
         except:
             wavelengths, flux_density = data[:,0]*u.angstrom, data[:,1]*u.erg / u.cm**2 / u.s / u.AA  # Angstrom, erg/cm2/s/Angstrom
+            self.wavelength_systematic_error = None
+            self.flux_systematic_error = None
         if plot:
             plt.figure(figsize=(12,5))
             plt.minorticks_on()
