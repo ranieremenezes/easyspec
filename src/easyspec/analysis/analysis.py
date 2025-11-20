@@ -2338,7 +2338,7 @@ class analysis:
             plt.show()
 
         if save_file:
-            output_path = f"{output_dir}/stacked_spectrum_{method}.dat"
+            output_path = f"{str(Path(output_dir))}/stacked_spectrum_{method}.dat"
             np.savetxt(output_path, np.column_stack((wavelengths_stacked, stacked_flux)))
 
         return wavelengths_stacked*u.AA, stacked_flux*u.erg/(u.AA*u.cm**2*u.s)
