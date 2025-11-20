@@ -2176,10 +2176,6 @@ class analysis:
 
         for wavelength, flux in zip(list_of_wavelengths, list_of_fluxes):
             
-            print("interpolate")
-            print(wavelength,flux)
-            for i in flux:
-                print(i)
             # Creates the splines and interpolates
             tck = interpolate.splrep(wavelength, flux, k=3)
             flux_interp = interpolate.splev(wavelengths_stacked, tck)
@@ -2231,7 +2227,7 @@ class analysis:
         return stacked_flux
     
 
-    def stack_calib_spectra(self, input_data="/home/vitor/projetos/easy_spec/spectra_data/", method="median", target_name=None, output_dir="./", over_resolution_factor=5, save_file=False, plot=True, plot_overlayed_spectra=True):
+    def stack_calib_spectra(self, input_data, method="median", target_name=None, output_dir="./", over_resolution_factor=5, save_file=False, plot=True, plot_overlayed_spectra=True):
     
         """
         This function stacks calibrated .dat spectra from a list of file paths or a directory containing .dat spectra.
@@ -2239,7 +2235,7 @@ class analysis:
         Parameters: 
         -----------
         input_data: list or string
-            A list of file paths to calibrated .dat spectra or a directory path containing .dat spectra
+            A list of ".dat" file paths containing calibrated spectra or a directory path containing ".dat" spectra.
         method: string
             The stacking method to use, either "median" or "mean".
         target_name: string
@@ -2284,7 +2280,6 @@ class analysis:
 
         for file in files_list:
                 wavelength, flux = self.load_calibrated_data(file, target_name=target_name, output_dir="./",plot=False)
-                print(flux.value, wavelength.value)
                 list_of_wavelengths.append(wavelength.value)
                 list_of_fluxes.append(flux.value)
         
