@@ -2090,4 +2090,260 @@ class analysis:
         log10_BH_mass_Halpha = [log10_BH_mass_Halpha,systematic_error_FWHM]
         return log10_BH_mass_Halpha
 
+
+    def get_highest_resolution(self, specs_dict): 
+
+        """ 
+        This function gets the spectrum with the highest resolution in specs_dict.
+
+        Parameters:
+        -----------
+        specs_dict: dictionary
+            A dictionary where each key is a spectrum name and each value is a list containing [lambda0, lambdaf, R].
+
+        Returns:
+        --------
+        highest_R_spec: string
+            The name of the spectrum with the highest resolution.
+        highest_R: float
+            The highest resolution value found in specs_dict.
+        """
+        highest_R = 0
+        highest_R_spec = None
+
+        for spec in specs_dict: 
+
+            resolution = specs_dict[spec][2]  # retrieves the list for the current 'spec' and gets the element at index [2], which is 'R'
+
+            if resolution > highest_R:
+                highest_R = resolution
+                highest_R_spec = spec
+        return highest_R_spec, highest_R
+    
+
+    def create_common_grid(self, specs_dict, over_resolution_factor):
+
+        """ 
+        This function creates a common wavelength grid for all spectra to be used for the final stacked spectrum.
+
+        Parameters:
+        -----------
+        specs_dict: dictionary
+            A dictionary where each key is a spectrum and each value is a list containing [lambda0, lambdaf, R].
+        over_resolution_factor: int
+            This factor increases the number of points in the stacked spectrum wavelength grid. This value must be greater than 1.
+
+        Returns:
+        --------
+        wavelengths_stacked: numpy.ndarray
+            An array containing the interpolated wavelength values for the stacked spectrum.
+        """
+
+        highest_R = self.get_highest_resolution(specs_dict)[1]  # stores the 2° value of the return of the function(the resolution) in "highest_R"
+        all_lambda0 = [value[0] for value in specs_dict.values()]   # stores lambda0 for all spectra (spect_dict values are [lambda0, lambdaf, R])
+        all_lambdaf = [value[1] for value in specs_dict.values()]   # stores lambdaf for all spectra
+
+        lambda_min = min(all_lambda0)  # smallest value of lambda0 among all spectra
+        lambda_max = max(all_lambdaf)  # largest value of lambdaf among all spectra
+        N_points = int(over_resolution_factor * highest_R * (lambda_max - lambda_min))   # number of points for the new wavelength array, using 5x highest_R
+
+        wavelengths_stacked = np.linspace(lambda_min,lambda_max,N_points)  # array with the wavelength values for the stacked spectrum
+
+        return wavelengths_stacked
+    
+
+    def interpolate_spectra(self, list_of_wavelengths, list_of_fluxes, wavelengths_stacked):
+
+        """ 
+        This function interpolates all spectra to the common wavelength grid of the stacked spectrum,
+        fills the grid with NaN's where there is no data and creates a matrix where each row is an interpolated spectrum.
+
+        Parameters:
+        ----------- 
+        list_of_wavelengths: list
+            A list where each element is a numpy array containing the wavelength values of each spectrum.
+        list_of_fluxes: list
+            A list where each element is a numpy array containing the flux values of each spectrum.
+        wavelengths_stacked: numpy.ndarray
+            An array containing the wavelength values of the stacked spectrum in Å. These are not the measured wavelengths but the values of the common grid created for stacking.
+
+        Returns:
+        --------  
+        spectra_interp_matrix: numpy.ndarray
+            A matrix where each row is an interpolated spectrum with the size of the common wavelength grid.
+        """
+        spectra_interp_list = []
+
+        for wavelength, flux in zip(list_of_wavelengths, list_of_fluxes):
+            
+            print("interpolate")
+            print(wavelength,flux)
+            for i in flux:
+                print(i)
+            # Creates the splines and interpolates
+            tck = interpolate.splrep(wavelength, flux, k=3)
+            flux_interp = interpolate.splev(wavelengths_stacked, tck)
+            
+            # Creates an array of NaN's with the same shape as wavelengths_stacked
+            filled_flux = np.full_like(wavelengths_stacked, np.nan, dtype=float)
+
+            # Creates a mask for the valid wavelength range of each spectrum
+            mask = (wavelengths_stacked >= wavelength.min()) & (wavelengths_stacked <= wavelength.max())
+            
+            # Fills the valid range in filled_flux with the interpolated flux values
+            filled_flux[mask] = flux_interp[mask]
+            
+            spectra_interp_list.append(filled_flux)
+
+        # Creates the matrix where each row is an interpolated spectrum
+        spectra_interp_matrix = np.vstack(spectra_interp_list)
+
+        return spectra_interp_matrix
+
+
+    def calculate_stack(self, spectra_interp_matrix, method):
+    
+        """
+        This function calculates the stacked spectrum using the specified method (median or mean).
+
+        Parameters:
+        -----------
+        spectra_interp_matrix: numpy.ndarray
+            A matrix where each row is an interpolated spectrum with the size of the common wavelength grid.
+        method: string
+            The stacking method to use, either "median" or "mean".
+
+        Returns:
+        --------  
+        stacked_flux: numpy.ndarray
+            An array containing the interpolated flux values of the stacked spectrum. 
+        """
         
+        if method == "median":
+            stacked_flux = np.nanmedian(spectra_interp_matrix, axis=0)
+
+        elif method == "mean":
+            stacked_flux = np.nanmean(spectra_interp_matrix, axis=0)
+
+        else:
+            raise ValueError("Invalid stacking method. Use 'median' or 'mean'.")
+            
+        return stacked_flux
+    
+
+    def stack_calib_spectra(self, input_data="/home/vitor/projetos/easy_spec/spectra_data/", method="median", target_name=None, output_dir="./", over_resolution_factor=5, save_file=False, plot=True, plot_overlayed_spectra=True):
+    
+        """
+        This function stacks calibrated .dat spectra from a list of file paths or a directory containing .dat spectra.
+
+        Parameters: 
+        -----------
+        input_data: list or string
+            A list of file paths to calibrated .dat spectra or a directory path containing .dat spectra
+        method: string
+            The stacking method to use, either "median" or "mean".
+        target_name: string
+            Optional. This will be the title of the plot.
+        output_dir: string
+            The directory where the stacked spectrum file will be saved if save_file is True.
+        over_resolution_factor: int
+            This factor increases the number of points in the stacked spectrum wavelength grid. This value must be greater than 1. Default value = 5.
+        save_file: bool
+            If True, saves the stacked spectrum to a .dat file.
+        plot: bool
+            If True, plots the stacked spectrum.
+        plot_overlayed_spectra: bool
+            If True, plots all individual spectra overlaid with the stacked spectrum.
+
+        Returns:
+        --------  
+        wavelengths_stacked: numpy.ndarray (astropy.units Å)
+            An array containing the wavelength values of the stacked spectrum in Å. These are not the measured wavelengths but the values of the common grid created for stacking.
+        stacked_flux: numpy.ndarray (astropy.units. erg / (Å cm² s))
+            An array containing the interpolated flux values of the stacked spectrum in erg / (Å cm² s). 
+        """
+        files_list = []
+        
+        if isinstance(input_data, list):   # Checks if input_data is a list
+            
+            for file_path in input_data:
+                if not file_path.endswith(".dat"):   # Test if all elements are .dat files
+                    raise RuntimeError("The input_data variable must be a list of data paths or a directory filled with .dat spectra.")
+        
+            files_list = input_data
+
+        elif isinstance(input_data,str) and Path(input_data).is_dir():  # Checks if input_data is a directory path
+            
+            files_list = [str(path) for path in Path(input_data).glob("*.dat")]
+            
+        else:
+            raise RuntimeError("The input_data variable must be a list of data paths or a directory filled with .dat spectra.")
+
+        list_of_wavelengths = []
+        list_of_fluxes = []
+
+        for file in files_list:
+                wavelength, flux = self.load_calibrated_data(file, target_name=target_name, output_dir="./",plot=False)
+                print(flux.value, wavelength.value)
+                list_of_wavelengths.append(wavelength.value)
+                list_of_fluxes.append(flux.value)
+        
+        names = [Path(file_path).stem for file_path in files_list]   # fills the names list with the name of each file(.stem removes the .dat extension)
+
+        lambda0_list = []
+        lambdaf_list = []
+        specs_dict = {}
+
+        for name, wavelength in zip(names, list_of_wavelengths): # iterates through both lists simultaneously
+            lambda0 = wavelength[0]       # first wavelength value
+            lambdaf = wavelength[-1]      # last wavelength value
+            lambda0_list.append(lambda0)  # adds all lambda0 values to lambda0_list
+            lambdaf_list.append(lambdaf)  # adds all lambdaf values to lambdaf_list
+            delta_lambda = lambdaf - lambda0    
+            resolution = len(wavelength)/(delta_lambda)  # points per wavelength
+
+            specs_dict[name] = [lambda0, lambdaf, resolution]  # assigns each name to its corresponding values to fill the dictionary
+
+        wavelengths_stacked = self.create_common_grid(specs_dict, over_resolution_factor)   # Creates the wavelength interval for the stacked spectrum
+        spectra_interp_matrix = self.interpolate_spectra(list_of_wavelengths, list_of_fluxes, wavelengths_stacked)  # Interpolates all spectra to the common wavelength grid
+        stacked_flux = self.calculate_stack(spectra_interp_matrix, method)  # Calculates the stacked flux
+        
+        if plot and not plot_overlayed_spectra:   
+
+            plt.figure(figsize=(12, 4), dpi=150)
+            plt.plot(wavelengths_stacked, stacked_flux, color='orange', linewidth=0.5)
+            plt.xlabel('Observed ${\lambda}$[$\AA$]')
+            plt.ylabel(r'$F_{\lambda}$ [erg / ($\AA$ cm² s)]', fontsize=12)
+            if target_name is not None:
+                plt.title('Stacked Spectrum of '+ target_name, fontsize=12)
+            else:
+                plt.title('Stacked Spectrum', fontsize=12)
+            plt.grid(True, which='both', linewidth=0.1, linestyle='--', color='gray')
+            plt.minorticks_on()
+            plt.legend()
+            plt.show()
+
+        elif plot and plot_overlayed_spectra:   # Plots all individual spectra overlaid with the stacked spectrum
+            
+            plt.figure(figsize=(12, 4), dpi=150)
+
+            for i in range(spectra_interp_matrix.shape[0]):
+                plt.plot(wavelengths_stacked, spectra_interp_matrix[i], alpha=0.8, linewidth=0.5)
+            
+            plt.plot(wavelengths_stacked, stacked_flux, label='Stacked Spectrum', color='black', linewidth=0.5)
+            plt.xlabel('Observed ${\lambda}$[$\AA$]')
+            plt.ylabel(r'$F_{\lambda}$ [erg / ($\AA$ cm² s)]', fontsize=12)
+            if target_name is not None:
+                plt.title('Stacked Spectrum of '+ target_name + ' overlayed with original spectra', fontsize=12)
+            else:
+                plt.title('Stacked Spectrum overlayed with original spectra', fontsize=12)
+            plt.grid(True, which='both', linewidth=0.1, linestyle='--', color='gray')
+            plt.minorticks_on()
+            plt.legend()
+            plt.show()
+
+        if save_file:
+            output_path = f"{output_dir}/stacked_spectrum_{method}.dat"
+            np.savetxt(output_path, np.column_stack((wavelengths_stacked, stacked_flux)))
+
+        return wavelengths_stacked*u.AA, stacked_flux*u.erg/(u.AA*u.cm**2*u.s)
