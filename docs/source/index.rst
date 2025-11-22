@@ -26,6 +26,8 @@ For more advanced analyses, we recommend the tutorials
 
 * `asymmetrical\_lines\_easyspec <https://github.com/ranieremenezes/easyspec/blob/main/tutorial/asymmetrical_lines_easyspec.ipynb>`_: here, we fit a skewed Lorentzian model to a C IV emission line, demonstrate how to construct a synthetic spectrum, and show how to manually define MCMC priors. 
 
+* `Stacking\_reduced\_spectra <https://github.com/ranieremenezes/easyspec/blob/main/tutorial/Stacking_reduced_spectra.ipynb>`_: in this tutorial, we show you how to stack several spectra of the same target collected with different instruments.
+
 Contents
 --------
 
