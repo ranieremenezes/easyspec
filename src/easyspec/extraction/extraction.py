@@ -21,7 +21,7 @@ libpath = Path(__file__).parent.resolve() / Path("airmass")
 libpath_std = Path(__file__).parent.resolve() / Path("standards")
 cleaning = cleaning()
 
-easyspec_extraction_version = "1.0.1"
+easyspec_extraction_version = "1.0.2"
 
 
 class extraction:
@@ -93,6 +93,8 @@ class extraction:
             Matrix containing the standard star spectral image (only if the standard star spectral file is given by the user).
         """
 
+        warnings.filterwarnings('ignore')
+
         # Main target:
         self.target_spec_data = fits.open(target_spec_file)[0].data
         self.target_name = target_name
@@ -134,6 +136,7 @@ class extraction:
     
         self.wavelengths_fit_std_list = None  # To be filled with the function extraction.wavelength_calibration()
         self.spec_systematic_error_list = None  # To be filled with the function extraction.extracting()
+        self.extraction_weights = None  # To be filled with the function extraction.extracting()
     
     def _repeat_trace(self, fitted_polymodel_list, final_peak_positions, ymin, ymax, bad_pixels, yvals, repeat_trace_at):
 
@@ -216,6 +219,8 @@ class extraction:
         fitted_polymodel_list: list
             List with the fitted spine for all spectra in the image or only the brighter spectrum.
         """
+
+        warnings.filterwarnings('ignore')
 
         try:
             _ = self.aspect_ratio
@@ -367,7 +372,7 @@ class extraction:
         return fitted_polymodel_list
     
     
-    def extracting(self, target_spec_data, fitted_polymodel_list, data_type, MC_steps = 50, master_lamp_data = None, trace_half_width = 7, shift_y_pixels = 30, lamp_peak_height = None, peak_distance = None, diagnostic_plots = True, spec_plots = True):
+    def extracting(self, target_spec_data, fitted_polymodel_list, data_type, MC_steps = 25, master_lamp_data = None, trace_half_width = 7, shift_y_pixels = 30, extraction_weights="gaussian", lamp_peak_height = None, peak_distance = None, diagnostic_plots = True, spec_plots = True):
 
         """
         This function takes the traces as input to extract one or more spectra from the image with a Gaussian-weighted model.
@@ -389,7 +394,7 @@ class extraction:
         data_type: string
             Options are "target" or "std_star". We use this information to correctly select the airmass for the extinction correction.
         MC_steps: int
-            Number of Monte Carlo simulations for estimating the error. Default is 50. The larger this number, the longer it takes to run this function.
+            Number of Monte Carlo simulations for estimating the error. Default is 25. The larger this number, the longer it takes to run this function.
             Minimum value is 3.
         master_lamp_data: string
             Optional. The path to the master lamp data file. This file can be produced with the easyspec cleaning() class.
@@ -397,6 +402,10 @@ class extraction:
             The half-width of the trace. The spectra will be extracted within a region 2*trace_half_width around their corresponding traces.
         shift_y_pixels: integer
             Value used to shift the trace vertically by +-N pixels and repeat the extracting process to get the sky spectrum around each trace.
+        extraction_weights: string
+            Specifies the weighting scheme used for spectral extraction. The default value is "gaussian", which enables optimal extraction using
+            a Gaussian spatial profile. Alternatively, setting this parameter to "tophat" applies uniform weights across the extraction aperture,
+            corresponding to a simple (unweighted) extraction.
         lamp_peak_height: float
             The height of the lamp peaks (in counts and with respect to zero) to be detected.
         peak_distance: float
@@ -418,6 +427,8 @@ class extraction:
             for different traces.
         """
 
+        warnings.filterwarnings("default")
+
         try:
             _ = self.aspect_ratio
         except:
@@ -427,7 +438,7 @@ class extraction:
             if MC_steps < 3:
                 MC_steps = 3
         else:
-            MC_steps = 50
+            raise RuntimeError("Input variable MC_steps must be a positive integer larger than 3.")
 
         individual_spec_shift = False
         if isinstance(shift_y_pixels, int):
@@ -453,6 +464,11 @@ class extraction:
         spec_list = []
         if data_type == "target":
             self.spec_systematic_error_list = []
+            self.extraction_weights = extraction_weights
+        else:
+            if self.extraction_weights is not None:
+                if extraction_weights != self.extraction_weights:
+                    warnings.warn(f"The target extraction_weights input variable is {self.extraction_weights}. You are setting a different weight for the standard star. Please use the same weights for both extractions to ensure reasonable results.")
         lamp_spec_list = []
         lamp_peak_positions_list = []
         lamp_peak_heights_list = []
@@ -489,28 +505,47 @@ class extraction:
             mean_trace_profile = (cutouts - background.T[:,:np.shape(cutouts)[1]]).mean(axis=0)  # Here we also transpose and crop the background matrix just to fit the size of "cutouts"
             trace_profile_xaxis = np.arange(-trace_half_width, trace_half_width)
 
-            lmfitter = LevMarLSQFitter(calc_uncertainties=True)
-            guess = Gaussian1D(amplitude=mean_trace_profile.max(), mean=0, stddev=trace_half_width/2)
-            fitted_trace_profile = lmfitter(model=guess, x=trace_profile_xaxis, y=mean_trace_profile)
-            amplitude_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[0][0])
-            mean_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[1][1])
-            std_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[2][2])
+            if extraction_weights == "gaussian":
+                lmfitter = LevMarLSQFitter(calc_uncertainties=True)
+                guess = Gaussian1D(amplitude=mean_trace_profile.max(), mean=0, stddev=trace_half_width/2)
+                fitted_trace_profile = lmfitter(model=guess, x=trace_profile_xaxis, y=mean_trace_profile)
+                # Now, let's normalize the Gaussian weights:
+                normalization = np.trapz(fitted_trace_profile(trace_profile_xaxis),trace_profile_xaxis)
+                fitted_trace_profile.amplitude.value = fitted_trace_profile.amplitude.value/normalization#(fitted_trace_profile.stddev.value * np.sqrt(2 * np.pi))                
+                # And then collect the errors
+                amplitude_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[0][0])/normalization
+                mean_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[1][1])
+                std_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[2][2])
+                weights_profile = fitted_trace_profile(trace_profile_xaxis)
+                squared_sum_of_weights = np.sum(weights_profile**2)
+            elif extraction_weights == "tophat":
+                weights_profile = np.ones(len(trace_profile_xaxis))
+                squared_sum_of_weights = 1
+            else:
+                raise RuntimeError(f"The variable 'extraction_weights' must be set to 'gaussian' or 'tophat'. Instead, the input string was '{extraction_weights}'.")
 
-            if std_sys_error > trace_half_width/2:
+
+            if extraction_weights == "gaussian" and std_sys_error > trace_half_width/2:
                 warnings.warn(f"Spec_{number} has no significant counts. Skipping it...")
                 print(f"Spec_{number} has no significant counts. Skipping it...")
                 continue
 
-            model_trace_profile = fitted_trace_profile(trace_profile_xaxis)
+            warnings.filterwarnings('ignore')
+
+
             # Lamp spectral extraction:
             if master_lamp_data is not None:
                 lamp_image = fits.open(master_lamp_data)
                 lamp_image = lamp_image[0].data
-                lamp_spectrum = np.array([np.average(lamp_image[int(yval)-trace_half_width:int(yval)+trace_half_width, xval],
-                                        weights=model_trace_profile) for yval, xval in zip(trace_center, xvals)])
+
+                lamp_spectrum = np.array([np.sum(
+                    weights_profile
+                    * (lamp_image[int(yval)-trace_half_width:int(yval)+trace_half_width, xval]) 
+                )/ squared_sum_of_weights
+                for yval, xval in zip(trace_center, xvals)])
 
                 if lamp_peak_height is None:
-                    lamp_peak_height = np.median(lamp_spectrum)
+                    lamp_peak_height = np.mean(lamp_spectrum)
                 if peak_distance is None:
                     peak_distance = int(len(xvals)/20)
                 lamp_peak_positions, lamp_peak_heights = scipy.signal.find_peaks(lamp_spectrum,distance=peak_distance,height=lamp_peak_height)
@@ -520,49 +555,63 @@ class extraction:
 
 
             # Target spectral extraction:
-            gaussian_trace_avg_spectrum = np.array([np.average(
-            target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval] - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval],
-            weights=model_trace_profile) for yval, xval in zip(trace_center, xvals)])
+            trace_avg_spectrum = np.array([
+                np.sum(
+                    weights_profile
+                    * (target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval]
+                    - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval])
+                ) / squared_sum_of_weights
+                for yval, xval in zip(trace_center, xvals)
+            ])
+
 
             # Target extraction systematic error estimation:
             if data_type == "target":
-                gaussian_trace_avg_spectrum_sys_error = np.zeros((MC_steps,len(gaussian_trace_avg_spectrum)))
-                for i in range(MC_steps):
-                    fitted_trace_profile_sys_error = copy.deepcopy(fitted_trace_profile)
-                    fitted_trace_profile_sys_error.amplitude = fitted_trace_profile.amplitude.value + np.random.choice((-1, 1))*amplitude_sys_error*np.random.random()
-                    fitted_trace_profile_sys_error.mean = fitted_trace_profile.mean.value + np.random.choice((-1, 1))*mean_sys_error*np.random.random()
-                    fitted_trace_profile_sys_error.stddev = fitted_trace_profile.stddev.value + np.random.choice((-1, 1))*std_sys_error*np.random.random()
-                    model_trace_profile_sys_error = fitted_trace_profile_sys_error(trace_profile_xaxis)
-                    gaussian_trace_avg_spectrum_sys_error[i] = np.array([np.average(
-                        target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval] - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval],
-                        weights=model_trace_profile_sys_error) for yval, xval in zip(trace_center, xvals)])
+                if extraction_weights=="gaussian":
+                    trace_avg_spectrum_sys_error = np.zeros((MC_steps,len(trace_avg_spectrum)))
+                    for i in range(MC_steps):
+                        fitted_trace_profile_sys_error = copy.deepcopy(fitted_trace_profile)
+                        fitted_trace_profile_sys_error.amplitude = fitted_trace_profile.amplitude.value + np.random.choice((-1, 1))*amplitude_sys_error*np.random.random()
+                        fitted_trace_profile_sys_error.mean = fitted_trace_profile.mean.value + np.random.choice((-1, 1))*mean_sys_error*np.random.random()
+                        fitted_trace_profile_sys_error.stddev = fitted_trace_profile.stddev.value + np.random.choice((-1, 1))*std_sys_error*np.random.random()
+                        weights_profile_sys_error = fitted_trace_profile_sys_error(trace_profile_xaxis)
+                        trace_avg_spectrum_sys_error[i] = np.array([np.sum(
+                            weights_profile_sys_error*target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval] - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval]) for yval, xval in zip(trace_center, xvals)])
+                    systematic_error = np.std(trace_avg_spectrum_sys_error,axis=0)
+                else:
+                    systematic_error = np.zeros(len(trace_avg_spectrum))
                 
-                systematic_error = np.std(gaussian_trace_avg_spectrum_sys_error,axis=0)
                 self.spec_systematic_error_list.append(systematic_error)
 
             # Sky spectra:
             trace_center_sky = fitted_polymodel(xvals) + shift_y_pixels_up - trace_half_width
             trace_center_sky2 = fitted_polymodel(xvals) - shift_y_pixels_down + trace_half_width
             
-            gaussian_trace_sky_spectrum1 = np.array([np.average(
-            target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval] - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval],
-            weights=model_trace_profile) for yval, xval in zip(trace_center_sky, xvals)])
+            trace_sky_spectrum1 = np.array([np.sum(
+            weights_profile
+            * (target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval]
+            - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval])
+            ) / squared_sum_of_weights
+            for yval, xval in zip(trace_center_sky, xvals)])
 
-            gaussian_trace_sky_spectrum2 = np.array([np.average(
-            target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval] - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval],
-            weights=model_trace_profile) for yval, xval in zip(trace_center_sky2, xvals)])
+            trace_sky_spectrum2 = np.array([np.sum(
+            weights_profile
+            * (target_spec_data[int(yval)-trace_half_width:int(yval)+trace_half_width, xval]
+            - background[int(yval)-trace_half_width:int(yval)+trace_half_width, xval]) 
+            ) / squared_sum_of_weights
+            for yval, xval in zip(trace_center_sky2, xvals)])
 
-            gaussian_trace_sky_spectrum = (gaussian_trace_sky_spectrum1 + gaussian_trace_sky_spectrum2)/2  # Final sky spectrum
+            trace_sky_spectrum = (trace_sky_spectrum1 + trace_sky_spectrum2)/2  # Final sky spectrum
             
             # Final target spectrum:
-            gaussian_trace_avg_spectrum = gaussian_trace_avg_spectrum - gaussian_trace_sky_spectrum
+            trace_avg_spectrum = trace_avg_spectrum - trace_sky_spectrum
 
-            spec_list.append(gaussian_trace_avg_spectrum)
+            spec_list.append(trace_avg_spectrum)
 
             if spec_plots:
                 plt.figure(figsize=(12,5)) 
-                plt.plot(gaussian_trace_avg_spectrum, label=f'Gaussian trace spec {number}', alpha=0.9, linewidth=0.5, color='orange')
-                plt.title(f"Non-calibrated Gaussian-extracted spectrum {number} - "+self.target_name+" field")
+                plt.plot(trace_avg_spectrum, label=f'{extraction_weights} trace spec {number}', alpha=0.9, linewidth=0.5, color='orange')
+                plt.title(f"Non-calibrated {extraction_weights}-extracted spectrum {number} - "+self.target_name+" field")
                 plt.grid(linestyle=":",which="both")
                 plt.minorticks_on()
                 plt.ylabel("Counts")
@@ -797,6 +846,7 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
                 plt.plot(wavelength, spec, label="No atm correction")
                 plt.plot(wavelength, spec_atm_corrected,color="orange",label="Atm corrected")
                 plt.xlabel(f"Wavelength [${wavelength.unit}$]")
+                plt.ylabel("Counts")
                 plt.minorticks_on()
                 plt.grid(which="both", linestyle=":")
                 number = len(spec_atm_corrected_list)-1
@@ -984,7 +1034,7 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
             plt.plot(wavelengths_std, spec_atm_corrected_std, label="Measured std star spectrum")
             plt.plot(wavelengths_std, measured_spec_continuum, label = "Std star continuum")
             plt.xlabel(f"Wavelength [${wavelengths_std.unit}$]")
-            plt.ylabel("Counts")
+            plt.ylabel("Counts per second")
             plt.minorticks_on()
             plt.title("Standard star measured spectrum and continuum")
             plt.grid(which="both", linestyle=":")
