@@ -483,6 +483,12 @@ class cleaning:
             Dictionary containing the data corrected for dark.
         """
 
+        valid_types = ["all", "flat", "lamp", "standard_star", "target"]
+        if Type not in valid_types:
+            raise KeyError(
+                'Invalid Type. Options are: "all", "flat", "lamp", "standard_star", and "target".'
+            )
+
         subdark_list = []
         for file_name in debiased_data.keys():
             if Type == "all" and file_name not in self.darks_list:
@@ -495,9 +501,7 @@ class cleaning:
                 subdark_list = subdark_list + [file_name]
             elif Type == "target" and file_name in self.target_list:
                 subdark_list = subdark_list + [file_name]
-            else:
-                raise KeyError('There are two possibilities for this error:\n1) There is an invalid value for the variable Type. Options are: "all", "flat", "lamp", "standard_star", and "target".'+
-                               '\n2)If the value of Type is fine, please be sure that you did not change the keys in the debiased_data dictionary.')
+            
 
         subdark_data_out = {}  # Dictionary for the sub_dark images
 

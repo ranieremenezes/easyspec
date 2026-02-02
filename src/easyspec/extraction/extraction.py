@@ -1148,7 +1148,8 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
             wavelengths_sliced_list.append(wavelengths)
             calibrated_flux_list[counter] = calibrated_flux_list[counter][wavelength_min_index:wavelength_max_index]
             spec_number = len(calibrated_flux_list)-1
-            calibrated_spec_systematic_error_list[counter] = calibrated_spec_systematic_error_list[counter][wavelength_min_index:wavelength_max_index]
+            if calibrated_spec_systematic_error_list is not None:
+                calibrated_spec_systematic_error_list[counter] = calibrated_spec_systematic_error_list[counter][wavelength_min_index:wavelength_max_index]
 
             if plot:
                 plt.figure(figsize=(12,5))

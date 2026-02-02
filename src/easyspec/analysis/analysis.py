@@ -558,6 +558,8 @@ class analysis:
                 pass
             else:
                 raise Exception("The input value for air_wavelength_line must be a float, an integer, a list, or a numpy array.")
+        else:
+            air_wavelength_line = [None] * len(parlabels)
         
         # Checking line_names:
         if isinstance(line_names,str):
@@ -582,7 +584,7 @@ class analysis:
                 q_16, q_50, q_84 = corner.quantile(samples[:,j+previous_j], quantiles)
                 dx_down, dx_up = q_50-q_16, q_84-q_50
                 # Computing the redshift of the line:
-                if parlabels[i][j] == "Location" and air_wavelength_line is not None:
+                if parlabels[i][j] == "Location" and air_wavelength_line[i] is not None:
                     z, zerror_down, zerror_up = self.redshift_calculator(q_16,q_50,q_84,air_wavelength_line[i])
                     if savefile:
                         f.write(f"z, {z}, {zerror_down}, {zerror_up}\n")
