@@ -828,10 +828,10 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
         for spec, wavelength in zip(spec_list,wavelengths_list):
             wavelength_min_index = self.find_nearest(extinction_wavelength, wavelength.value.min())
             wavelength_max_index = self.find_nearest(extinction_wavelength, wavelength.value.max())
-            extinction_wavelength = extinction_wavelength[wavelength_min_index:wavelength_max_index]
-            extinction = extinction[wavelength_min_index:wavelength_max_index]
+            extinction_wavelength_local = extinction_wavelength[wavelength_min_index:wavelength_max_index]
+            extinction_local = extinction[wavelength_min_index:wavelength_max_index]
 
-            tck = interpolate.splrep(extinction_wavelength, extinction,k=spline_order)
+            tck = interpolate.splrep(extinction_wavelength_local, extinction_local,k=spline_order)
 
             spec_atm_corrected = spec*2.51188643151**( airmass * interpolate.splev(wavelength.value, tck))  # The numerical factor here is 100**(1/5), which is the increase in flux when the magnitude decreases 1.
             spec_atm_corrected_list.append(spec_atm_corrected)
@@ -859,9 +859,9 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
                 plt.figure(figsize=(12,5)) 
                 plt.plot(wavelength.value, interpolate.splev(wavelength.value, tck),label="Fit Spline")
                 if custom_observatory is None:
-                    plt.plot(extinction_wavelength, extinction,label=f"Extinction data {observatory}")
+                    plt.plot(extinction_wavelength_local, extinction_local,label=f"Extinction data {observatory}")
                 else:
-                    plt.plot(extinction_wavelength, extinction,label="Extinction data custom observatory")
+                    plt.plot(extinction_wavelength_local, extinction_local,label="Extinction data custom observatory")
                 plt.axhline(y=0.0, color='r', linestyle=':')
                 plt.xlabel(f"Wavelength [${wavelength.unit}$]")
                 plt.ylabel("Extinction (mag/airmass)")

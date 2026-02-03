@@ -930,7 +930,7 @@ class cleaning:
     def vertical_align(self, CR_corrected_data, Type="all"):
 
         """
-        This function is used to align target and standard star data taht are shifted in the vertical axis.
+        This function is used to align target and standard star data that are shifted in the vertical axis.
         Although this function does not align lamp images, it accepts the raw lamp data in the dictionary CR_corrected_data.
         In the last step of this function, all data will be trimmed according to the alignment cuts, including the lamp data (if provided). 
         
@@ -998,8 +998,8 @@ class cleaning:
                 # Vertical alignment: 
                 if difference_y < 0:
                     # Remember that y increases from the top to the bottom!!!
-                    temporary_image = np.concatenate([CR_corrected_data[file_name], np.zeros([difference_y,np.shape(CR_corrected_data[file_name])[1]])])
-                    temporary_image = self.trim({'temporary' : temporary_image},x1=0,x2=np.shape(CR_corrected_data[file_name])[1],y1=difference_y,y2=np.shape(CR_corrected_data[file_name])[0]+difference_y)
+                    temporary_image = np.concatenate([CR_corrected_data[file_name], np.zeros([np.abs(difference_y),np.shape(CR_corrected_data[file_name])[1]])])
+                    temporary_image = self.trim({'temporary' : temporary_image},x1=0,x2=np.shape(CR_corrected_data[file_name])[1],y1=np.abs(difference_y),y2=np.shape(CR_corrected_data[file_name])[0]+np.abs(difference_y))
                     CR_corrected_data[file_name] = temporary_image['temporary']  # Remember that the function trim above returns a dictionary.
                     if difference_y < maximum_y2_cut:
                         maximum_y2_cut = difference_y
@@ -1014,6 +1014,8 @@ class cleaning:
                     print("Images are already aligned in the vertical.")
 
         print("Final vertical cuts (y1, y2): ",maximum_y1_cut, maximum_y2_cut)
+        # Each one of the aligned images above (except for the reference image) has now a band of zeros in the top or in the bottom.
+        # We then trim all the images to get rid of these "zero stripes" with the function below:
         aligned_data = self.trim(CR_corrected_data,x1=0,x2=np.shape(CR_corrected_data[file_name])[1],y1=maximum_y1_cut,y2=np.shape(CR_corrected_data[file_name])[0]+maximum_y2_cut)  # Remember that maximum_y2_cut is negative
 
             
