@@ -11,7 +11,8 @@ from scipy.optimize import brentq, minimize_scalar
 
 
 def model_Gauss(theta, x):
-    mean, amplitude, std = theta
+    mean, amplitude, fwhm = theta
+    std = fwhm/(2*np.sqrt(2 * np.log(2)))
     return amplitude * np.exp(-0.5 * ((x - mean) / std) ** 2)
 
 def model_Lorentz(theta, x):
@@ -86,13 +87,13 @@ def model_skewed_lorentzian(theta, x):
         The intensity values of the skewed Lorentzian profile
     """
 
-    lam_peak, amplitude, gamma, skewness = theta
+    lam_peak, amplitude, fwhm, skewness = theta
 
     s = skewness / np.sqrt(2.0)
     # solve for x_peak numerically (dimensionless)
     x_peak = xpeak_for_s(s, x_min=-50.0, x_max=50.0)
-    lam0 = lam_peak - x_peak * gamma
-    x = (x - lam0) / gamma
+    lam0 = lam_peak - x_peak * (fwhm/2)
+    x = (x - lam0) / (fwhm/2)
     numer = 1.0 + erf(s * x)
     denom = 1.0 + x**2
     return amplitude * numer / denom
@@ -142,7 +143,7 @@ def model_skewed_gaussian(theta, x):
         Array with parameters [x_peak, amplitude, sigma, skewness]
         x_peak: position of the peak
         amplitude: maximum height
-        sigma: width parameter  
+        fwhm: width parameter  
         skewness: skew parameter (s > 0: right-skewed, s < 0: left-skewed)
     
     Returns:
@@ -150,7 +151,9 @@ def model_skewed_gaussian(theta, x):
     intensity : ndarray
         The intensity values of the skewed Gaussian profile
     """
-    x_peak, amplitude, sigma, skewness = theta
+    x_peak, amplitude, fwhm, skewness = theta
+
+    sigma = fwhm/(2*np.sqrt(2 * np.log(2)))
     
     s = skewness / np.sqrt(2.0)
     

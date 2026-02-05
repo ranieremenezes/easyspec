@@ -23,9 +23,8 @@ The Gaussian profile is defined by:
 
 * :math:`A` - Amplitude
 * :math:`\lambda_0` - Mean wavelength (line center)
-* :math:`\sigma` - Standard deviation
+* :math:`\mathrm{FWHM}` -  Full width at half maximum, where :math:`\mathrm{FWHM} = 2\sigma\sqrt{2\ln 2}`
 
-**Note:** The full width at half maximum (FWHM) is related to :math:`\sigma` by :math:`\mathrm{FWHM} = 2\sigma\sqrt{2\ln 2}`.
 
 Lorentzian Model
 ----------------
@@ -70,8 +69,8 @@ with :math:`G` being the Gaussian and :math:`L` the Lorentzian component.
 
 * :math:`A` - Amplitude
 * :math:`\lambda_0` - Mean wavelength (line center)
-* :math:`\sigma` - Gaussian standard deviation
-* :math:`\gamma` - Lorentzian HWHM
+* :math:`\mathrm{FWHM}_G` - Gaussian :math:`\mathrm{FWHM} = 2\sigma\sqrt{2\ln 2}`
+* :math:`\mathrm{FWHM}_L` - Lorentzian :math:`\mathrm{FWHM} =2\gamma`
 
 Skewed Gaussian Model
 ---------------------
@@ -112,7 +111,7 @@ The final implemented model uses the parameters:
 
 * :math:`\lambda_{\mathrm{peak}}` - Peak wavelength position (observed maximum)
 * :math:`A` - Amplitude of the Gaussian symmetrical component
-* :math:`\sigma` - Standard deviation
+* :math:`\mathrm{FWHM}_G` - The :math:`\mathrm{FWHM} = 2\sigma\sqrt{2\ln 2}` of the Gaussian symmetric component
 * :math:`\alpha` - Skewness parameter
 
 This parameterization makes the fitting more physically intuitive, as :math:`\lambda_{\mathrm{peak}}` directly corresponds to the observable line peak.
@@ -156,7 +155,7 @@ The final implemented model uses the parameters:
 
 * :math:`\lambda_{\mathrm{peak}}` - Peak wavelength position (observable maximum)
 * :math:`A` - Amplitude of the Lorentzian symmetrical component
-* :math:`\gamma` - Lorentzian HWHM  
+* :math:`\mathrm{FWHM}_L` - The :math:`\mathrm{FWHM} =2\gamma` of the Lorentzian symmetric component
 * :math:`\eta` - Skewness parameter
 
 This parameterization makes the fitting more physically intuitive, as :math:`\lambda_{\mathrm{peak}}` directly corresponds to the observable line peak. An example of a skewed Lorentzian profile applied to the CIV line of the AGN PKS J0049-5738 is shown below:

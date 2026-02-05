@@ -288,10 +288,12 @@ class analysis:
             if number == 0:
                 if len(continuum_std_deviation) > 1:
                     index = np.where(wavelengths.value < (continuum_regions[0][1] + continuum_regions[1][0])/2)[0]
+                    index = np.append(index,index[-1] + 1) # This step is to avoid gaps of 1 pixel between the continuum regions
                 else:
                     index = np.asarray(range(len(wavelengths.value)))
             elif number != (len(continuum_std_deviation)-1):
                 index = np.where((wavelengths.value > (continuum_regions[number-1][1] + continuum_regions[number][0])/2 ) & (wavelengths.value <  (continuum_regions[number][1] + continuum_regions[number+1][0])/2 ))[0]
+                index = np.append(index,index[-1] + 1) # This step is to avoid gaps of 1 pixel between the continuum regions
             else:
                 index = np.where(wavelengths.value > (continuum_regions[number-1][1] + continuum_regions[number][0])/2)[0]
             continuum_removed_flux = flux_density.value[index]-continuum_baseline[index]
@@ -1301,7 +1303,7 @@ class analysis:
 
         return par_values_list, par_values_errors_list, par_names_list, samples_list, line_windows
     
-    def line_dispersion_and_equiv_width(self, wavelengths_window, flux_density_window, continuum_baseline_window, line_std_deviation, line_name = None, plot = True):
+    def line_dispersion_and_equiv_width(self, wavelengths_window, flux_density_window, continuum_baseline_window, line_fit_parameters, line_std_deviation, line_name = None, plot = True):
 
         """
         
@@ -1316,6 +1318,8 @@ class analysis:
             The flux density window for the given line.
         continuum_baseline_window: numpy.ndarray
             An array with the continuum density flux window for the given line. Standard easyspec units are in erg/cm2/s/A.
+        line_fit_parameters: list
+            This is the list with the best-fit values for a given line model. We use these fitted values here just to estimate the integration limits.
         line_std_deviation: numpy.ndarray (float)
             The standard deviation for the local continuum. This variable is an output of the function analysis.find_lines().
         line_name: string
@@ -1362,33 +1366,37 @@ class analysis:
         
         line_function = interpolate.splev(wavelengths_window, tck)
         line_function_positive = np.sqrt(line_function**2)  # We square the profile and take the squareroot such that we can also work with absorption lines
-        line_peak = line_function_positive.max()
-        index_peak = np.where(line_function_positive == line_peak)[0][0]
-        integration_limit_0 = 0
-        for n,flux_bin in enumerate(np.flip(line_function_positive[:index_peak])):
-            if flux_bin > 2*line_std_deviation:
-                if n < (index_peak-2):  # This condition is necessary such that we don't take e.g. wavelengths_window[-1] (negative index!)
+        integration_limit_0 = line_fit_parameters[1]-line_fit_parameters[3]/2 # The first integration limit is the fitted line peak minus the FWHM/2.
+        index_limit_0 = extraction.find_nearest(wavelengths_window, integration_limit_0)
+        for n,flux_bin in enumerate(np.minimum.accumulate(np.flip(line_function_positive[:index_limit_0]))): # np.minimum.accumulate gives us the accumulated minimum value for each element: the next element will always be equal or smaller than the previous one.
+            if flux_bin > 2*line_std_deviation and flux_bin <= line_function_positive[index_limit_0]:
+                if n < (index_limit_0-2):  # This condition is necessary such that we don't take e.g. wavelengths_window[-1] (negative index!)
                     try:
-                        integration_limit_0 = wavelengths_window[index_peak-n-2]
+                        integration_limit_0 = wavelengths_window[index_limit_0-n-2]
                     except:
                         break
                 else:
                     break
             else:
                 break
-        integration_limit_1 = 0
-        for n,flux_bin in enumerate(line_function_positive[index_peak:]):
-            if flux_bin > 2*line_std_deviation:
+        integration_limit_1 = line_fit_parameters[1]+line_fit_parameters[3]/2 # The first integration limit is the fitted line peak plus the FWHM/2.
+        index_limit_1 = extraction.find_nearest(wavelengths_window, integration_limit_1)
+        for n,flux_bin in enumerate(np.minimum.accumulate(line_function_positive[index_limit_1:])):  # np.minimum.accumulate gives us the accumulated minimum value for each element: the next element will always be equal or smaller than the previous one.
+            if flux_bin > 2*line_std_deviation and flux_bin <= line_function_positive[index_limit_1]:
                 try:
-                    integration_limit_1 = wavelengths_window[index_peak+n+2]
+                    integration_limit_1 = wavelengths_window[index_limit_1+n+2]
                 except:
                     break
             else:
                 break
+
+        self.integration_limits_dispersion = [integration_limit_0,integration_limit_1]
+
         numerator = quad(lambda_P, integration_limit_0, integration_limit_1,args=(tck,))[0]
         denominator = quad(P, integration_limit_0, integration_limit_1,args=(tck,))[0]
 
         first_moment = numerator/denominator
+
         
         second_moment = quad(lambda2_P, integration_limit_0, integration_limit_1,args=(tck,))[0]/denominator
         line_dispersion = np.sqrt(second_moment)
@@ -1400,11 +1408,14 @@ class analysis:
         if numerator > 0:
             line_peak_value = interpol_density_flux.max()
         else:
-            line_peak_value = interpol_density_flux.min()
+            line_peak_value = interpol_density_flux.min() # in case of absorption lines.
         max_index = extraction.find_nearest(interpol_density_flux, line_peak_value)
         max_index_for_error = extraction.find_nearest((flux_density_window-continuum_baseline_window), line_peak_value)  # This is used in the loop a few lines below.
-        lambda_0_index = extraction.find_nearest(interpol_density_flux[0:max_index], line_peak_value/2)
-        lambda_1_index = extraction.find_nearest(interpol_density_flux[max_index:], line_peak_value/2) + max_index
+        
+        interpol_density_flux_positive = np.sqrt(interpol_density_flux**2)
+        lambda_0_index = extraction.find_nearest(np.minimum.accumulate(np.flip(interpol_density_flux_positive[0:max_index])), line_peak_value/2)
+        lambda_0_index = max_index - lambda_0_index
+        lambda_1_index = extraction.find_nearest(np.minimum.accumulate(interpol_density_flux_positive[max_index:]), line_peak_value/2) + max_index
         profile_FWHM = np.abs(interpol_wavelenghts[lambda_1_index]-interpol_wavelenghts[lambda_0_index])
         
 
@@ -1425,8 +1436,13 @@ class analysis:
             tck4 = interpolate.splrep(wavelengths_window, (noisy_density_flux - continuum_baseline_window), k=1)
             line_disp_error.append(np.sqrt(quad(lambda2_P, integration_limit_0, integration_limit_1,args=(tck4,))[0]/denominator))
 
-            lambda_0_index_error = extraction.find_nearest((noisy_density_flux[0:max_index_for_error]-continuum_baseline_window[0:max_index_for_error]), line_peak_value/2)
-            lambda_1_index_error = extraction.find_nearest((noisy_density_flux[max_index_for_error:]-continuum_baseline_window[max_index_for_error:]), line_peak_value/2) + max_index_for_error
+
+            noisy_density_flux_positive = np.sqrt(noisy_density_flux**2)
+            noisy_density_flux_cumulative0 = np.minimum.accumulate(np.flip(noisy_density_flux_positive[0:max_index_for_error]-continuum_baseline_window[0:max_index_for_error]))
+            noisy_density_flux_cumulative1 = np.minimum.accumulate(noisy_density_flux_positive[max_index_for_error:]-continuum_baseline_window[max_index_for_error:])
+            lambda_0_index_error = extraction.find_nearest(noisy_density_flux_cumulative0, line_peak_value/2)
+            lambda_0_index_error = max_index_for_error - lambda_0_index_error
+            lambda_1_index_error = extraction.find_nearest(noisy_density_flux_cumulative1, line_peak_value/2) + max_index_for_error
             fwhm_error.append(np.abs(wavelengths_window[lambda_1_index_error]-wavelengths_window[lambda_0_index_error]))
 
         equiv_width_error = np.std(np.asarray(equiv_width_error))
@@ -1474,7 +1490,7 @@ class analysis:
 
         """
         
-        This function estimates the line dispersion (aka the rms width of the line) and the FWHM for the skwede line models.
+        This function estimates the line dispersion (aka the rms width of the line) and the FWHM for the skewed line models.
 
         Parameters
         ----------
@@ -1500,8 +1516,8 @@ class analysis:
         theta = np.asarray(par_values[1:])
 
         if model == "Lorentz":
-            theta[2] = theta[2]/2
-            theta_error[2] = theta_error[2]/2
+            #theta[2] = theta[2]/2
+            #theta_error[2] = theta_error[2]/2
             def lambda_P(wavelengths_window,theta):
                 return model_skewed_lorentzian(theta,wavelengths_window)*wavelengths_window
             
@@ -1511,8 +1527,8 @@ class analysis:
             def Intensity(wavelengths_window,theta):
                 return model_skewed_lorentzian(theta,wavelengths_window)
         else:
-            theta[2] = theta[2]/(2*np.sqrt(2 * np.log(2))) # Gaussian component FWHM to sigma
-            theta_error[2] = theta_error[2]/(2*np.sqrt(2 * np.log(2)))
+            #theta[2] = theta[2]/(2*np.sqrt(2 * np.log(2))) # Gaussian component FWHM to sigma
+            #theta_error[2] = theta_error[2]/(2*np.sqrt(2 * np.log(2)))
             def lambda_P(wavelengths_window,theta):
                 return model_skewed_gaussian(theta,wavelengths_window)*wavelengths_window
             
@@ -1526,7 +1542,7 @@ class analysis:
         Normalization_factor_for_integration = 10**round(np.log10(theta[1]))
         theta[1] = theta[1]/Normalization_factor_for_integration
 
-        x = np.linspace(theta[0]- 10*theta[2],theta[0]+ 10*theta[2])
+        x = np.linspace(self.integration_limits_dispersion[0],self.integration_limits_dispersion[1]) # We use the same integration limits adopted in the function line_dispersion_and_equiv_width()
         
         numerator = np.trapz(lambda_P(x,theta), x)*Normalization_factor_for_integration
         denominator = np.trapz(Intensity(x,theta), x)*Normalization_factor_for_integration
@@ -1593,7 +1609,7 @@ class analysis:
         return fwhm_error_voigt
 
 
-    def equiv_width_error(self,integrand,line_window,line_parameters,line_par_errors, n_samples=100, n_points=300):
+    def equiv_width_error(self,integrand,integration_limits,line_parameters,line_par_errors, n_samples=100, n_points=300):
 
         """
         In this function, we estimate the modeled equivalent width error for a line based on a Monte Carlo simulation.
@@ -1602,7 +1618,7 @@ class analysis:
         ----------
         integrand: function
             The function to be integrated. See the details here: https://en.wikipedia.org/wiki/Equivalent_width
-        line_window: list
+        integration_limits: list
             A list containing the wavelength limits around the line.
         line_parameters: list
             A list with the line best-fit parameters obtained with the MCMC method.
@@ -1626,7 +1642,7 @@ class analysis:
         line_par_errors = np.asarray(line_par_errors)
 
         # Create wavelength grid
-        lam = np.linspace(line_window[0], line_window[1], n_points)
+        lam = np.linspace(integration_limits[0], integration_limits[1], n_points)
 
         # Generate random samples for lower and upper error bounds
         rand = np.random.uniform(size=(n_samples, len(line_parameters)))
@@ -1649,7 +1665,7 @@ class analysis:
         return EQW_error_down, EQW_error_up
         
 
-    def line_physics(self, wavelengths, flux_density, continuum_baseline, par_values_list, par_values_errors_list, par_names_list, line_windows, line_std_deviation, plot = True, save_file = True):
+    def line_physics(self, wavelengths, flux_density, continuum_baseline, par_values_list, par_values_errors_list, par_names_list, line_windows, line_std_deviation, sistemic_redshift = None, plot = True, save_file = True):
 
         """
         In this function, we compute several physical properties for the fitted lines.
@@ -1680,6 +1696,9 @@ class analysis:
             A list containing the wavelength intervals around each line.
         line_std_deviation: numpy.ndarray (float)
             The standard deviation for the local continuum. This variable is an output of the function analysis.find_lines().
+        sistemic_redshift: float
+            If the sistemic redshift is given, it will be used to calculate all the output of this function. Otherwise, the function will use the
+            redshift of each individual line. Default value is sistemic_redshift = None.
         plot: boolean
             If True, the line and corresponding centroid and dispersion will be showed.
         save_file: boolean
@@ -1728,7 +1747,10 @@ class analysis:
         for number,line_parameters in enumerate(par_values_list):
 
             # taking the redshift and local continuum:
-            z = line_parameters[0]
+            if sistemic_redshift is None:
+                z = line_parameters[0]
+            else:
+                z = sistemic_redshift
             peak_position = line_parameters[1]
             continuum_index = extraction.find_nearest(wavelengths.value, peak_position)
 
@@ -1738,7 +1760,7 @@ class analysis:
             continuum_baseline_window = continuum_baseline[window_indexes]
             wavelengths_window = wavelengths[window_indexes]
 
-            line_dispersion, profile_equiv_width, profile_FWHM, line_disp_error, equiv_width_error, fwhm_error = self.line_dispersion_and_equiv_width(wavelengths_window.value, flux_density_window.value, continuum_baseline_window, line_std_deviation = line_std_deviation[number], line_name = line_names[number], plot = plot)
+            line_dispersion, profile_equiv_width, profile_FWHM, line_disp_error, equiv_width_error, fwhm_error = self.line_dispersion_and_equiv_width(wavelengths_window.value, flux_density_window.value, continuum_baseline_window, line_fit_parameters = par_values_list[number], line_std_deviation = line_std_deviation[number], line_name = line_names[number], plot = plot)
             profile_disp_vel_error_down = c.to("km/s").value*np.sqrt(  line_disp_error*2/(peak_position**2) + (line_dispersion*par_values_errors_list[number][1][0]/(peak_position**2))**2 )
             profile_disp_vel_error_up = c.to("km/s").value*np.sqrt(  line_disp_error*2/(peak_position**2) + (line_dispersion*par_values_errors_list[number][1][1]/(peak_position**2))**2 )
             profile_rest_frame_disp_velocity.append([c.to("km/s").value*line_dispersion/peak_position, profile_disp_vel_error_down, profile_disp_vel_error_up])
@@ -1757,6 +1779,7 @@ class analysis:
             profile_line_dispersion_rest_frame.append([line_dispersion,line_dispersion_err_down, line_dispersion_err_up])
             profile_fwhm.append([profile_FWHM, profile_FWHM_error_down, profile_FWHM_error_up])
             
+            integration_limits = self.integration_limits_dispersion
             # Computing the equivalent width from best-fit line models:
             if len(line_parameters) == 5:
                 if par_names_list[number][4] == 'fwhm_Gauss':
@@ -1764,8 +1787,8 @@ class analysis:
                     def integrand(x,theta):
                         return -1*model_Voigt(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
                     
-                    equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=line_parameters[1:])
-                    EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],line_parameters[1:],par_values_errors_list[number][1:])
+                    equivalent_width = quad(integrand,integration_limits[0],integration_limits[1],args=line_parameters[1:])
+                    EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,integration_limits,line_parameters[1:],par_values_errors_list[number][1:])
                     FWHM_Voigt = 0.5346*line_parameters[3] + np.sqrt(0.2166*line_parameters[3]**2 + line_parameters[4]**2)
                     disp_velocity = c.to("km/s").value*FWHM_Voigt/(peak_position*2*np.sqrt(2 * np.log(2)))
                     fwhm_error_down = self.error_propagation_voigt(par_values_list[number][3],par_values_list[number][4],par_values_errors_list[number][3][0],par_values_errors_list[number][4][0])
@@ -1781,11 +1804,11 @@ class analysis:
                         return -1*model_skewed_gaussian(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
                     
                     skewed_gaussian_parameters = line_parameters[1:]
-                    skewed_gaussian_parameters[2] = skewed_gaussian_parameters[2]/(2*np.sqrt(2 * np.log(2)))  # This is necessary because the last Gaussian parameter saved in par_values_list is the FWHM and not the standard deviation.
-                    equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=skewed_gaussian_parameters)
+                    #skewed_gaussian_parameters[2] = skewed_gaussian_parameters[2]/(2*np.sqrt(2 * np.log(2)))  # This is necessary because the last Gaussian parameter saved in par_values_list is the FWHM and not the standard deviation.
+                    equivalent_width = quad(integrand,integration_limits[0],integration_limits[1],args=skewed_gaussian_parameters)
                     skewed_gaussian_parameters_errors = np.asarray(par_values_errors_list[number][1:])
-                    skewed_gaussian_parameters_errors[2] = skewed_gaussian_parameters_errors[2]/(2*np.sqrt(2 * np.log(2)))
-                    EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],skewed_gaussian_parameters,skewed_gaussian_parameters_errors)
+                    #skewed_gaussian_parameters_errors[2] = skewed_gaussian_parameters_errors[2]/(2*np.sqrt(2 * np.log(2)))
+                    EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,integration_limits,skewed_gaussian_parameters,skewed_gaussian_parameters_errors)
                 
                     line_dispersion, model_FWHM, line_disp_error, fwhm_error = self.line_dispersion_skewed_models(par_values_list[number], skewed_gaussian_parameters_errors, model="Gauss")
                     
@@ -1802,11 +1825,11 @@ class analysis:
                         return -1*model_skewed_lorentzian(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
                     
                     skewed_lorentzian_parameters = line_parameters[1:]
-                    skewed_lorentzian_parameters[2] = skewed_lorentzian_parameters[2]/2  # This is necessary because the last Lorentzian parameter saved in par_values_list is the FWHM and not the HWHM.
-                    equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=skewed_lorentzian_parameters)
+                    #skewed_lorentzian_parameters[2] = skewed_lorentzian_parameters[2]/2  # This is necessary because the last Lorentzian parameter saved in par_values_list is the FWHM and not the HWHM.
+                    equivalent_width = quad(integrand,integration_limits[0],integration_limits[1],args=skewed_lorentzian_parameters)
                     skewed_lorentzian_parameters_errors = np.asarray(par_values_errors_list[number][1:])
-                    skewed_lorentzian_parameters_errors[2] = skewed_lorentzian_parameters_errors[2]/2
-                    EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],skewed_lorentzian_parameters,skewed_lorentzian_parameters_errors)
+                    #skewed_lorentzian_parameters_errors[2] = skewed_lorentzian_parameters_errors[2]/2
+                    EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,integration_limits,skewed_lorentzian_parameters,skewed_lorentzian_parameters_errors)
                 
                     line_dispersion, model_FWHM, line_disp_error, fwhm_error = self.line_dispersion_skewed_models(par_values_list[number], skewed_lorentzian_parameters_errors, model="Lorentz")
                     
@@ -1822,8 +1845,8 @@ class analysis:
                 def integrand(x,theta):
                     return -1*model_Lorentz(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
                 
-                equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=line_parameters[1:])
-                EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],line_parameters[1:],par_values_errors_list[number][1:])
+                equivalent_width = quad(integrand,integration_limits[0],integration_limits[1],args=line_parameters[1:])
+                EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,integration_limits,line_parameters[1:],par_values_errors_list[number][1:])
                 disp_velocity = c.to("km/s").value*line_parameters[3]/(2*peak_position) # The dispersion velocity for a Lorentzian is the half of its FWHM.
                 disp_velocity_err_down = c.to("km/s").value*par_values_errors_list[number][3][0]/(peak_position*2)
                 disp_velocity_err_up = c.to("km/s").value*par_values_errors_list[number][3][1]/(peak_position*2)
@@ -1836,11 +1859,11 @@ class analysis:
                     return -1*model_Gauss(theta,x)/continuum_baseline[continuum_index]  # The "-1" here is because our spectrum is already continuum-subtracted.
                 
                 gaussian_parameters = line_parameters[1:]
-                gaussian_parameters[2] = gaussian_parameters[2]/(2*np.sqrt(2 * np.log(2)))  # This is necessary because the last Gaussian parameter saved in par_values_list is the FWHM and not the standard deviation.
-                equivalent_width = quad(integrand,line_windows[number][0],line_windows[number][1],args=gaussian_parameters)
+                #gaussian_parameters[2] = gaussian_parameters[2]/(2*np.sqrt(2 * np.log(2)))  # This is necessary because the last Gaussian parameter saved in par_values_list is the FWHM and not the standard deviation.
+                equivalent_width = quad(integrand,integration_limits[0],integration_limits[1],args=gaussian_parameters)
                 gaussian_parameters_errors = par_values_errors_list[number][1:]
-                gaussian_parameters_errors[2] = gaussian_parameters_errors[2]/(2*np.sqrt(2 * np.log(2)))
-                EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,line_windows[number],gaussian_parameters,gaussian_parameters_errors)
+                #gaussian_parameters_errors[2] = gaussian_parameters_errors[2]/(2*np.sqrt(2 * np.log(2)))
+                EQW_error_down, EQW_error_up = self.equiv_width_error(integrand,integration_limits,gaussian_parameters,gaussian_parameters_errors)
                 disp_velocity = c.to("km/s").value*line_parameters[3]/(peak_position*2*np.sqrt(2 * np.log(2))) # The dispersion velocity for a Gaussian is its standard deviation given in velocity units.
                 disp_velocity_err_down = c.to("km/s").value*par_values_errors_list[number][3][0]/(peak_position*2*np.sqrt(2 * np.log(2)))
                 disp_velocity_err_up = c.to("km/s").value*par_values_errors_list[number][3][1]/(peak_position*2*np.sqrt(2 * np.log(2)))
@@ -1898,7 +1921,7 @@ class analysis:
         return profile_equiv_width_rest_frame, modeled_equiv_width_rest_frame, profile_integrated_flux, modeled_integrated_flux, profile_rest_frame_disp_velocity, modeled_rest_frame_disp_velocity, profile_line_dispersion_rest_frame, profile_rest_frame_fwhm, modeled_rest_frame_fhwm
 
 
-    def BH_mass_Hbeta_VP2006(self, wavelengths, continuum_baseline, FWHM_Hbeta, par_values_Hbeta, integrated_flux_Hbeta, H0=70):
+    def BH_mass_Hbeta_VP2006(self, wavelengths, continuum_baseline, FWHM_Hbeta, sistemic_redshift, integrated_flux_Hbeta, Hbeta_rest_wavelength = 4861.333, H0=70):
 
         """
         This function estimates the black hole mass based on Vestergaard & Peterson, 2006, ApJ, 641, "DETERMINING CENTRAL BLACK HOLE MASSES IN DISTANT ACTIVE
@@ -1914,13 +1937,14 @@ class analysis:
             The wavelength solution for the given spectrum.
         continuum_baseline: numpy.ndarray (float)
             An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
-        FWHM_Hbeta: float (astropy.units Angstrom)
-            The FWHM for the Hbeta line in Angstrom units.
-        par_values_Hbeta: list
-            The list with the best fit values for the Hbeta line. This information is contained in the variable "par_values_list" returned from the function
-            analysis.fit_lines().
-        integrated_flux_Hbeta: float (astropy.units Angstrom)
-            The integrated flux for the Hbeta line in erg/cm2/s units.
+        FWHM_Hbeta: float
+            The FWHM for the Hbeta line in Angstrom, in the rest frame.
+        sistemic_redshift: float
+            The sistemic redshift of the AGN.
+        integrated_flux_Hbeta: float 
+            The integrated flux for the Hbeta line in erg/cm2/s.
+        Hbeta_rest_wavelength: float
+            The rest wavelength of the Hbeta line in Angstrom.
         H0: float
             This is the Hubble constant value. Default is 70 km/s/Mpc.
 
@@ -1931,16 +1955,20 @@ class analysis:
         log10_BH_mass_line_lum: float
             The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 6 from Vestergaard & Peterson, 2006, ApJ, 641.
         """
+        if isinstance(FWHM_Hbeta, u.Quantity):
+            FWHM_Hbeta = FWHM_Hbeta.value
+
+        if isinstance(integrated_flux_Hbeta, u.Quantity):
+            integrated_flux_Hbeta = integrated_flux_Hbeta.value
 
         systematic_error = 0.43 # dex. Result from Vestergaard & Peterson, 2006.
-        z = par_values_Hbeta[0]
-        FWHM_Hbeta_velocity = c.to("km/s").value*FWHM_Hbeta.value*(1+z)/par_values_Hbeta[1]
+        FWHM_Hbeta_velocity = c.to("km/s").value*FWHM_Hbeta/Hbeta_rest_wavelength
 
         cosmo = FlatLambdaCDM(H0=H0, Om0=0.3, Tcmb0 = 2.7) # Omega lambda is implicitly 0.7
-        Distance = cosmo.luminosity_distance(z).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
-        Lum_Hbeta = integrated_flux_Hbeta.value*4*np.pi*(Distance**2)
+        Distance = cosmo.luminosity_distance(sistemic_redshift).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
+        Lum_Hbeta = integrated_flux_Hbeta*4*np.pi*(Distance**2)
 
-        continuum_index = extraction.find_nearest(wavelengths.value, 5100*(1+z))
+        continuum_index = extraction.find_nearest(wavelengths.value, 5100*(1+sistemic_redshift))
         Lum_5100 = continuum_baseline[continuum_index]*wavelengths.value[continuum_index]*4*np.pi*(Distance**2)
 
         log10_BH_mass_continuum = np.log10( ((FWHM_Hbeta_velocity/1000)**2) * np.sqrt((Lum_5100/(10**44))) ) + 6.91
@@ -1952,7 +1980,7 @@ class analysis:
         return log10_BH_mass_continuum, log10_BH_mass_line_lum
 
 
-    def BH_mass_CIV_VP2006(self, wavelengths, continuum_baseline, FWHM_CIV, par_values_CIV, H0=70):
+    def BH_mass_CIV_VP2006(self, wavelengths, continuum_baseline, FWHM_CIV, sistemic_redshift, CIV_rest_wavelength = 1549.4795, H0=70):
 
         """
         This function estimates the black hole mass based on Vestergaard & Peterson, 2006, ApJ, 641, "DETERMINING CENTRAL BLACK HOLE
@@ -1969,11 +1997,12 @@ class analysis:
             The wavelength solution for the given spectrum.
         continuum_baseline: numpy.ndarray (float)
             An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
-        FWHM_CIV: float (astropy.units Angstrom)
-            The FWHM for the CIV line in Angstrom units.
-        par_values_CIV: list
-            The list with the best fit values for the CIV line. This information is contained in the variable "par_values_list" returned from the function
-            analysis.fit_lines().
+        FWHM_CIV: float 
+            The FWHM for the CIV line in Angstrom, in the rest frame.
+        sistemic_redshift: float
+            The sistemic redshift of the AGN.
+        CIV_rest_wavelength: float
+            The rest wavelength of the CIV line in Angstrom.
         H0: float
             This is the Hubble constant value. Default is 70 km/s/Mpc.
 
@@ -1982,15 +2011,16 @@ class analysis:
         log10_BH_mass_CIV: float
             The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 8 from Vestergaard & Peterson, 2006, ApJ, 641.
         """
+        if isinstance(FWHM_CIV, u.Quantity):
+            FWHM_CIV = FWHM_CIV.value
 
         systematic_error_FWHM = 0.36 # dex. Result from Vestergaard & Peterson, 2006.
-        z = par_values_CIV[0]
-        FWHM_CIV_velocity = c.to("km/s").value*FWHM_CIV.value*(1+z)/par_values_CIV[1]
+        FWHM_CIV_velocity = c.to("km/s").value*FWHM_CIV/CIV_rest_wavelength
 
         cosmo = FlatLambdaCDM(H0=H0, Om0=0.3, Tcmb0 = 2.7) # Omega lambda is implicitly 0.7
-        Distance = cosmo.luminosity_distance(z).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
+        Distance = cosmo.luminosity_distance(sistemic_redshift).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
 
-        continuum_index = extraction.find_nearest(wavelengths.value, 1350*(1+z))
+        continuum_index = extraction.find_nearest(wavelengths.value, 1350*(1+sistemic_redshift))
         Lum_1350 = continuum_baseline[continuum_index]*wavelengths.value[continuum_index]*4*np.pi*(Distance**2)
 
         log10_BH_mass_CIV = np.log10( ((FWHM_CIV_velocity/1000)**2) * (Lum_1350/(10**44))**0.53 ) + 6.66
@@ -1999,7 +2029,60 @@ class analysis:
         return log10_BH_mass_CIV
 
 
-    def BH_mass_MgII_VO2009(self, wavelengths, continuum_baseline, FWHM_MgII, par_values_MgII, H0=70):
+    def BH_mass_CIV_Coatman2017(self, wavelengths, continuum_baseline, FWHM_CIV, CIV_redshift, sistemic_redshift, CIV_rest_wavelength = 1549.4795,  H0=73):
+
+        """
+        This function estimates the black hole mass based on Coatman et al., 2017, MNRAS, 465, "Correcting C IV-based virial black hole masses".
+        As stated in that work, we assume a cosmology with H0 = 71 km/s/Mpc, Omega_Lambda = 0.73, and Omega_matter = 0.27, although we allow the user to
+        change the value of the Hubble constant (H0).
+
+        We assume a systematic error of 0.36 dex, like in Vestergaard & Peterson, 2006, since the estimated errors are not given in Coatman et al. 2017.
+        Since this error is much higher than the errors in FWHM and integrated flux, we simply ignore the measured errors in these parameters.
+
+        Parameters
+        ----------
+        wavelengths: numpy.ndarray (astropy.units Angstrom)
+            The wavelength solution for the given spectrum.
+        continuum_baseline: numpy.ndarray (float)
+            An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
+        FWHM_CIV: float
+            The measured FWHM for the CIV line in Angstrom, in the rest frame.
+        CIV_redshift: float
+            The redshift of the CIV line, in km/s.
+        sistemic_redshift: float
+            The sistemic redshift of the AGN.
+        CIV_rest_wavelength: float
+            The rest wavelength of the CIV line in Angstrom.
+        H0: float
+            This is the Hubble constant value. Default is 73 km/s/Mpc.
+
+        Returns
+        -------
+        log10_BH_mass_CIV: float
+            The black hole mass in log10 scale and its estimated error.
+        """
+        if isinstance(FWHM_CIV, u.Quantity):
+            FWHM_CIV = FWHM_CIV.value
+
+        systematic_error_FWHM = 0.36 # dex. Result from Vestergaard & Peterson, 2006.
+        FWHM_CIV_velocity = c.to("km/s").value*FWHM_CIV/CIV_rest_wavelength
+
+        vel_outflow = c.to("km/s").value * (CIV_redshift - sistemic_redshift) / (1 + sistemic_redshift)
+        corrected_FWHM = FWHM_CIV_velocity/(0.41*(vel_outflow/1000) + 0.62)
+
+        cosmo = FlatLambdaCDM(H0=H0, Om0=0.27, Tcmb0 = 2.7) # Omega lambda is implicitly 0.73
+        Distance = cosmo.luminosity_distance(sistemic_redshift).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
+
+        continuum_index = extraction.find_nearest(wavelengths.value, 1350*(1+sistemic_redshift))
+        Lum_1350 = continuum_baseline[continuum_index]*wavelengths.value[continuum_index]*4*np.pi*(Distance**2)
+
+        log10_BH_mass_CIV = np.log10( ((corrected_FWHM/1000)**2) * (Lum_1350/(10**44))**0.53 ) + 6.71
+
+        log10_BH_mass_CIV = [log10_BH_mass_CIV,systematic_error_FWHM]
+        return log10_BH_mass_CIV
+
+
+    def BH_mass_MgII_VO2009(self, wavelengths, continuum_baseline, FWHM_MgII, sistemic_redshift, MgII_rest_wavelength = 2798, H0=70):
 
         """
         This function estimates the black hole mass based on Vestergaard & Osmer, 2009, ApJ, 699, "MASS FUNCTIONS OF THE ACTIVE BLACK HOLES
@@ -2016,11 +2099,12 @@ class analysis:
             The wavelength solution for the given spectrum.
         continuum_baseline: numpy.ndarray (float)
             An array with the continuum density flux. Standard easyspec units are in erg/cm2/s/A. This variable is an output of the function analysis.find_lines().
-        FWHM_MgII: float (astropy.units Angstrom)
-            The FWHM for the MgII line in Angstrom units.
-        par_values_MgII: list
-            The list with the best fit values for the MgII line. This information is contained in the variable "par_values_list" returned from the function
-            analysis.fit_lines().
+        FWHM_MgII: float
+            The FWHM for the MgII line in Angstrom, in the rest frame.
+        sistemic_redshift: float
+            The sistemic redshift of the AGN.
+        MgII_rest_wavelength: float
+            The rest wavelength of the MgII line in Angstrom.
         H0: float
             This is the Hubble constant value. Default is 70 km/s/Mpc.
 
@@ -2031,17 +2115,18 @@ class analysis:
             taking the continuum luminosity at 3000 Angstroms. If the continuum at 3000 Angstroms is not available, it automatically uses the
             continuum at 2100 Angstroms.
         """
+        if isinstance(FWHM_MgII, u.Quantity):
+            FWHM_MgII = FWHM_MgII.value
 
         systematic_error_FWHM = 0.55 # dex. Result from Vestergaard & Osmer, 2009.
-        z = par_values_MgII[0]
-        FWHM_MgII_velocity = c.to("km/s").value*FWHM_MgII.value*(1+z)/par_values_MgII[1]
+        FWHM_MgII_velocity = c.to("km/s").value*FWHM_MgII/MgII_rest_wavelength
 
         cosmo = FlatLambdaCDM(H0=H0, Om0=0.3, Tcmb0 = 2.7) # Omega lambda is implicitly 0.7
-        Distance = cosmo.luminosity_distance(z).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
+        Distance = cosmo.luminosity_distance(sistemic_redshift).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
 
-        continuum_index = extraction.find_nearest(wavelengths.value, 3000*(1+z))
-        if wavelengths.value[continuum_index] < 0.9*3000*(1+z):
-            continuum_index = extraction.find_nearest(wavelengths.value, 2100*(1+z))
+        continuum_index = extraction.find_nearest(wavelengths.value, 3000*(1+sistemic_redshift))
+        if wavelengths.value[continuum_index] < 0.9*3000*(1+sistemic_redshift):
+            continuum_index = extraction.find_nearest(wavelengths.value, 2100*(1+sistemic_redshift))
             Lum_2100 = continuum_baseline[continuum_index]*wavelengths.value[continuum_index]*4*np.pi*(Distance**2)
             log10_BH_mass_MgII = np.log10( ((FWHM_MgII_velocity/1000)**2) * (Lum_2100/(10**44))**0.5 ) + 6.79
         else:
@@ -2051,7 +2136,7 @@ class analysis:
         log10_BH_mass_MgII = [log10_BH_mass_MgII,systematic_error_FWHM]
         return log10_BH_mass_MgII
 
-    def BH_mass_Halpha_Shen2011(self, FWHM_Halpha, par_values_Halpha, integrated_flux_Halpha, H0=70):
+    def BH_mass_Halpha_Shen2011(self, FWHM_Halpha, sistemic_redshift, integrated_flux_Halpha, Halpha_rest_wavelength = 6562.819, H0=70):
 
         """
         This function estimates the black hole mass based on Shen at al. 2011, ApJS, 194:45, "A CATALOG OF QUASAR PROPERTIES FROM
@@ -2063,13 +2148,14 @@ class analysis:
 
         Parameters
         ----------
-        FWHM_Halpha: float (astropy.units Angstrom)
-            The FWHM for the Halpha line in Angstrom units.
-        par_values_Halpha: list
-            The list with the best fit values for the Halpha line. This information is contained in the variable "par_values_list" returned from the function
-            analysis.fit_lines().
-        integrated_flux_Halpha: float (astropy.units Angstrom)
-            The integrated flux for the Halpha line in erg/cm2/s units.
+        FWHM_Halpha: float
+            The FWHM for the Halpha line in Angstrom, in the rest frame.
+        sistemic_redshift: float
+            The sistemic redshift of the AGN.
+        integrated_flux_Halpha: float 
+            The integrated flux for the Halpha line in erg/cm2/s.
+        Halpha_rest_wavelength: float
+            The rest wavelength of the Halpha line in Angstrom.
         H0: float
             This is the Hubble constant value. Default is 70 km/s/Mpc.
 
@@ -2078,14 +2164,18 @@ class analysis:
         log10_BH_mass_Halpha: float
             The black hole mass in log10 scale and its corresponding error in dex computed based on Eq. 10 from Shen et al. 2011. 
         """
+        if isinstance(FWHM_Halpha, u.Quantity):
+            FWHM_Halpha = FWHM_Halpha.value
+        
+        if isinstance(integrated_flux_Halpha, u.Quantity):
+            integrated_flux_Halpha = integrated_flux_Halpha.value
 
         systematic_error_FWHM = 0.18
-        z = par_values_Halpha[0]
-        FWHM_Halpha_velocity = c.to("km/s").value*FWHM_Halpha.value*(1+z)/par_values_Halpha[1]
+        FWHM_Halpha_velocity = c.to("km/s").value*FWHM_Halpha/Halpha_rest_wavelength
 
         cosmo = FlatLambdaCDM(H0=H0, Om0=0.3, Tcmb0 = 2.7) # Omega lambda is implicitly 0.7
-        Distance = cosmo.luminosity_distance(z).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
-        Lum_Halpha = integrated_flux_Halpha.value*4*np.pi*(Distance**2)
+        Distance = cosmo.luminosity_distance(sistemic_redshift).value*3.086e24  # Luminosity distance. The constant converts Mpc to cm.
+        Lum_Halpha = integrated_flux_Halpha*4*np.pi*(Distance**2)
 
         log10_BH_mass_Halpha = np.log10(  (FWHM_Halpha_velocity**2.1) * ((Lum_Halpha/(10**42)))**0.43 ) + 0.379
         
