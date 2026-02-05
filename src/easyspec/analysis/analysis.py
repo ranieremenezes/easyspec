@@ -2029,7 +2029,7 @@ class analysis:
         return log10_BH_mass_CIV
 
 
-    def BH_mass_CIV_Coatman2017(self, wavelengths, continuum_baseline, FWHM_CIV, CIV_redshift, sistemic_redshift, CIV_rest_wavelength = 1549.4795,  H0=73):
+    def BH_mass_CIV_Coatman2017(self, wavelengths, continuum_baseline, FWHM_CIV, CIV_redshift, sistemic_redshift, CIV_rest_wavelength = 1549.4795,  H0=71):
 
         """
         This function estimates the black hole mass based on Coatman et al., 2017, MNRAS, 465, "Correcting C IV-based virial black hole masses".
@@ -2054,7 +2054,7 @@ class analysis:
         CIV_rest_wavelength: float
             The rest wavelength of the CIV line in Angstrom.
         H0: float
-            This is the Hubble constant value. Default is 73 km/s/Mpc.
+            This is the Hubble constant value. Default is 71 km/s/Mpc.
 
         Returns
         -------
