@@ -72,6 +72,7 @@ For more advanced analyses, we recommend the tutorials
 * [spectral\_analysis\_fitting\_a\_line\_with\_two\_Gaussians](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/spectral_analysis_fitting_a_line_with_two_Gaussians.ipynb): here we fit the Hbeta line with two Gaussian components and also explore the MCMC posterior distributions.
 * [asymmetrical\_lines\_easyspec](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/asymmetrical_lines_easyspec.ipynb): here, we fit a skewed Lorentzian model to a C IV emission line, demonstrate how to construct a synthetic spectrum, and show how to manually define MCMC priors. 
 * [Stacking\_reduced\_spectra](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/Stacking_reduced_spectra.ipynb): in this tutorial, we show you how to stack several spectra of the same target collected with different instruments.
+* [Emission-in-Absorption](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/Emission-in-Absorption.ipynb): here we show how to fit an emission-in-absorption H$\beta$ line in a transition starforming-AGN spectrum.
 
 The documentation of `easyspec` can be found in the header of all the functions, and at [this link](https://easyspec.readthedocs.io/en/latest/index.html).
 
