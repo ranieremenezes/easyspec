@@ -17,6 +17,8 @@ If you'd like to support the maintenance of `easyspec` (or [easyfermi](https://g
 
 [![CI](https://github.com/ranieremenezes/easyspec/actions/workflows/ci.yml/badge.svg)](https://github.com/ranieremenezes/easyspec/actions/workflows/ci.yml)
 
+[![ascl](https://img.shields.io/badge/ascl-2603.017-blue.svg?colorB=262255)](https://ascl.net/2603.017) 
+
 # Requirements
 
 - Linux OS / Mac OS / Windows
@@ -83,7 +85,7 @@ An overview seminar on `easyspec`, presented in August 2025 at the University of
 
 # Acknowledgments
 
-To acknowledge `easyspec` in a publication, please cite de Menezes et al., 2025 (https://iopscience.iop.org/article/10.3847/1538-3881/adf220) and the DOI in [Zenodo](https://zenodo.org/records/17211465).
+To acknowledge `easyspec` in a publication, please cite de Menezes et al., 2025 (https://iopscience.iop.org/article/10.3847/1538-3881/adf220) and the DOI in [Zenodo](https://zenodo.org/records/17211465). 
 
 # News
 
