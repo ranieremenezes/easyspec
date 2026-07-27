@@ -15,7 +15,6 @@ from dust_extinction.parameter_averages import F99
 import warnings
 import copy
 
-
 plt.rcParams.update({'font.size': 12})
 
 libpath = Path(__file__).parent.resolve() / Path("airmass")
