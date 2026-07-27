@@ -781,7 +781,7 @@ class extraction:
 
 
 
-        reference_dictionaty = {"ctio" : "The CTIO extinction curve was originally distributed with IRAF and comes from the work of Stone & Baldwin (1983 MN 204, 347) \
+        reference_dictionary = {"ctio" : "The CTIO extinction curve was originally distributed with IRAF and comes from the work of Stone & Baldwin (1983 MN 204, 347) \
 plus Baldwin & Stone (1984 MN 206, 241). The first of these papers lists the points from 3200-8370A while the second extended the \
 flux calibration from 6056 to 10870A but the derived extinction curve was not given in the paper. The IRAF table follows SB83 out \
 to 6436, the redder points presumably come from BS84 with averages used in the overlap region. More recent CTIO extinction curves \
@@ -813,7 +813,7 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
             raise NameError("Invalid entry for data_type. The options are 'target' or 'std_star'.")
 
         if custom_observatory is None:
-            airmass_extinction = np.loadtxt(str(libpath)+f"/{observatory}_airmass_extinction.txt")
+            airmass_extinction = np.loadtxt(libpath / f"{observatory}_airmass_extinction.txt")
             extinction_wavelength = airmass_extinction[:,0]
             extinction = airmass_extinction[:,1]
         else:
@@ -877,7 +877,7 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
                 plt.show()
         
         if plots and custom_observatory is None:
-            print("Please cite the work where this extinction curve was measured:\n"+reference_dictionaty[observatory])
+            print("Please cite the work where this extinction curve was measured:\n"+reference_dictionary[observatory])
 
         return spec_atm_corrected_list
 
@@ -894,11 +894,11 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
 
         Returns
         -------
-        reference_dictionaty[dataset]: string
+        reference_dictionary[dataset]: string
             If a dataset is given, the function will return the reference for this dataset.
         """
 
-        reference_dictionaty = {"blackbody" :  "Blackbody flux distributions in various magnitude bands.",
+        reference_dictionary = {"blackbody" :  "Blackbody flux distributions in various magnitude bands.",
 "bstdscal" :  "The brighter KPNO IRS standards (i.e. those with HR numbers) at 29 bandpasses, data from various\
 sources transformed to the Hayes and Latham system, unpublished.",
 "ctiocal" :  "Fluxes for the southern tertiary standards as published by Baldwin & Stone, 1984, MNRAS,\
@@ -924,23 +924,22 @@ and red fluxes in the overlap.  The separate red and blue fluxes may be selected
 "spec50cal" : "The KPNO spectrophotometric standards at 50 A intervals. The data are from (1) Table V, Spectrophotometric Standards, Massey et al., 1988,\
 ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Extension to 1 micron, Massey and Gronwall, 1990, ApJ 358, p. 344."}
 
-        available_datasets = glob.glob(str(libpath_std)+"/*")
-        available_datasets = np.sort(available_datasets)
+        available_datasets = sorted(libpath_std.glob("*"))
+        available_dataset_names = [p.name for p in available_datasets]
 
         if std_star_dataset is None:
             print("Available datasets:")
-            for available_dataset in available_datasets:
-                print(available_dataset.split("/")[-1])
-        
-        elif str(libpath_std)+"/"+std_star_dataset in available_datasets:
-            available_std_stars = glob.glob(str(libpath_std)+f"/{std_star_dataset}/*")
-            std_stars = []
-            for available_std_star in available_std_stars:
-                std_stars.append(available_std_star.split("/")[-1])
+            for name in available_dataset_names:
+                print(name)
 
-            return std_stars, reference_dictionaty[std_star_dataset]
+        elif std_star_dataset in available_dataset_names:
+            available_std_stars = (libpath_std / std_star_dataset).glob("*")
+            std_stars = [p.name for p in available_std_stars]
+
+            return std_stars, reference_dictionary[std_star_dataset]
         else:
             print("Input dataset not found in our library. Try using the function extraction.list_available_standards(dataset=None) to see the available datasets.")
+
 
 
     def std_star_normalization(self, spec_atm_corrected_std, wavelengths_std, std_star_dataset, std_star_archive_file, smooth_window = 101, exclude_regions = None, smooth_window_archive = 11, interpolation_order=1, plots = True):
@@ -1170,13 +1169,13 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
             if save_spec:
                 output_directory = Path(output_directory)
                 if self.wavelengths_fit_std_list is None and calibrated_spec_systematic_error_list is None:
-                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
+                    np.savetxt(output_directory / f"{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
                 elif calibrated_spec_systematic_error_list is None:
-                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value, self.wavelengths_fit_std_list[counter]*np.ones(len(wavelengths.value))], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom)")
+                    np.savetxt(output_directory / f"{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value, self.wavelengths_fit_std_list[counter]*np.ones(len(wavelengths.value))], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom)")
                 elif self.wavelengths_fit_std_list is None:
-                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value, calibrated_spec_systematic_error_list[counter].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic flux error (erg/cm2/s/Angstrom)")
+                    np.savetxt(output_directory / f"{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value, calibrated_spec_systematic_error_list[counter].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic flux error (erg/cm2/s/Angstrom)")
                 else:
-                    np.savetxt(str(output_directory)+f"/{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value, self.wavelengths_fit_std_list[counter]*np.ones(len(wavelengths.value)), calibrated_spec_systematic_error_list[counter].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom), Systematic flux error (erg/cm2/s/Angstrom)")
+                    np.savetxt(output_directory / f"{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value, self.wavelengths_fit_std_list[counter]*np.ones(len(wavelengths.value)), calibrated_spec_systematic_error_list[counter].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom), Systematic flux error (erg/cm2/s/Angstrom)")
             
             counter = counter + 1
 
