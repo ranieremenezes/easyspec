@@ -1,5 +1,5 @@
 <p align="center" width="100%">
- <img width="100%" height="100%" src="/docs/source/logo.png">
+ <img width="100%" height="100%" src="/docs/source/logo.jpeg">
 </p> 
 
 # easyspec
