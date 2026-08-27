@@ -4,7 +4,6 @@
 
 # easyspec
 
-
 The easiest way to do long-slit spectroscopy.
 
 `easyspec` is a tool designed to streamline long-slit spectroscopy, offering an intuitive framework for reducing, extracting, and analyzing astrophysical spectra.
