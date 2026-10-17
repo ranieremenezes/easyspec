@@ -10,9 +10,11 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
+import os
+import sys
+# Document the easyspec code of this repository (two levels above docs/source), and NOT an easyspec version installed
+# with pip (e.g. the one on PyPI), which may be older than the code on GitHub:
+sys.path.insert(0, os.path.abspath('../..'))
 
 
 # -- Project information -----------------------------------------------------
@@ -22,7 +24,10 @@ copyright = '2025, Raniere de Menezes'
 author = 'Raniere de Menezes'
 
 # The full version, including alpha/beta/rc tags
-release = '2025'
+try:
+    from easyspec.version import __version__ as release  # keeps the version shown in the docs in sync with the code
+except Exception:
+    release = '2025'
 
 
 # -- General configuration ---------------------------------------------------
@@ -42,6 +47,13 @@ extensions = ['sphinx.ext.duration',
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
+# Packages that are not needed to read the docstrings are "mocked" (replaced by dummy modules), so that the build does not
+# fail if they cannot be installed on Read the Docs. Add here any new heavy dependency imported by easyspec:
+autodoc_mock_imports = ['ccdproc', 'astroscrappy', 'emcee', 'corner', 'dust_extinction', 'tqdm']
+
+autodoc_member_order = 'bysource'  # functions listed in the same order as in the code
+autodoc_default_options = {'members': True, 'undoc-members': True, 'show-inheritance': True}
+
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
@@ -53,9 +65,9 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+html_theme = 'sphinx_rtd_theme'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = []
