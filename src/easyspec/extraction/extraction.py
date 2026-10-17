@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import glob
 from pathlib import Path
 from scipy import interpolate
+from scipy.integrate import trapezoid
 from easyspec.cleaning import cleaning
 from astropy.modeling.polynomial import Polynomial1D
 from astropy.modeling.fitting import LinearLSQFitter, LevMarLSQFitter
@@ -510,7 +511,7 @@ class extraction:
                 guess = Gaussian1D(amplitude=mean_trace_profile.max(), mean=0, stddev=trace_half_width/2)
                 fitted_trace_profile = lmfitter(model=guess, x=trace_profile_xaxis, y=mean_trace_profile)
                 # Now, let's normalize the Gaussian weights:
-                normalization = np.trapz(fitted_trace_profile(trace_profile_xaxis),trace_profile_xaxis)
+                normalization = trapezoid(fitted_trace_profile(trace_profile_xaxis),trace_profile_xaxis)
                 fitted_trace_profile.amplitude.value = fitted_trace_profile.amplitude.value/normalization#(fitted_trace_profile.stddev.value * np.sqrt(2 * np.pi))                
                 # And then collect the errors
                 amplitude_sys_error = np.sqrt(fitted_trace_profile.cov_matrix.cov_matrix[0][0])/normalization
@@ -724,7 +725,7 @@ class extraction:
                 plt.figure(figsize=(12,5))
                 plt.plot(lamp_peak_positions, corresponding_wavelengths, 'o')
                 plt.plot(xrange, wavelengths, '-',label="Wavelength solution")
-                plt.ylabel(f"$\lambda(x)$ [{str(unit)}]")
+                plt.ylabel(f"$\\lambda(x)$ [{str(unit)}]")
                 plt.xlabel("x (pixels)")
                 plt.title(f"Wavelength solution - spectrum {number}")
                 plt.grid(linestyle=":",which="both")
@@ -1161,13 +1162,14 @@ ApJ 328, p. 315 and (2) Table 3, The Kitt Peak Spectrophotometric Standards: Ext
                 plt.xlim(wavelengths.value.min(),wavelengths.value.max())
                 plt.ylim(0,calibrated_flux_list[counter].value.max()*1.2)
                 plt.title(f"Calibrated spec {spec_number} - "+self.target_name+" field")
-                plt.ylabel("F$_{\lambda}$ "+f"[{calibrated_flux_list[counter].unit}]",fontsize=12)
-                plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
+                plt.ylabel("F$_{\\lambda}$ "+f"[{calibrated_flux_list[counter].unit}]",fontsize=12)
+                plt.xlabel(f"Observed $\\lambda$ [${wavelengths.unit}$]",fontsize=12)
                 plt.legend()
                 
 
             if save_spec:
                 output_directory = Path(output_directory)
+                output_directory.mkdir(parents=True, exist_ok=True)
                 if self.wavelengths_fit_std_list is None and calibrated_spec_systematic_error_list is None:
                     np.savetxt(output_directory / f"{self.target_name}_spec_{spec_number}.dat", np.c_[wavelengths.value, calibrated_flux_list[counter].value], header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom)")
                 elif calibrated_spec_systematic_error_list is None:

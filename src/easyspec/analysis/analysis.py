@@ -9,6 +9,7 @@ import time
 import warnings
 from matplotlib.ticker import AutoMinorLocator
 from scipy import interpolate
+from scipy.integrate import trapezoid
 from easyspec.extraction import extraction
 from astropy import units as u
 from scipy.signal import medfilt
@@ -198,8 +199,8 @@ class analysis:
             plt.title(f"Calibrated data -  {target_name}")
             plt.plot(wavelengths, flux_density, color='orange', label=target_name+" - calibrated data")
             plt.legend()
-            plt.ylabel("F$_{\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
-            plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
+            plt.ylabel("F$_{\\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
+            plt.xlabel(f"Observed $\\lambda$ [${wavelengths.unit}$]",fontsize=12)
             plt.show()
 
         
@@ -267,8 +268,8 @@ class analysis:
         line_position = []
         if plot_regions:
             plt.figure(figsize=(12,4))
-            plt.ylabel("F$_{\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
-            plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
+            plt.ylabel("F$_{\\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
+            plt.xlabel(f"Observed $\\lambda$ [${wavelengths.unit}$]",fontsize=12)
             if continuum_regions is None:
                 plt.title("Using the full wavelength range to estimate the continuum")
             else:
@@ -334,10 +335,10 @@ class analysis:
             if len(peak_heights) > 0:
                 for number, peak_wavelength in enumerate(wavelength_peak_positions.value):
                     if line_position[number] == "up":
-                        plt.text(peak_wavelength, peak_heights.value[number] + 0.05*peak_heights.value.max(), str(round(peak_wavelength,3))+"$\AA$", color="C0",rotation=90,fontsize=10, horizontalalignment="center", verticalalignment="bottom")
+                        plt.text(peak_wavelength, peak_heights.value[number] + 0.05*peak_heights.value.max(), str(round(peak_wavelength,3))+"$\\AA$", color="C0",rotation=90,fontsize=10, horizontalalignment="center", verticalalignment="bottom")
                     else:
                         text_height = np.mean(np.abs(peak_heights.value))
-                        plt.text(peak_wavelength, continuum_baseline[peak_position_index][number] + text_height,str(round(peak_wavelength,3))+"$\AA$", color="red",rotation=90,fontsize=10, horizontalalignment="center", verticalalignment="bottom")
+                        plt.text(peak_wavelength, continuum_baseline[peak_position_index][number] + text_height,str(round(peak_wavelength,3))+"$\\AA$", color="red",rotation=90,fontsize=10, horizontalalignment="center", verticalalignment="bottom")
                         plt.vlines(peak_wavelength, peak_heights.value[number], continuum_baseline[peak_position_index][number] + 0.95*text_height,color="red")
             
             if method != "median_filter":
@@ -351,8 +352,8 @@ class analysis:
             plt.grid(which="both",linestyle=":")
             plt.xlim(wavelengths.value.min(),wavelengths.value.max())
             plt.ylim(ylim_min,flux_density.value.max()*1.5)
-            plt.ylabel("F$_{\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
-            plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
+            plt.ylabel("F$_{\\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
+            plt.xlabel(f"Observed $\\lambda$ [${wavelengths.unit}$]",fontsize=12)
             plt.title(self.target_name)
             plt.legend()
             plt.tight_layout()
@@ -619,7 +620,7 @@ class analysis:
         return par_values, par_values_errors, par_names
 
 
-    def quick_plot(self, x, y, model_name, parlabels, sampler=None, best_fit_model=None, theta_max=None, normalization = 1, hair_color="grey", title="",xlabel="Observed $\lambda$ [$\AA$]",ylabel="F$_{\lambda}$ [erg cm$^{-2}$ s$^{-1}$ $\AA^{-1}$ ]",overplot_median_model=True,savefig=True, outputdir="./"):
+    def quick_plot(self, x, y, model_name, parlabels, sampler=None, best_fit_model=None, theta_max=None, normalization = 1, hair_color="grey", title="",xlabel="Observed $\\lambda$ [$\\AA$]",ylabel="F$_{\\lambda}$ [erg cm$^{-2}$ s$^{-1}$ $\\AA^{-1}$ ]",overplot_median_model=True,savefig=True, outputdir="./"):
         
         """
         In this function we plot the data window together with the maximum likelihood and/or the median model.
@@ -677,7 +678,7 @@ class analysis:
             median_model,spread = self.MCMC_spread(x, samples, model_name, nsamples=200)
             x_plot = np.linspace(x.min(),x.max(),len(median_model))
             plt.plot(x_plot,median_model*normalization, color="C0", ls="--", label="Median model")
-            plt.fill_between(x_plot,(median_model+spread)*normalization,(median_model-spread)*normalization,color="C0",alpha=0.3,label="$1\sigma$")
+            plt.fill_between(x_plot,(median_model+spread)*normalization,(median_model-spread)*normalization,color="C0",alpha=0.3,label="$1\\sigma$")
 
         plt.xlabel(xlabel,fontsize=12)
         plt.ylabel(ylabel,fontsize=12)
@@ -1141,7 +1142,7 @@ class analysis:
                         self.parameter_time_series(initial, sampler, labels)
 
                         self.quick_plot(x,y,model_name=copy_which_models[number], parlabels=labels, sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=local_normalization,
-                                        hair_color="grey",title=self.target_name+" - "+line_names[number], ylabel="F$_{\lambda} - F_{continuum}$ ["+f"{flux_density.unit}]", overplot_median_model=overplot_median_model, outputdir = self.output_dir)
+                                        hair_color="grey",title=self.target_name+" - "+line_names[number], ylabel="F$_{\\lambda} - F_{continuum}$ ["+f"{flux_density.unit}]", overplot_median_model=overplot_median_model, outputdir = self.output_dir)
 
                 else:
                     blended_line_names.append(line_names[number])
@@ -1211,7 +1212,7 @@ class analysis:
                         self.parameter_time_series(initial, sampler, labels_corner)
 
                         self.quick_plot(x,y,model_name=copy_which_models[number], parlabels = labels_corner,sampler=sampler,best_fit_model=best_fit_model,theta_max=theta_max, normalization=local_normalization,
-                                        hair_color="grey",title=self.target_name+" - "+line_names_corner, ylabel="F$_{\lambda} - F_{continuum}$ ["+f"{flux_density.unit}]",overplot_median_model=overplot_median_model, outputdir = self.output_dir)
+                                        hair_color="grey",title=self.target_name+" - "+line_names_corner, ylabel="F$_{\\lambda} - F_{continuum}$ ["+f"{flux_density.unit}]",overplot_median_model=overplot_median_model, outputdir = self.output_dir)
                 else:
                     continue
                 
@@ -1284,9 +1285,9 @@ class analysis:
             plt.grid(which="both",linestyle=":")
             plt.xlim(wavelengths.value.min(),wavelengths.value.max())
             plt.ylim(0,flux_density.value.max()*2)
-            plt.ylabel("F$_{\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
-            plt.xlabel(f"Observed $\lambda$ [${wavelengths.unit}$]",fontsize=12)
-            plt.title(self.target_name+" - $z_{av} = $"+f"{round(average_redshift,7)}, $\sigma_z = {round(std_redshift,7)}$")
+            plt.ylabel("F$_{\\lambda}$ "+f"[{flux_density.unit}]",fontsize=12)
+            plt.xlabel(f"Observed $\\lambda$ [${wavelengths.unit}$]",fontsize=12)
+            plt.title(self.target_name+" - $z_{av} = $"+f"{round(average_redshift,7)}, $\\sigma_z = {round(std_redshift,7)}$")
             plt.legend()
             plt.tight_layout()
             if save_results:
@@ -1480,7 +1481,7 @@ class analysis:
             
             plt.legend()
             if line_name is not None:
-                plt.title(line_name+" - Model-independent estimate for $\sigma_{rms}$ (observed frame)")
+                plt.title(line_name+" - Model-independent estimate for $\\sigma_{rms}$ (observed frame)")
 
 
         return line_dispersion, profile_equiv_width, profile_FWHM, line_disp_error, equiv_width_error, fwhm_error
@@ -1544,12 +1545,12 @@ class analysis:
 
         x = np.linspace(self.integration_limits_dispersion[0],self.integration_limits_dispersion[1]) # We use the same integration limits adopted in the function line_dispersion_and_equiv_width()
         
-        numerator = np.trapz(lambda_P(x,theta), x)*Normalization_factor_for_integration
-        denominator = np.trapz(Intensity(x,theta), x)*Normalization_factor_for_integration
+        numerator = trapezoid(lambda_P(x,theta), x)*Normalization_factor_for_integration
+        denominator = trapezoid(Intensity(x,theta), x)*Normalization_factor_for_integration
 
         first_moment = numerator/denominator
 
-        second_moment = np.trapz(lambda2_P(x,theta), x)*Normalization_factor_for_integration/denominator
+        second_moment = trapezoid(lambda2_P(x,theta), x)*Normalization_factor_for_integration/denominator
         line_dispersion = np.sqrt(second_moment)
 
         wavelength_range_0 = np.linspace(theta[0]-10*theta[2],theta[0],1000)
@@ -1571,8 +1572,8 @@ class analysis:
             lambda_1_index = extraction.find_nearest(Intensity(wavelength_range_1,noisy_theta), noisy_theta[1]/2)
             fwhm_error.append(np.abs(wavelength_range_1[lambda_1_index]-wavelength_range_0[lambda_0_index]))
 
-            denominator = np.trapz(Intensity(x,noisy_theta), x)*Normalization_factor_for_integration
-            second_moment = np.trapz(lambda2_P(x,noisy_theta), x)*Normalization_factor_for_integration/denominator
+            denominator = trapezoid(Intensity(x,noisy_theta), x)*Normalization_factor_for_integration
+            second_moment = trapezoid(lambda2_P(x,noisy_theta), x)*Normalization_factor_for_integration/denominator
             line_disp_error.append(np.sqrt(second_moment))
 
         line_disp_error = np.nanstd(np.asarray(line_disp_error))
@@ -1651,11 +1652,11 @@ class analysis:
 
         # Evaluate integrand and integrate using the trapezoidal rule
         eqw_down = np.array([
-            np.trapz(integrand(lam, p), lam)
+            trapezoid(integrand(lam, p), lam)
             for p in params_down
         ])
         eqw_up = np.array([
-            np.trapz(integrand(lam, p), lam)
+            trapezoid(integrand(lam, p), lam)
             for p in params_up
         ])
 
@@ -2399,8 +2400,8 @@ class analysis:
 
             plt.figure(figsize=(12, 4), dpi=150)
             plt.plot(wavelengths_stacked, stacked_flux, color='orange', linewidth=0.5)
-            plt.xlabel('Observed ${\lambda}$[$\AA$]')
-            plt.ylabel(r'$F_{\lambda}$ [erg / ($\AA$ cm² s)]', fontsize=12)
+            plt.xlabel('Observed ${\\lambda}$[$\\AA$]')
+            plt.ylabel(r'$F_{\\lambda}$ [erg / ($\\AA$ cm² s)]', fontsize=12)
             if target_name is not None:
                 plt.title('Stacked Spectrum of '+ target_name, fontsize=12)
             else:
@@ -2418,7 +2419,7 @@ class analysis:
                 plt.plot(wavelengths_stacked, spectra_interp_matrix[i], alpha=0.8, linewidth=0.5)
             
             plt.plot(wavelengths_stacked, stacked_flux, label='Stacked Spectrum', color='black', linewidth=0.5)
-            plt.xlabel('Observed ${\lambda}$[$\AA$]')
+            plt.xlabel('Observed ${\\lambda}$[$\\AA$]')
             plt.ylabel(r'$F_{\lambda}$ [erg / ($\AA$ cm² s)]', fontsize=12)
             if target_name is not None:
                 plt.title('Stacked Spectrum of '+ target_name + ' overlayed with original spectra', fontsize=12)
