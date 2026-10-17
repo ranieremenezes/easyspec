@@ -12,9 +12,9 @@
 #
 import os
 import sys
-# Document the easyspec code of this repository (two levels above docs/source), and NOT an easyspec version installed
+# Document the easyspec code of this repository (src/ folder, two levels above docs/source), and NOT an easyspec version installed
 # with pip (e.g. the one on PyPI), which may be older than the code on GitHub:
-sys.path.insert(0, os.path.abspath('../..'))
+sys.path.insert(0, os.path.abspath('../../src'))
 
 
 # -- Project information -----------------------------------------------------
@@ -24,10 +24,7 @@ copyright = '2025, Raniere de Menezes'
 author = 'Raniere de Menezes'
 
 # The full version, including alpha/beta/rc tags
-try:
-    from easyspec.version import __version__ as release  # keeps the version shown in the docs in sync with the code
-except Exception:
-    release = '2025'
+release = '2025'
 
 
 # -- General configuration ---------------------------------------------------
@@ -65,7 +62,7 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'alabaster'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

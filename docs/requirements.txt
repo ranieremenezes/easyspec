@@ -2,7 +2,6 @@
 # easyspec itself is NOT installed from PyPI: conf.py documents the code of this repository directly.
 # ccdproc, astroscrappy, emcee, corner, dust_extinction and tqdm are mocked in conf.py, so they are not needed here.
 sphinx>=7.1
-sphinx-rtd-theme>=2.0
 numpy
 scipy
 astropy
