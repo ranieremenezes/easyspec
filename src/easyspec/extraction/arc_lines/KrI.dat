@@ -1,0 +1,23 @@
+# KrI arc lamp lines. Wavelengths in VACUUM (Angstrom); easyspec converts them to air when requested.
+# Taken from the PypeIt line lists (pypeit/data/arc_lines/lists), Copyright (c) 2018-2023, PypeIt Developers, BSD-3-Clause license (see LICENSE_PypeIt.txt).
+# Columns: wavelength_vacuum relative_amplitude ion source
+4275.1722 10000 KrI deimos_1200B_iraf_manual
+4320.7943 10000 KrI deimos_1200B_iraf_manual
+4377.3512 10000 KrI deimos_1200B_iraf_manual
+4455.1677 10000 KrI deimos_1200B_iraf_manual
+4464.9427 10000 KrI deimos_1200B_iraf_manual
+4503.6172 10000 KrI deimos_1200B_iraf_manual
+5571.8362 2000 KrI deimos_600
+5872.5432 741 KrI lrisr_600_7500_PYPIT.json
+7589.5025 23900 KrI lrisr_600_7500_PYPIT.json
+7603.6384 64387 KrI lrisr_600_7500_PYPIT.json
+7696.6579 11908 KrI lrisr_600_7500_PYPIT.json
+7856.9844 14382 KrI lrisr_600_7500_PYPIT.json
+8061.7211 15327 KrI lrisr_400_8500_PYPIT.json
+8192.3082 39171 KrI lrisr_600_7500_PYPIT.json
+8300.3907 64396 KrI lrisr_600_7500_PYPIT.json
+8511.2106 11634 KrI lrisr_600_7500_PYPIT.json
+8779.1607 64346 KrI lrisr_600_7500_PYPIT.json
+8931.1447 30000 KrI deimos_830g_r_PYPIT.json
+9754.4352 2000 KrI deimos_830g_r_PYPIT.json
+9858.9400 500 KrI deimos_830g_pypeit_manual

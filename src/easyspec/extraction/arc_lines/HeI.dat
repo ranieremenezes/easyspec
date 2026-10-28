@@ -1,0 +1,12 @@
+# HeI arc lamp lines. Wavelengths in VACUUM (Angstrom); easyspec converts them to air when requested.
+# Taken from the PypeIt line lists (pypeit/data/arc_lines/lists), Copyright (c) 2018-2023, PypeIt Developers, BSD-3-Clause license (see LICENSE_PypeIt.txt).
+# Columns: wavelength_vacuum relative_amplitude ion source
+3889.7500 2565 HeI kastb_600_PYPIT.json
+4027.3292 153 HeI kastb_600_PYPIT.json
+4472.7350 30 HeI ALFOSC
+4714.4644 275 HeI kastb_600_PYPIT.json
+4923.3053 656 HeI kastb_600_PYPIT.json
+5017.0772 2341 HeI kastb_600_PYPIT.json
+5877.2490 1000 HeI FORS2
+6679.9950 300 HeI ALFOSC
+7067.1380 200 HeI ALFOSC

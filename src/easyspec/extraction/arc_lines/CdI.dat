@@ -1,0 +1,12 @@
+# CdI arc lamp lines. Wavelengths in VACUUM (Angstrom); easyspec converts them to air when requested.
+# Taken from the PypeIt line lists (pypeit/data/arc_lines/lists), Copyright (c) 2018-2023, PypeIt Developers, BSD-3-Clause license (see LICENSE_PypeIt.txt).
+# Columns: wavelength_vacuum relative_amplitude ion source
+3134.0746 200 CdI ldt_deveny_300_HgCdAr.fits
+3261.9951 11126 CdI lrisb_600_4000_PYPIT.json
+3404.6287 2600 CdI hand_LRISb_600_LRX
+3467.1923 1710 CdI lrisb_600_4000_PYPIT.json
+3611.5375 2640 CdI lrisb_600_4000_PYPIT.json
+4679.4587 2640 CdI kastb_600_PYPIT.json
+4801.2540 25017 CdI lrisb_600_4000_PYPIT.json
+5087.2393 28781 CdI lrisb_600_4000_PYPIT.json
+6440.2490 2000 CdI ldt_deveny_300_HgCdAr.fits

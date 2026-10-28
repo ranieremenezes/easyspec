@@ -1,0 +1,29 @@
+# ZnI arc lamp lines. Wavelengths in VACUUM (Angstrom); easyspec converts them to air when requested.
+# Taken from the PypeIt line lists (pypeit/data/arc_lines/lists), Copyright (c) 2018-2023, PypeIt Developers, BSD-3-Clause license (see LICENSE_PypeIt.txt).
+# Columns: wavelength_vacuum relative_amplitude ion source
+3019.2400 125 ZnI keck_lris_webpage
+3036.6600 200 ZnI keck_lris_webpage
+3072.9500 200 ZnI keck_lris_webpage
+3076.7900 150 ZnI keck_lris_webpage
+3283.2800 528 ZnI lrisb_600_4000_PYPIT.json
+3303.5300 1209 ZnI lrisb_600_4000_PYPIT.json
+3303.8900 700 ZnI keck_lris_webpage
+3345.9800 2198 ZnI lrisb_600_4000_PYPIT.json
+3346.5300 500 ZnI keck_lris_webpage
+3346.9000 150 ZnI keck_lris_webpage
+3884.4400 50 ZnI keck_lris_webpage
+3966.5500 15 ZnI keck_lris_webpage
+4114.3700 10 ZnI keck_lris_webpage
+4294.0900 25 ZnI keck_lris_webpage
+4299.5400 25 ZnI keck_lris_webpage
+4631.1100 35 ZnI keck_lris_webpage
+4681.4500 22288 ZnI lrisb_600_4000_PYPIT.json
+4723.4700 35865 ZnI lrisb_600_4000_PYPIT.json
+4811.8700 49870 ZnI lrisb_600_4000_PYPIT.json
+5070.9900 15 ZnI keck_lris_webpage
+5183.4200 200 ZnI keck_lris_webpage
+5778.7100 10 ZnI keck_lris_webpage
+6364.1000 1000 ZnI keck_lris_webpage
+6480.9700 10 ZnI keck_lris_webpage
+6930.2300 15 ZnI keck_lris_webpage
+7801.5100 10 ZnI keck_lris_webpage

@@ -1,0 +1,32 @@
+# XeI arc lamp lines. Wavelengths in VACUUM (Angstrom); easyspec converts them to air when requested.
+# Taken from the PypeIt line lists (pypeit/data/arc_lines/lists), Copyright (c) 2018-2023, PypeIt Developers, BSD-3-Clause license (see LICENSE_PypeIt.txt).
+# Columns: wavelength_vacuum relative_amplitude ion source
+4079.9718 10000 XeI deimos_900ZD_pypeit_manual
+4502.2410 1000 XeI gtc_osiris_manual
+4525.9493 1000 XeI gtc_osiris_manual
+4584.0314 1000 XeI gtc_osiris_manual
+4625.5712 10000 XeI deimos_1200B_iraf_manual
+4672.5337 10000 XeI deimos_1200B_iraf_manual
+4698.3352 500 XeI gtc_osiris_manual
+4735.4753 10000 XeI deimos_1200B_iraf_manual
+4808.3596 10000 XeI deimos_1200B_iraf_manual
+4831.0597 10000 XeI deimos_1200B_iraf_manual
+4844.6393 10000 XeI deimos_1200B_iraf_manual
+4917.8797 10000 XeI deimos_1200B_iraf_manual
+4924.5255 10000 XeI deimos_1200B_iraf_manual
+8233.8964 58686 XeI lrisr_600_7500_PYPIT.json
+8282.3921 46786 XeI lrisr_400_8500_PYPIT.json
+8349.1157 1657 XeI lrisr_600_7500_PYPIT.json
+8821.8324 10000 XeI deimos_830g_r_PYPIT.json
+8954.7086 38663 XeI lrisr_400_8500_PYPIT.json
+9047.9296 12000 XeI deimos_830g_r_PYPIT.json
+9165.1667 13000 XeI deimos_830g_r_PYPIT.json
+9377.3300 100 XeI deimos_830g_pypeit_manual
+9515.9870 200 XeI deimos_830g_pypeit_manual
+9687.9800 150 XeI deimos_830g_pypeit_manual
+9720.8300 100 XeI deimos_830g_pypeit_manual
+9802.3840 64296 XeI lrisr_400_8500_PYPIT.json
+9925.9190 60153 XeI lrisr_400_8500_PYPIT.json
+10110.1100 80 XeI deimos_830g_pypeit_manual
+10841.3100 1000 XeI deimos_830g_pypeit_manual
+11130.2360 375 XeI deimos_830g_pypeit_manual

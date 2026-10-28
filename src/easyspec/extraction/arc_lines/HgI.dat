@@ -1,0 +1,15 @@
+# HgI arc lamp lines. Wavelengths in VACUUM (Angstrom); easyspec converts them to air when requested.
+# Taken from the PypeIt line lists (pypeit/data/arc_lines/lists), Copyright (c) 2018-2023, PypeIt Developers, BSD-3-Clause license (see LICENSE_PypeIt.txt).
+# Columns: wavelength_vacuum relative_amplitude ion source
+2968.1495 3000 HgI ldt_deveny_300_HgCdAr.fits
+3022.3840 1200 HgI ldt_deveny_300_HgCdAr.fits
+3342.4450 700 HgI ldt_deveny_300_HgCdAr.fits
+3651.1980 7408 HgI lrisb_600_4000_PYPIT.json
+3664.3270 1042 HgI lrisb_600_4000_PYPIT.json
+4047.7080 12902 HgI lrisb_600_4000_PYPIT.json
+4078.9880 884 HgI lrisb_600_4000_PYPIT.json
+4359.5600 38125 HgI lrisb_600_4000_PYPIT.json
+5462.2680 28377 HgI lrisb_600_4000_PYPIT.json
+5771.2100 5510 HgI lrisr_600_7500_PYPIT.json
+5792.2760 6029 HgI lrisr_600_7500_PYPIT.json
+10142.5300 6000 HgI NIST

@@ -246,7 +246,9 @@ DEFAULT_FLUX_UNIT = u.erg / u.cm**2 / u.s / u.AA
 _LEGACY_COLUMNS = {"wavelength": "wavelength",
                    "flux": "flux",
                    "systematic wavelength error": "wavelength_sys_err",
-                   "systematic flux error": "flux_sys_err"}
+                   "systematic flux error": "flux_sys_err",
+                   "flux error": "flux_err",
+                   "calibration flux error": "flux_cal_err",}
 
 
 def _as_quantity(values, default_unit):

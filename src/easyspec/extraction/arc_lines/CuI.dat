@@ -1,0 +1,12 @@
+# CuI arc lamp lines. Wavelengths in VACUUM (Angstrom); easyspec converts them to air when requested.
+# Taken from the PypeIt line lists (pypeit/data/arc_lines/lists), Copyright (c) 2018-2023, PypeIt Developers, BSD-3-Clause license (see LICENSE_PypeIt.txt).
+# Columns: wavelength_vacuum relative_amplitude ion source
+4260.6000 92 CuI GMOS_R400_blue_1_fit.json
+4481.6070 65 CuI GMOS_R400_blue_1_fit.json
+4652.4260 -1 CuI WHT_ISIS
+5018.0100 66 CuI GMOS_R400_blue_1_fit.json
+5106.9640 -1 CuI WHT_ISIS
+5144.1000 36 CuI GMOS_R400_blue_15_fit.json
+5154.6710 -1 CuI WHT_ISIS
+5221.5230 31 CuI GMOS_R400_blue_15_fit.json
+6034.0000 167 CuI GMOS_R400_blue_38_fit.json
