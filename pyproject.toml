@@ -50,9 +50,6 @@ write_to = "src/easyspec/_version.py"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.package-data]
-"resources.ebl" = ["*.fits.gz", "*.fits"]
-"reousrce.images" = ["*.png", "*.jpg"]
 
 [project.optional-dependencies]
 dev = ["easyspec[docs]", "ruff", "pre-commit"]

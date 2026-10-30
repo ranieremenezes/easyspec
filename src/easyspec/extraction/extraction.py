@@ -28,7 +28,6 @@ import copy
 libpath = Path(__file__).parent.resolve() / Path("airmass")
 libpath_std = Path(__file__).parent.resolve() / Path("standards")
 
-easyspec_extraction_version = "1.2.0"
 
 # Matplotlib settings used by the easyspec plots. They are applied only while an easyspec function is running (see _plot_style), so the
 # user's own matplotlib settings are never changed.
@@ -78,8 +77,6 @@ class extraction:
 
     def __init__(self):
         # Print the current version of easyspec-extraction
-        print("easyspec-extraction version: ",easyspec_extraction_version)
-
         # Attributes filled by the other functions of this class. They are created here, so that the functions can be called in any
         # order without raising AttributeError.
         self.target_spec_data = None
@@ -2127,6 +2124,22 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
         self.sensitivity_function = sensitivity
         return sensitivity
 
+    def _instrumental_fwhm(self, wavelength):
+
+        """
+        Instrumental resolution (FWHM, in Angstrom) at each wavelength of a calibrated spectrum: the median FWHM of the lamp lines (in pixels,
+        measured by the automatic wavelength calibration) times the local dispersion (Angstrom per pixel). NaN if it is not known (e.g. after
+        a manual wavelength calibration).
+        """
+
+        wavelength = np.asarray(getattr(wavelength, "value", wavelength), dtype=float)
+        info = getattr(self, "lamp_identification_info", None) or []
+        widths = np.array([item.get("fwhm", np.nan) for item in info if isinstance(item, dict)], dtype=float)
+        widths = widths[np.isfinite(widths) & (widths > 0)]
+        if len(widths) == 0 or len(wavelength) < 2:
+            return np.full(len(wavelength), np.nan)
+        return float(np.median(widths))*np.abs(np.gradient(wavelength))
+        
     @_plot_style
     def target_flux_calibration(self, wavelengths_list, spec_atm_corrected_list, correction_factor, reddening = None, Rv = 3.1, wavelength_cuts = None,
                                 output_directory = "./", save_spec = True, plot = True, file_format = "dat"):
@@ -2285,17 +2298,18 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
                     wavelength_rms = float(getattr(self.wavelengths_fit_rms_list[number], "value", self.wavelengths_fit_rms_list[number]))
                 base_name = output_directory / f"{self.target_name}_spec_{number}"
                 if file_format in ("dat", "both"):
-                    np.savetxt(f"{base_name}.dat", np.c_[wavelength, flux, wavelength_rms*np.ones(len(wavelength)), flux_error, calibration_error, mask],
-                               fmt=["%.4f", "%.6e", "%.4f", "%.6e", "%.6e", "%d"],
+                    np.savetxt(f"{base_name}.dat", np.c_[wavelength, flux, wavelength_rms*np.ones(len(wavelength)),flux_error,calibration_error, mask,self._instrumental_fwhm(wavelength)],
+                               fmt=["%.4f", "%.6e", "%.4f", "%.6e", "%.6e", "%d", "%.3f"],
                                header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom), Flux error "
-                                      "(erg/cm2/s/Angstrom), Calibration flux error (erg/cm2/s/Angstrom), Mask ()")
+                                      "(erg/cm2/s/Angstrom), Calibration flux error (erg/cm2/s/Angstrom), Mask (), Instrumental FWHM (Angstrom)")
                 if file_format in ("fits", "both"):
                     header = {"OBJECT": str(self.target_name), "EXPTIME": exposure, "AIRMASS": float(self.airmass_target or np.nan),
                               "EBV": float(reddening) if reddening is not None else 0.0, "RV": float(Rv),
                               "STDFILE": Path(sensitivity.info.get("archive_file", "")).name}
                     data_io.write_spectrum(f"{base_name}.fits", wavelength*u.AA, flux*flux_calibration.FLAM_UNIT, flux_err=flux_error, mask=mask,
                                            header=header, extra_columns={"flux_cal_err": calibration_error*flux_calibration.FLAM_UNIT,
-                                                                         "wavelength_sys_err": wavelength_rms*u.AA})
+                                                                         "wavelength_sys_err": wavelength_rms*u.AA,
+                                                                         "instrumental_fwhm": self._instrumental_fwhm(wavelength)*u.AA})
 
         if plot:
             plt.show()
@@ -2577,16 +2591,17 @@ at https://www.apo.nmsu.edu/arc35m/Instruments/DIS/ (https://www.apo.nmsu.edu/ar
                 base_name = output_directory_path / f"{self.target_name}_spec_{number}_telluric"
                 if file_format in ("dat", "both"):
                     np.savetxt(f"{base_name}.dat", np.c_[wavelength_values, corrected, wavelength_rms*np.ones(len(wavelength_values)), corrected_error,
-                                                        corrected_calibration_error, mask],
-                               fmt=["%.4f", "%.6e", "%.4f", "%.6e", "%.6e", "%d"],
+                                                        corrected_calibration_error, mask, self._instrumental_fwhm(wavelength_values)],
+                               fmt=["%.4f", "%.6e", "%.4f", "%.6e", "%.6e", "%d", "%.3f"],
                                header="wavelength (Angstrom), Flux (erg/cm2/s/Angstrom), Systematic wavelength error (Angstrom), Flux error "
-                                      "(erg/cm2/s/Angstrom), Calibration flux error (erg/cm2/s/Angstrom), Mask ()")
+                                      "(erg/cm2/s/Angstrom), Calibration flux error (erg/cm2/s/Angstrom), Mask (), Instrumental FWHM (Angstrom)")
                 if file_format in ("fits", "both"):
                     header = {"OBJECT": str(self.target_name), "AIRMASS": airmass_target, "TELLURIC": source[:60], "TELBETA": float(beta)}
                     data_io.write_spectrum(f"{base_name}.fits", wavelength_values*u.AA, corrected*flux_calibration.FLAM_UNIT, flux_err=corrected_error,
                                            mask=mask, header=header,
                                            extra_columns={"flux_cal_err": corrected_calibration_error*flux_calibration.FLAM_UNIT,
-                                                          "wavelength_sys_err": wavelength_rms*u.AA, "telluric_transmission": transmission})
+                                                          "wavelength_sys_err": wavelength_rms*u.AA, "telluric_transmission": transmission,
+                                                          "instrumental_fwhm": self._instrumental_fwhm(wavelength_values)*u.AA})
 
         if plots:
             plt.figure(figsize=(12, 4))

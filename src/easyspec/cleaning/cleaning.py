@@ -14,7 +14,6 @@ import ccdproc as ccdp
 from . import alignment
 from .. import data_io
 
-easyspec_cleaning_version = "1.2.0" 
 
 class cleaning:
 
@@ -22,7 +21,7 @@ class cleaning:
 
     def __init__(self): 
         # Print the current version of easyspec       
-        print("easyspec-cleaning version: ",easyspec_cleaning_version)
+        pass
 
 
     def data_paths(self,bias=None,flats=None,lamp=None,standard_star=None,targets=None,darks=None,data_file_extension="fits"):

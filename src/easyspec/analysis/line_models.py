@@ -27,20 +27,17 @@ def model_Lorentz(theta, x):
 
 def model_Voigt(theta, x):
     """
-    Voigt profile - amplitude controls peak height directly
-    theta = [x_0, amplitude, fwhm_G, fwhm_L]
+    Voigt profile (convolution of a Gaussian and a Lorentzian), normalized such that 'amplitude' is the peak height.
+    theta = [x_0, amplitude, fwhm_L, fwhm_G], with the FWHMs of the Lorentzian and of the Gaussian components.
     """
-    x_0, amplitude, fwhm_G, fwhm_L = theta
-    
+    x_0, amplitude, fwhm_L, fwhm_G = theta
+
     sigma = fwhm_G / (2 * np.sqrt(2 * np.log(2)))
     gamma = fwhm_L / 2.0
-    
+
     z = (x - x_0 + 1j * gamma) / (sigma * np.sqrt(2))
-    voigt = wofz(z).real
-    
-    Voigt_profile = amplitude * voigt
-    
-    return Voigt_profile
+    peak = wofz(1j * gamma / (sigma * np.sqrt(2))).real   # value at x = x_0
+    return amplitude * wofz(z).real / peak
 
 
 def xpeak_for_s(s, x_min=-50.0, x_max=50.0):
@@ -140,7 +137,7 @@ def model_skewed_gaussian(theta, x):
     Parameters:
     -----------
     theta : numpy.array
-        Array with parameters [x_peak, amplitude, sigma, skewness]
+        Array with parameters [x_peak, amplitude, fwhm, skewness]
         x_peak: position of the peak
         amplitude: maximum height
         fwhm: width parameter  

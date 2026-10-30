@@ -1,6 +1,6 @@
 <p align="center" width="100%">
- <img width="100%" height="100%" src="/docs/source/logo.png">
-</p> 
+ <img width="100%" height="100%" src="https://raw.githubusercontent.com/ranieremenezes/easyspec/main/docs/source/logo.png">
+</p>
 
 # easyspec
 
@@ -8,6 +8,13 @@ The easiest way to do long-slit spectroscopy.
 
 `easyspec` is a tool designed to streamline long-slit spectroscopy, offering an intuitive framework for reducing, extracting, and analyzing astrophysical spectra.
 
+<p align="center">
+  <a href="https://www.gov.br/cbpf/pt-br">
+    <img src="https://raw.githubusercontent.com/ranieremenezes/easyspec/main/src/easyspec/images/cbpf_logo.png" alt="CBPF" height="70">
+  </a>
+  <br>
+  <em><code>easyspec</code> is developed at the Centro Brasileiro de Pesquisas Físicas (CBPF), Rio de Janeiro, Brazil.</em>
+</p>
 
 If you'd like to support the maintenance of `easyspec` (or [easyfermi](https://github.com/ranieremenezes/easyfermi)), consider buying us a coffee:
 
