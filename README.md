@@ -126,5 +126,5 @@ The fine-tuning of `easyspec` (code, tests, documentation and tutorials) was gre
 
 # News
 
-[![Check out easyspec news!](https://github.com/ranieremenezes/easyspec/blob/main/News/news3_photometry.png)](https://github.com/ranieremenezes/easyspec/blob/main/News/easyspec_News___October_2026.pdf)
+[![Check out easyspec news!](https://github.com/ranieremenezes/easyspec/blob/main/News/news3_photometry.png)](https://github.com/ranieremenezes/easyspec/blob/main/News/easyspec_News_november_2026.pdf)
 
