@@ -13,38 +13,28 @@ jobs:
 
   install:
     runs-on: ${{ matrix.os }}
+    # A job that hangs fails with a clear message after 30 minutes, instead of running for hours
+    timeout-minutes: 30
     strategy:
       # A failure in one Python version or system does not cancel the others, so that all problems are seen at once
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
+        # macOS only with one Python version: the macOS runners of GitHub are often busy (long queues or cancelled jobs), and the
+        # differences between Python versions are already tested on Linux and Windows
+        include:
+          - os: macos-latest
+            python-version: "3.12"
 
     defaults:
         run:
-          # We need login shells (-l) for micromamba to work.
-          shell: bash -leo pipefail {0}
+          shell: bash
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Prepare mamba installation
-        env:
-          PYTHON_VERSION: ${{ matrix.python-version }}
-        run: |
-          # setup correct python version (the backup suffix makes "sed -i" work on Linux, macOS and Windows alike)
-          sed -i.bak -e "s/- python=.*/- python=$PYTHON_VERSION/g" environment.yml
-          rm -f environment.yml.bak
-
-      - name: mamba setup
-        uses: mamba-org/setup-micromamba@v2
-        with:
-          environment-file: environment.yml
-          cache-downloads: true
-          # the cleanup after the job fails with "ENOENT ... micromamba-shell"; it is not needed on GitHub runners
-          post-cleanup: none
 
       - name: Python setup
         uses: actions/setup-python@v5
@@ -52,21 +42,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           check-latest: true
 
-      - if: runner.os == 'macOS'
-        name: Fix Python PATH on macOS
-        # See https://github.com/actions/setup-python/issues/132 and
-        # https://github.com/actions/setup-python/issues/132#issuecomment-779406058
-        # Login shells on macOS prepend system paths, so we need to
-        # prepend the python path from actions/setup-python.
-        # Micromamba sets up ~/.bash_profile, where we need to set the path now.
-        run: |
-          tee -a ~/.bash_profile <<<'export PATH="$pythonLocation/bin:$PATH"'
-
-      - name: Install dependencies
+      - name: Install easyspec and its dependencies
+        # The same installation as a user would do: pip reads the dependencies from pyproject.toml
         env:
           PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
           python --version | grep "Python ${PYTHON_VERSION}"
+          python -m pip install --upgrade pip
           pip install -e .
           pip freeze
 
