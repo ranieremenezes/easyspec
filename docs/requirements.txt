@@ -1,6 +1,6 @@
 # Packages needed to BUILD the documentation on Read the Docs.
 # easyspec itself is NOT installed from PyPI: conf.py documents the code of this repository directly.
-# ccdproc, astroscrappy, emcee, corner, dust_extinction and tqdm are mocked in conf.py, so they are not needed here.
+# ccdproc, astroscrappy, emcee, corner, dust_extinction, tqdm and photutils are mocked in conf.py, so they are not needed here.
 sphinx>=7.1
 numpy
 scipy

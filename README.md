@@ -102,7 +102,21 @@ An overview seminar on `easyspec`, presented in August 2025 at the University of
 
 # Acknowledgments
 
-To acknowledge `easyspec` in a publication, please cite de Menezes et al., 2025 (https://iopscience.iop.org/article/10.3847/1538-3881/adf220) and the DOI in [Zenodo](https://zenodo.org/records/17211465). 
+To acknowledge `easyspec` in a publication, please cite de Menezes et al., 2025 (https://iopscience.iop.org/article/10.3847/1538-3881/adf220) and the DOI in [Zenodo](https://zenodo.org/records/17211465).
+
+`easyspec` would not be possible without the many open-source packages and methods it is built on, and their authors deserve the credit
+for their work. Depending on which parts of `easyspec` you use, please also cite the corresponding works below:
+
+* **Always**: Astropy ([Astropy Collaboration 2013](https://doi.org/10.1051/0004-6361/201322068), [2018](https://doi.org/10.3847/1538-3881/aabc4f), [2022](https://doi.org/10.3847/1538-4357/ac7c74)), NumPy ([Harris et al. 2020](https://doi.org/10.1038/s41586-020-2649-2)), SciPy ([Virtanen et al. 2020](https://doi.org/10.1038/s41592-019-0686-2)) and Matplotlib ([Hunter 2007](https://doi.org/10.1109/MCSE.2007.55)).
+* **Data reduction** (`cleaning`): ccdproc ([Craig et al.](https://doi.org/10.5281/zenodo.1069648)), and, for the removal of cosmic rays, astroscrappy ([McCully et al. 2018](https://doi.org/10.5281/zenodo.1482019)) and the L.A.Cosmic algorithm ([van Dokkum 2001](https://doi.org/10.1086/323894)).
+* **Spectral analysis** (`analysis`): emcee ([Foreman-Mackey et al. 2013](https://doi.org/10.1086/670067)), corner ([Foreman-Mackey 2016](https://doi.org/10.21105/joss.00024)) and, for the extinction corrections, dust_extinction ([Gordon 2024](https://doi.org/10.21105/joss.07023)).
+* **Photometry** (`photometry`): Photutils ([Bradley et al.](https://doi.org/10.5281/zenodo.596036)), whose star detection follows DAOFIND ([Stetson 1987](https://doi.org/10.1086/131977)) and whose empirical PSF follows [Anderson & King (2000)](https://doi.org/10.1086/316632). Also, depending on the analysis:
+    * standard stars: [Landolt (1992)](https://doi.org/10.1086/116242), [Landolt (2009)](https://doi.org/10.1088/0004-6256/137/5/4186), [Landolt (2013)](https://doi.org/10.1088/0004-6256/146/5/131), [Clem & Landolt (2013)](https://doi.org/10.1088/0004-6256/146/4/88) and [Clem & Landolt (2016)](https://doi.org/10.3847/0004-6256/152/4/91), for the catalogue you use;
+    * surface photometry: [King (1962)](https://doi.org/10.1086/108756) for the King profile, [Sérsic (1963)](https://ui.adsabs.harvard.edu/abs/1963BAAA....6...41S) for the Sérsic profile, and [Jedrzejewski (1987)](https://doi.org/10.1093/mnras/226.4.747) for the isophote fits;
+    * exoplanet transits: [Mandel & Agol (2002)](https://doi.org/10.1086/345520) for the transit model and [Kipping (2013)](https://doi.org/10.1093/mnras/stt1435) for the limb-darkening parametrization;
+    * color images: [Lupton et al. (2004)](https://doi.org/10.1086/382245), if you use `color_mode="preserve"`.
+
+The fine-tuning of `easyspec` (code, tests, documentation and tutorials) was greatly helped by Claude, an AI assistant by Anthropic.
 
 # News
 

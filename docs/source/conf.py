@@ -46,7 +46,7 @@ templates_path = ['_templates']
 
 # Packages that are not needed to read the docstrings are "mocked" (replaced by dummy modules), so that the build does not
 # fail if they cannot be installed on Read the Docs. Add here any new heavy dependency imported by easyspec:
-autodoc_mock_imports = ['ccdproc', 'astroscrappy', 'emcee', 'corner', 'dust_extinction', 'tqdm']
+autodoc_mock_imports = ['ccdproc', 'astroscrappy', 'emcee', 'corner', 'dust_extinction', 'tqdm', 'photutils']
 
 autodoc_member_order = 'bysource'  # functions listed in the same order as in the code
 autodoc_default_options = {'members': True, 'undoc-members': True, 'show-inheritance': True}

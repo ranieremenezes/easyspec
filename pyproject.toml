@@ -8,12 +8,15 @@ name = "easyspec"
 authors = [
     { name = "Raniere de Menezes", email = "easyfermi@gmail.com" },
     ]
-description = "The easiest way to do long-slit spectroscopy."
+description = "The easiest way to do long-slit spectroscopy and imaging photometry."
+
 readme = "README.md"
 requires-python = ">=3.10"
 keywords = [
     "python",
     "spectroscopy",
+    "photometry",
+    "imaging",
     "optical",
     "astronomy",
 ]
@@ -41,6 +44,7 @@ dependencies = [
     "scipy>=1.9.1",
     "dust_extinction>=1.2",
     "tqdm>=4.64.1",
+    "photutils>=1.9",
 ]
 dynamic = ["version"]
 
@@ -49,6 +53,9 @@ write_to = "src/easyspec/_version.py"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+easyspec = ["photometry/standard_star_catalogues/*.csv", "photometry/standard_star_catalogues/*.md"]
 
 
 [project.optional-dependencies]
