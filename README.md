@@ -107,7 +107,7 @@ An overview seminar on `easyspec`, presented in August 2025 at the University of
 
 # Acknowledgments
 
-To acknowledge `easyspec` in a publication, please cite **de Menezes et al., 2025** (https://iopscience.iop.org/article/10.3847/1538-3881/adf220) and the DOI in [Zenodo](https://zenodo.org/records/17211465).
+To acknowledge `easyspec` in a publication, please cite **de Menezes et al., 2025** (https://iopscience.iop.org/article/10.3847/1538-3881/adf220) and the DOI in [Zenodo](https://doi.org/10.5281/zenodo.15732788).
 
 `easyspec` would not be possible without the many open-source packages, data and methods it is built on, and their authors deserve the
 credit for their work. Depending on which parts of `easyspec` you use, please also cite the corresponding works below:
@@ -126,5 +126,5 @@ The fine-tuning of `easyspec` (code, tests, documentation and tutorials) was gre
 
 # News
 
-[![Check out easyspec news!](https://github.com/ranieremenezes/easyspec/blob/main/News/news2_stack.png)](https://github.com/ranieremenezes/easyspec/blob/main/News/easyspec_News2_March_2026.pdf)
+[![Check out easyspec news!](https://github.com/ranieremenezes/easyspec/blob/main/News/news3_photometry.png)](https://github.com/ranieremenezes/easyspec/blob/main/News/easyspec_News___October_2026.pdf)
 

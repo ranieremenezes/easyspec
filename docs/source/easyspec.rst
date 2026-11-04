@@ -8,3 +8,4 @@ easyspec package
    easyspec.extraction
    easyspec.analysis
    easyspec.data_io
+   easyspec.photometry
