@@ -8,10 +8,12 @@ from scipy import stats as st
 from scipy import ndimage
 from pathlib import Path
 import warnings
+import re
 from astropy.nddata import CCDData
 from astropy import units as u
 import ccdproc as ccdp
 from . import alignment
+from . import color_composite
 from .. import data_io
 
 
@@ -165,8 +167,12 @@ class cleaning:
         """
 
         raw_image_data_trimmed = {}  # Here we create a new dictionary for the trimmed data.
+        if not hasattr(self, "trim_offsets"):
+            self.trim_offsets = {}
         for image_data_path,raw_image in raw_image_data.items():
             raw_image_data_trimmed[image_data_path] = raw_image[y1:y2,x1:x2]  # Addind the trimmed data to the new dictionary.
+            # Origin of the trimmed image in the original one: save_fits_files() uses it to shift the WCS reference pixel (CRPIX)
+            self.trim_offsets[image_data_path] = (x1 or 0, y1 or 0)
         
         return raw_image_data_trimmed
 
@@ -571,6 +577,9 @@ class cleaning:
                                        header_hdu_entry=header_hdu_entry,
                                        exposure_header_entry=exposure_header_entry if allow_exp_and_airmass else None,
                                        airmass_header_entry=airmass_header_entry if allow_exp_and_airmass else None)
+            # WCS of the combined image: the frames must share one pixel grid (e.g. after align()). combined_header() removed the WCS
+            # keywords whose values differ between the original frames (and did not shift the reference pixel by the trim)
+            self._update_master_wcs(hdr, data_list[data_splitter[n]:data_splitter[n+1]], header_hdu_entry)
  
             # Keywords kept for backward compatibility with previous easyspec versions:
             if allow_exp_and_airmass and exposure_header_entry is not None and exposure_header_entry in hdr:
@@ -836,8 +845,12 @@ class cleaning:
           pixel-to-pixel (small-scale) sensitivity: the large-scale illumination along the slit is removed. Use it when the lamp illumination
           along the slit is not representative of the sky (e.g. you will correct the slit illumination with twilight flats), or when the response
           varies smoothly along the slit (e.g. vignetting). Small-scale slit features (dust) are partially kept.
+        - "imaging": for direct images (photometry). An imaging flat has no lamp spectrum to remove, and its large-scale structure (vignetting,
+          dust donuts, illumination gradients) is part of the response that must be corrected. The master flat is simply divided by its level,
+          the sigma-clipped median of the central half of the image, so that the normalized flat keeps ALL the structure of the response. Flats
+          taken with different filters must be combined and normalized separately (one call of data_paths() per filter).
 
-        In all cases the dispersion axis must be horizontal. The 1D profile is computed with a median along the illuminated rows, after dividing each
+        For the spectroscopic methods, the dispersion axis must be horizontal. The 1D profile is computed with a median along the illuminated rows, after dividing each
         row by its own level, and its uncertainty is estimated column by column. Bad columns (narrow outliers of the profile) are excluded from
         the models, so that they remain in (and are corrected by) the normalized flat.
 
@@ -849,7 +862,7 @@ class cleaning:
             Array with master flat raw data.
         method: string
             Method to be adopted to model the master flat large-scale shape (see plots for clarification). Options are "polynomial",
-            "median_filter", and "surface".
+            "median_filter", and "surface" (spectroscopy), and "imaging" (direct images, for photometry).
         degree: int
             Polynomial degree of the 1D model along the dispersion axis. Used if method = "polynomial" or "surface".
         smooth_window: integer
@@ -917,7 +930,7 @@ class cleaning:
         """
 
         # ---------------------- Input validation ----------------------
-        valid_methods = ["polynomial", "median_filter", "surface"]
+        valid_methods = ["polynomial", "median_filter", "surface", "imaging"]
         if method not in valid_methods:
             raise ValueError(f"Invalid method '{method}'. Options are: " + ", ".join(f'"{m}"' for m in valid_methods) + ".")
         if max_flat_noise is not None and not max_flat_noise > 0:
@@ -977,6 +990,25 @@ class cleaning:
         used = signal_columns & ~bad_columns  # Points used in the 1D fit
         model_1d = None
         chi2_reduced = None
+
+        if method == "imaging":
+            # Direct images: the flat is divided by a single number (its level), which keeps the whole structure of the response (vignetting,
+            # dust donuts, gradients). The level is the sigma-clipped median of the central half of the image, robust against hot pixels,
+            # bad columns and dust donuts. All rows are used (no slit): pixels without signal are caught by low_signal_threshold below.
+            central = masterflat[ny//4:3*ny//4, nx//4:3*nx//4]
+            central = central[np.isfinite(central)]
+            for _ in range(10):
+                level, scatter = np.median(central), 1.4826*np.median(np.abs(central - np.median(central)))
+                kept = central[np.abs(central - level) < clip_sigma*max(scatter, 1e-12)]
+                if len(kept) == len(central):
+                    break
+                central = kept
+            level = float(np.median(central))
+            if not level > 0:
+                raise ValueError("The master flat has no positive signal in the central region. Please check that it was correctly bias-subtracted.")
+            illuminated = np.ones(ny, dtype=bool)
+            model_1d = np.full(nx, level)
+            model = np.full(masterflat.shape, level)
 
         if profile_method == "polynomial":
             # Polynomial.fit performs an ordinary (weighted) least-squares fit in a rescaled domain [-1, 1], which keeps the problem well
@@ -1142,7 +1174,21 @@ class cleaning:
                                     mask=flat_mask)
 
         # ---------------------- Diagnostic plots ----------------------
-        if plots:
+        if plots and method == "imaging":
+            # Imaging flats: the normalized flat itself and the distribution of its values (no profile to show)
+            figure, axes = plt.subplots(1, 2, figsize=(14, 5.5), gridspec_kw={"width_ratios": [1.2, 1]})
+            vmin, vmax = np.percentile(normalized_master_flat[good], [0.5, 99.5]) if np.any(good) else (None, None)
+            im = axes[0].imshow(normalized_master_flat, origin='lower', cmap='gray', vmin=vmin, vmax=vmax)
+            plt.colorbar(im, ax=axes[0], fraction=0.046, pad=0.04, label="Normalized counts")
+            axes[0].set_title("Normalized master flat (imaging)")
+            axes[1].hist(normalized_master_flat[good].ravel(), bins=200, range=(vmin, vmax), color="C0")
+            axes[1].set_xlabel("Normalized counts")
+            axes[1].set_ylabel("Pixels")
+            axes[1].set_title("Distribution of the normalized flat")
+            axes[1].grid(which="both", linestyle=":")
+            plt.tight_layout()
+            plt.show()
+        elif plots:
             labels = {"polynomial": f"Polynomial fit (degree {degree})", "median_filter": f"Median filter ({smooth_window} px)"}
             label = labels[profile_method] + (", step 1 of the surface model" if method == "surface" else "")
             fig, axes = plt.subplots(1, 2, figsize=(12, 4))
@@ -1683,6 +1729,107 @@ class cleaning:
         return data_io.read_master(file_name)
  
  
+    # ==================================================================================================================================
+    # WCS (astrometric solution) of the processed images
+    # ==================================================================================================================================
+
+    WCS_KEYWORDS = re.compile(r"^(WCSAXES|CTYPE\d|CUNIT\d|CRVAL\d|CRPIX\d|CDELT\d|CROTA\d|CD\d_\d|PC\d_\d|PV\d_\d+|LONPOLE|LATPOLE|"
+                              r"RADESYS|RADECSYS|EQUINOX|MJDREF|[AB]P?_ORDER|[AB]P?_\d+_\d+|A_DMAX|B_DMAX)$")
+
+    def _record_alignment_geometry(self, data, groups):
+        """
+        After align(): for every image in 'data', the image whose pixel grid it now has (its reference image, or itself if it was not
+        aligned) and the origin of the crop (if any). Used to write the right WCS when the images are saved or combined.
+        """
+        if not hasattr(self, "pixel_grid_of"):
+            self.pixel_grid_of = {}
+        crop_x, crop_y = (self.alignment_crop_box[0], self.alignment_crop_box[2]) if self.alignment_crop_box is not None else (0, 0)
+        reference_of = {}
+        for files in groups.values():
+            references = [name for name in files if self.alignment_transforms.get(name, {}).get("method") == "reference"]
+            for name in files:
+                reference_of[name] = references[0] if references else name
+        new_grid = {}
+        for name in data:
+            # the grid of the reference image (which may itself come from an earlier align()), plus the new crop
+            source = reference_of.get(name, name)
+            previous_source, previous_x, previous_y = self.pixel_grid_of.get(source, (source, 0, 0))
+            new_grid[name] = (previous_source, previous_x + crop_x, previous_y + crop_y)
+        self.pixel_grid_of.update(new_grid)
+
+    def _output_wcs(self, file_name, header_hdu_entry=0):
+        """
+        Celestial WCS (astropy WCS) of the processed image of 'file_name', or None if its header has none: the WCS of the image whose pixel
+        grid it has (itself, or the reference image of align()), with the reference pixel shifted by the trim and the crop of align().
+        """
+        from astropy.wcs import WCS
+        source, crop_x, crop_y = getattr(self, "pixel_grid_of", {}).get(file_name, (file_name, 0, 0))
+        try:
+            header = fits.getheader(source, ext=header_hdu_entry)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                wcs = WCS(header).celestial
+        except Exception:
+            return None
+        if not wcs.has_celestial or not all(keyword in header for keyword in ("CRPIX1", "CRPIX2", "CRVAL1", "CRVAL2")):
+            return None
+        trim_x, trim_y = getattr(self, "trim_offsets", {}).get(source, (0, 0))
+        shift = np.array([trim_x + crop_x, trim_y + crop_y], dtype=float)
+        wcs.wcs.crpix = wcs.wcs.crpix - shift
+        if wcs.sip is not None:
+            from astropy.wcs import Sip
+            wcs.sip = Sip(wcs.sip.a, wcs.sip.b, wcs.sip.ap, wcs.sip.bp, wcs.sip.crpix - shift)
+        return wcs
+
+    def _write_wcs(self, header, wcs):
+        """Replace the WCS keywords of 'header' by those of 'wcs'."""
+        for key in [key for key in header.keys() if self.WCS_KEYWORDS.match(key)]:
+            header.remove(key, ignore_missing=True, remove_all=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            header.update(wcs.to_header(relax=True))
+
+    def _update_header_wcs(self, header, file_name, header_hdu_entry=0):
+        """WCS of one processed image (see _output_wcs()); images without a celestial WCS only get their linear keywords shifted."""
+        wcs = self._output_wcs(file_name, header_hdu_entry)
+        if wcs is not None:
+            self._write_wcs(header, wcs)
+            return
+        # No celestial WCS: the linear pixel keywords (and IRAF's LTV offsets) still follow the trim and the crop
+        source, crop_x, crop_y = getattr(self, "pixel_grid_of", {}).get(file_name, (file_name, 0, 0))
+        trim_x, trim_y = getattr(self, "trim_offsets", {}).get(source, (0, 0))
+        x_offset, y_offset = trim_x + crop_x, trim_y + crop_y
+        if x_offset or y_offset:
+            for keyword, offset in (("CRPIX1", x_offset), ("CRPIX2", y_offset), ("LTV1", x_offset), ("LTV2", y_offset)):
+                if keyword in header:
+                    header[keyword] = header[keyword] - offset
+
+    def _update_master_wcs(self, header, file_list, header_hdu_entry=0):
+        """
+        WCS of a combined image: written only if all the combined frames have the same WCS on their (processed) pixel grids, e.g. because
+        they were aligned onto one reference image, or because the telescope did not move; otherwise no WCS is written.
+        """
+        solutions = [self._output_wcs(file_name, header_hdu_entry) for file_name in file_list]
+        if solutions and all(wcs is None for wcs in solutions):
+            # no celestial WCS: shift the linear pixel keywords kept by combined_header() (identical in all frames), if the frames share
+            # the same trim and crop
+            grids = {getattr(self, "pixel_grid_of", {}).get(name, (name, 0, 0))[1:] + getattr(self, "trim_offsets", {}).get(
+                getattr(self, "pixel_grid_of", {}).get(name, (name, 0, 0))[0], (0, 0)) for name in file_list}
+            if len(grids) == 1:
+                self._update_header_wcs(header, file_list[0], header_hdu_entry)
+            return
+        if not solutions or any(wcs is None for wcs in solutions):
+            return
+        first = solutions[0]
+        for wcs in solutions[1:]:
+            same_center = np.allclose(wcs.wcs.crval, first.wcs.crval, rtol=0, atol=1e-7)
+            same_pixel = np.allclose(wcs.wcs.crpix, first.wcs.crpix, rtol=0, atol=1e-3)
+            same_scale = np.allclose(wcs.pixel_scale_matrix, first.pixel_scale_matrix, rtol=1e-6, atol=0)
+            if not (same_center and same_pixel and same_scale):
+                header["HISTORY"] = "No WCS: the combined frames have different astrometric solutions (align them first)."
+                return
+        self._write_wcs(header, first)
+
     def save_fits_files(self,datacube,output_directory,header_hdu_entry=0,Type="all",variance=None,mask=None):
  
         """
@@ -1737,6 +1884,9 @@ class cleaning:
         for n,file_name in enumerate(imagenames):
             hdr = fits.getheader(file_name,ext=header_hdu_entry)
             hdr['COMMENT'] = 'File generated with easyspec'
+            # The WCS must describe the pixels of the saved image: shifted by the trim and, for aligned images, taken from the reference
+            # image of the alignment (see _output_wcs())
+            self._update_header_wcs(hdr, file_name, header_hdu_entry)
             data_io.write_reduced_frame(output_directory / f"{Type}_{n:03d}.fits", datacube[file_name], header=hdr,
                                         variance=None if variance is None else variance.get(file_name),
                                         mask=None if mask is None else mask.get(file_name),
@@ -2148,6 +2298,7 @@ class cleaning:
             subpixel=subpixel, interpolation_order=interpolation_order, crop=crop, fill_value=fill_value, fwhm=fwhm,
             detection_sigma=detection_sigma, max_stars=max_stars, match_tolerance=match_tolerance,
             min_matches=min_matches, median_prefilter=median_prefilter, plot=plot, verbose=verbose)
+        self._record_alignment_geometry(data, groups)
  
         if variance is None and mask is None:
             return aligned_data
@@ -2174,3 +2325,307 @@ class cleaning:
                                                                            variance_mode=variance_mode)
                 self.calibration_variance.update(aligned_calibration)
         return aligned_data, aligned_variance, aligned_mask
+
+    
+    def generate_colored_image(self, images, colors=None, reference=0, alignment_method="auto", allow_rotation=True, allow_scale=False,
+                               interpolation_order=1, fwhm=4.0, remove_saturated_pixels=False, remove_stars=False, saturation_level=None,
+                               band_scaling="exposure", exposure_times=None, zero_points=None, white_percentile=99.99, black_level=0.0,
+                               band_weights=None, smoothing_sigma=0.0, stretch="log", stretch_strength=None, color_mode="channels",
+                               gamma=1.0, color_saturation=1.0, contrast=1.0, brightness=1.0, region=None, flip_x=False, flip_y=False,
+                               plot_diagnostic=False, plot_result=True, title="auto", figure_size=None, show_axes=True,
+                               output_file=None, file_format=None, verbose=True):
+
+        """
+        Color composite of two or more images of the same field taken in different bands (no maximum number of bands).
+
+        The images are aligned onto a reference image (translation and rotation, optionally scale: the same machinery as align()), the
+        edges where not all images have data are cut, the bands are put on a common flux scale (or normalized separately) and mixed with
+        the colors given by the user. The result is stretched (log by default, as in DS9), adjusted to the user's taste (gamma, color
+        saturation, contrast, brightness, zoom, flips) and can be saved as png or fits. This function makes pictures: its options are
+        cosmetic and its output must not be used for photometry.
+
+        Tuning the look: the slow steps (alignment, removal of saturation trails and, if remove_stars=True, the PSF fits) are done only
+        once. Pass the dictionary returned by a previous call as "images" and only the fast steps are redone, so that the colors, levels
+        and stretch can be changed many times in a few seconds:
+
+            result = c.generate_colored_image(["B.fits", "V.fits", "I.fits"], ["blue", "green", "red"])
+            result = c.generate_colored_image(result, ["royalblue", "gold", "orangered"], stretch_strength=3000, color_saturation=1.4)
+
+        Parameters
+        ----------
+        images: list or dict
+            At least two images: paths to fits files (e.g. the reduced frames written by save_fits_files(), or masters) and/or 2D arrays,
+            one per band. They must have the same shape (e.g. the same detector); their relative shifts and rotations are corrected here.
+            Or the dictionary returned by a previous call (the aligned bands are reused: no new alignment, trail or star removal).
+        colors: list
+            One color per image, in any format understood by matplotlib: names ("blue", "green", "red", "orange", "magenta"...),
+            hex strings ("#4060ff") or (r, g, b) tuples with values between 0 and 1. The usual choice is blue for the shortest
+            wavelength and red for the longest (e.g. B, V, I -> "blue", "green", "red"). If images is a previous result, colors can be
+            omitted to keep the previous ones.
+        reference: int
+            Index of the image used as reference for the alignment (default: the first one).
+        alignment_method: string
+            "auto" (default), "stars" or "correlation" (see align()).
+        allow_rotation, allow_scale: bool
+            Fit rotations (default) and/or changes of plate scale (only for images from different instruments or binnings).
+        interpolation_order: int
+            Order of the spline used to resample the aligned images (0 to 5). Default 1 (bilinear): higher orders are sharper but ring
+            (dark and colored rims) around the flat tops of saturated stars.
+        fwhm: float
+            Approximate FWHM of the stars in pixels, for the alignment.
+        remove_saturated_pixels: bool
+            If True, the bleeding trails of the saturated stars (the vertical or horizontal lines where the charge overflows along the
+            CCD) are removed from each image: the round core of the star is kept and the trail is replaced by the profile of the star
+            around it. Cosmetic only.
+        remove_stars: bool
+            If True, the stars are removed before the composite, to show the diffuse light (a galaxy or nebula behind foreground stars):
+            each image is fitted with an empirical PSF by easyspec.photometry.psf_photometry(), and the models of the stars found in
+            ALL the bands given here are subtracted (sources found in some bands only, e.g. knots of a nebula that shine in emission
+            lines, are kept); saturated stars and the residuals of the brightest cores are replaced by the surrounding light plus noise.
+            It takes some minutes per image in crowded fields. The extended halos of the brightest stars are not removed.
+        saturation_level: float or None
+            Saturation level of the images, in their units (e.g. electrons), used by remove_saturated_pixels and remove_stars. Default:
+            from the SATURATE keyword if present, otherwise found in the data (the value where the saturated pixels pile up).
+        band_scaling: string
+            "exposure" (default): each band is divided by its exposure time and all bands share the same white point, so the colors show
+            the real ratios of the count rates (or of the fluxes, if zero_points are given). "separate": each band is normalized on its
+            own (white point = its own percentile), as in DS9 with independent scales: the colors are stronger but no longer
+            proportional to the fluxes.
+        exposure_times: list or None
+            Exposure time of each image, for band_scaling="exposure". Default: the EXPTIME keyword of each image (1 for arrays).
+        zero_points: list or None
+            Photometric zero point of each band (m = zero_point - 2.5 log10(counts/s)), e.g. from photometry.fit_standard_star_solution().
+            With band_scaling="exposure", the bands are converted to fluxes relative to Vega: a star with the colors of Vega (A0) looks
+            white, redder stars yellow-orange-red and hotter stars blue. Without them, the colors also include the sensitivity of the
+            telescope and detector in each band.
+        white_percentile: float or list
+            Percentile that becomes white: of each band (band_scaling="separate"; one value or one per band) or of the brightest band at
+            each pixel (band_scaling="exposure"; one value). Lower values make the image brighter and saturate more stars.
+        black_level: float or list
+            Black point of each band, in units of the noise of its sky background, relative to the sky level: 0 (default) puts the sky
+            at black; positive values (e.g. 1-2) hide the noise of the sky; negative values make the sky grey. One value or one per band
+            (to remove a color cast of the sky, raise the black level of the band that dominates it).
+        band_weights: list or None
+            Multiplicative factor of each band after the scaling (e.g. [1, 1, 1.3] makes the third band stronger): the main control of
+            the color balance (it changes the flux ratios shown by band_scaling="exposure").
+        smoothing_sigma: float or list
+            Gaussian smoothing of the bands (sigma in pixels, one value or one per band) before the composite: reduces the noise of faint
+            diffuse emission, at the cost of resolution. Default 0 (none).
+        stretch: string
+            "log" (default, as the log scale of DS9), "asinh" or "linear".
+        stretch_strength: float or None
+            Strength of the stretch: a in log10(1 + a x)/log10(1 + a) (default 1000, as DS9) or in asinh(a x)/asinh(a) (default 100).
+            Larger values show fainter features.
+        color_mode: string
+            "channels" (default): the red, green and blue channels are stretched separately, as in DS9: bright stars turn white in
+            their cores and keep their colors in the wings. "preserve": the color of every pixel is kept by the stretch (Lupton et al.
+            2004): bright stars keep their colors up to the center, which gives more saturated colors.
+        gamma: float
+            Gamma correction after the stretch: < 1 brightens the faint parts, > 1 darkens them. Default 1 (none).
+        color_saturation: float
+            0 gives a grey-scale image, 1 (default) leaves the colors unchanged, > 1 makes them more vivid.
+        contrast: float
+            Contrast around the mid grey (1 = unchanged).
+        brightness: float
+            Multiplies the final image (1 = unchanged).
+        region: tuple or None
+            (x1, x2, y1, y2) in the pixels of the final (cut) image: zoom on a part of the field. Default: the whole image.
+        flip_x, flip_y: bool
+            Mirror the image left-right and/or up-down (e.g. to show east to the left).
+        plot_diagnostic: bool
+            If True, plot the composite before the cut, with the edges where only some bands have data and the box that will be kept.
+        plot_result: bool
+            If True (default), plot the final (cut) colored image.
+        title: string or None
+            Title of the result plot: "auto" (default) lists the images and colors; None or "" for no title.
+        figure_size: tuple or None
+            Size of the plots in inches (default: 10 inches wide, height from the image shape).
+        show_axes: bool
+            If False, the result is plotted without axes (only the image).
+        output_file: string, Path or None
+            If given, the colored image is saved there.
+        file_format: string or None
+            "png" (8 bits per channel) or "fits" (cube of three planes R, G, B with the WCS of the reference image, if it has one).
+            Default: from the extension of output_file (png if there is none).
+        verbose: bool
+            If True, print the alignment and the crop.
+
+        Returns
+        -------
+        result: dict
+            "rgb": the final colored image (rows x columns x 3, values between 0 and 1); "bands": the aligned and cut images (linear, in the
+            units of the input, trails and stars removed if requested); "crop_box": (x1, x2, y1, y2) in the pixels of the reference image;
+            "transforms": the alignment of each image (see align()); "file": the saved file (or None); plus "names", "colors", "header",
+            "exposure_times", "remove_saturated_pixels" and "remove_stars", used when the result is passed back as "images".
+        """
+
+        if band_scaling not in color_composite.VALID_BAND_SCALINGS:
+            raise ValueError("band_scaling must be 'exposure' or 'separate'.")
+        if color_mode not in color_composite.VALID_COLOR_MODES:
+            raise ValueError("color_mode must be 'channels' or 'preserve'.")
+
+        if isinstance(images, dict):
+            # A previous result: reuse the aligned (and cut) bands
+            previous = images
+            names, header, transforms = previous["names"], previous["header"], previous["transforms"]
+            crop_box = previous["crop_box"]
+            if colors is None:
+                colors = previous["colors"]
+            if exposure_times is None:
+                exposure_times = previous["exposure_times"]
+            for option, value in (("remove_saturated_pixels", remove_saturated_pixels), ("remove_stars", remove_stars)):
+                if value and not previous.get(option, False) and verbose:
+                    print(f"{option} is ignored when a previous result is given: call generate_colored_image() with the image files.")
+            removed_trails, removed_stars = previous.get("remove_saturated_pixels", False), previous.get("remove_stars", False)
+            bands = [np.asarray(band, dtype=float) for band in previous["bands"]]
+            valid = np.all([np.isfinite(band) for band in bands], axis=0)
+            first_call, box = False, (slice(None), slice(None))
+        else:
+            if colors is None:
+                raise ValueError("Give one color per image in 'colors'.")
+            if len(images) < 2:
+                raise ValueError("A colored image needs at least two images (bands).")
+            if len(colors) != len(images):
+                raise ValueError(f"Give one color per image: {len(images)} images and {len(colors)} colors.")
+            names, data, variances, masks, headers = color_composite.read_band_images(images)
+            header = headers[reference]
+            shapes = {array.shape for array in data}
+            if len(shapes) > 1:
+                raise ValueError(f"The images have different shapes {sorted(shapes)}: trim them to the same size first.")
+            if len(set(names)) < len(names):
+                raise ValueError("The same image was given more than once.")
+            if exposure_times is None:
+                exposure_times = [float(band_header.get("EXPTIME", 1.0)) if band_header is not None else 1.0 for band_header in headers]
+            labels = [f"{Path(name).parent.name}/{Path(name).name}" if Path(name).parent.name else Path(name).name for name in names]
+            if band_scaling == "exposure" and verbose:
+                print("Exposure times: " + ", ".join(f"{label} = {time:g} s" for label, time in zip(labels, exposure_times)))
+
+            # Bleeding trails of the saturated stars, removed on the original images (they depend on the CCD columns)
+            if remove_saturated_pixels:
+                for index, band_header in enumerate(headers):
+                    level = saturation_level if saturation_level is not None else color_composite.estimate_saturation_level(data[index],
+                                                                                                                                band_header)
+                    if level is None:
+                        if verbose:
+                            print(f"{labels[index]}: no saturated pixels found")
+                        continue
+                    data[index], trails = color_composite.remove_saturation_trails(data[index], level)
+                    if verbose:
+                        print(f"{labels[index]}: saturation level {level:.6g}; {np.count_nonzero(trails)} pixels of saturation trails replaced")
+            removed_trails = remove_saturated_pixels
+
+            # Alignment onto the reference image, without cutting yet (pixels without data become NaN)
+            reference_name = names[reference]
+            order = [reference_name] + [name for name in names if name != reference_name]
+            group = {"colored image": order}
+            aligned, transforms, _ = alignment.align_images(dict(zip(names, data)), group, method=alignment_method, reference=0,
+                                                            allow_rotation=allow_rotation, allow_scale=allow_scale, subpixel=True,
+                                                            interpolation_order=interpolation_order, crop=False, fill_value=np.nan,
+                                                            fwhm=fwhm, plot=False, verbose=verbose)
+            bands = [aligned[name] for name in names]
+
+            # Stars removed on the original images (no resampling), then moved with the same transformations. Only the stars found in
+            # all bands are removed: knots of a nebula or galaxy found as "stars" in some bands only (e.g. in emission lines) are kept.
+            if remove_stars:
+                fits_of_bands = [color_composite.fit_stars_with_psf(name, array, variance, mask, band_header, saturation_level=saturation_level,
+                                                                    verbose=verbose)
+                                 for name, array, variance, mask, band_header in zip(names, data, variances, masks, headers)]
+                # positions of the stars in the pixels of the reference image (p_ref = matrix @ p + offset), matched between the bands
+                positions = []
+                for name, band_fit in zip(names, fits_of_bands):
+                    record = transforms[name]
+                    xy = np.column_stack([np.asarray(band_fit["table"]["x"], dtype=float), np.asarray(band_fit["table"]["y"], dtype=float)])
+                    positions.append(xy @ np.asarray(record["matrix"]).T + np.asarray(record["offset"]))
+                match_radius = max(2.0, 0.5*max(band_fit["fwhm"] for band_fit in fits_of_bands))
+                selections = color_composite.match_stars_in_all_bands(positions, match_radius)
+                if verbose:
+                    found = ", ".join(f"{label}: {len(band_fit['table'])}" for label, band_fit in zip(labels, fits_of_bands))
+                    print(f"Stars found in each band ({found}); {len(selections[0])} found in all {len(names)} bands (within "
+                          f"{match_radius:.1f} pixels) are removed, the others are kept")
+                star_free, unreliable, fwhm_values = [], np.zeros(data[0].shape, dtype=bool), []
+                for name, array, band_fit, selected in zip(names, data, fits_of_bands, selections):
+                    residual, bad = color_composite.subtract_stars(array, band_fit, selected)
+                    record = transforms[name]
+                    warped = alignment.warp(residual, record["matrix"], record["offset"], array.shape, order=interpolation_order,
+                                            cval=np.nan)
+                    warped[~np.isfinite(aligned[name])] = np.nan
+                    star_free.append(warped)
+                    unreliable |= alignment.warp(bad.astype(float), record["matrix"], record["offset"], array.shape, order=1,
+                                                 cval=0.0) > 0.1
+                    fwhm_values.append(band_fit["fwhm"])
+                # the same pixels are interpolated in all bands, so that the filled patches keep consistent colors
+                bands = color_composite.fill_unreliable_pixels(star_free, unreliable, smoothing_sigma=max(2*max(fwhm_values), 3.0))
+            removed_stars = remove_stars
+
+            # Region with data in all bands, and the largest box inside it
+            valid = np.all([np.isfinite(band) for band in bands], axis=0)
+            y1, y2, x1, x2 = alignment.largest_valid_box(valid)
+            crop_box = (x1, x2, y1, y2)
+            box = (slice(y1, y2), slice(x1, x2))
+            first_call = True
+            if verbose:
+                print(f"Region with data in all {len(bands)} bands: x = {x1}-{x2}, y = {y1}-{y2} ({x2 - x1} x {y2 - y1} pixels)")
+
+        number_of_bands = len(bands)
+        if len(colors) != number_of_bands:
+            raise ValueError(f"Give one color per image: {number_of_bands} images and {len(colors)} colors.")
+        black_levels = color_composite.per_band(black_level, number_of_bands, "black_level")
+        weights = color_composite.per_band(1.0 if band_weights is None else band_weights, number_of_bands, "band_weights")
+        smoothing = color_composite.per_band(smoothing_sigma, number_of_bands, "smoothing_sigma")
+        exposure_times = color_composite.per_band(exposure_times, number_of_bands, "exposure_times")
+        if zero_points is not None:
+            zero_points = color_composite.per_band(zero_points, number_of_bands, "zero_points")
+
+        # Scaling of the bands (on the common region), color mixing, stretch and cosmetic adjustments
+        inside_box = np.zeros(valid.shape, dtype=bool)
+        inside_box[box] = True
+        smoothed = [color_composite.smooth_band(band, sigma) for band, sigma in zip(bands, smoothing)]
+        if band_scaling == "exposure":
+            if np.ndim(white_percentile) != 0:
+                raise ValueError("With band_scaling='exposure' all bands share one white point: give a single white_percentile.")
+            scaled = color_composite.normalize_bands_by_flux(smoothed, valid & inside_box, exposure_times, zero_points, white_percentile,
+                                                             black_levels)
+        else:
+            white_percentiles = color_composite.per_band(white_percentile, number_of_bands, "white_percentile")
+            scaled = [color_composite.normalize_band(band, valid & inside_box, white, black)
+                      for band, white, black in zip(smoothed, white_percentiles, black_levels)]
+        scaled = [weight*band for weight, band in zip(weights, scaled)]
+        rgb_all = color_composite.stretch_rgb(color_composite.mix_colors(scaled, colors), stretch, stretch_strength, color_mode)
+        rgb_all = color_composite.adjust_rgb(rgb_all, gamma=gamma, color_saturation=color_saturation, brightness=brightness,
+                                             contrast=contrast)
+        if first_call and plot_diagnostic:
+            diagnostic = rgb_all.copy()
+            diagnostic[~valid] *= 0.35                                    # darker where some band is missing
+            color_composite.show(diagnostic, "Aligned images before the cut (dark edges: some bands without data)", crop_box,
+                                 figure_size=figure_size)
+        rgb = rgb_all[box]
+
+        # Zoom and orientation (only change what is shown and saved)
+        output_box = crop_box
+        if region is not None:
+            rx1, rx2, ry1, ry2 = [int(round(value)) for value in region]
+            rx1, ry1 = max(rx1, 0), max(ry1, 0)
+            rx2, ry2 = min(rx2, rgb.shape[1]), min(ry2, rgb.shape[0])
+            if rx2 <= rx1 or ry2 <= ry1:
+                raise ValueError(f"The region {region} is outside the image ({rgb.shape[1]} x {rgb.shape[0]} pixels).")
+            rgb = rgb[ry1:ry2, rx1:rx2]
+            output_box = (crop_box[0] + rx1, crop_box[0] + rx2, crop_box[2] + ry1, crop_box[2] + ry2)
+        if flip_x:
+            rgb = rgb[:, ::-1]
+        if flip_y:
+            rgb = rgb[::-1]
+
+        if plot_result:
+            if title == "auto":
+                labels = [f"{Path(name).parent.name}/{Path(name).name}" if Path(name).parent.name else Path(name).name for name in names]
+                title = "Colored image: " + ", ".join(f"{label} ({color})" for label, color in zip(labels, colors))
+            color_composite.show(rgb, title, figure_size=figure_size, show_axes=show_axes)
+        saved = None
+        if output_file is not None:
+            # the WCS is written only for an image that is not mirrored
+            saved = color_composite.save(rgb, output_file, file_format, None if (flip_x or flip_y) else header, output_box, colors, names)
+            if verbose:
+                print(f"Colored image saved in {saved}")
+        return {"rgb": rgb, "bands": [band[box] for band in bands], "crop_box": crop_box, "transforms": transforms, "file": saved,
+                "names": names, "colors": list(colors), "header": header, "exposure_times": list(exposure_times),
+                "remove_saturated_pixels": removed_trails, "remove_stars": removed_stars}
