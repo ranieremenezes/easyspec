@@ -4,9 +4,14 @@
 
 # easyspec
 
-The easiest way to do long-slit spectroscopy.
+The easiest way to do long-slit spectroscopy and imaging photometry.
 
-`easyspec` is a tool designed to streamline long-slit spectroscopy, offering an intuitive framework for reducing, extracting, and analyzing astrophysical spectra.
+`easyspec` is a tool designed to streamline optical data analysis, offering an intuitive framework for:
+
+* **Spectroscopy**: reducing raw long-slit data, extracting the spectra, calibrating them in wavelength and flux, and analyzing them
+  (line fitting with MCMC, redshift, velocities, fluxes and more);
+* **Photometry**: reducing raw images, aperture and PSF photometry, calibration with standard stars, color-magnitude diagrams,
+  surface photometry, differential photometry of time series (e.g. exoplanet transits), and color images of any field.
 
 <p align="center">
   <a href="https://www.gov.br/cbpf/pt-br">
