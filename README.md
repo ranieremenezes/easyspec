@@ -42,7 +42,7 @@ If you'd like to support the maintenance of `easyspec` (or [easyfermi](https://g
 The following instructions assume an installation of `conda` or `mamba` (i.e. a faster version of `conda`).
 
 In the terminal, run (substitute *mamba* by *conda* if it is the case for you):
-<pre><code>mamba create --name easyspec -c conda-forge python=3.11 scipy astropy emcee corner ccdproc matplotlib numpy dust_extinction notebook tqdm</code></pre>
+<pre><code>mamba create --name easyspec -c conda-forge python=3.11 scipy astropy emcee corner ccdproc matplotlib numpy photutils dust_extinction notebook tqdm</code></pre>
 
 This will create the virtual environment and install all dependencies. Then activate the environment and install _easyspec_:
 <pre><code>mamba activate easyspec
