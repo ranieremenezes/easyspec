@@ -102,7 +102,7 @@ An overview seminar on `easyspec`, presented in August 2025 at the University of
 
 # Acknowledgments
 
-To acknowledge `easyspec` in a publication, please cite de Menezes et al., 2025 (https://iopscience.iop.org/article/10.3847/1538-3881/adf220) and the DOI in [Zenodo](https://zenodo.org/records/17211465).
+To acknowledge `easyspec` in a publication, please cite **de Menezes et al., 2025** (https://iopscience.iop.org/article/10.3847/1538-3881/adf220) and the DOI in [Zenodo](https://zenodo.org/records/17211465).
 
 `easyspec` would not be possible without the many open-source packages and methods it is built on, and their authors deserve the credit
 for their work. Depending on which parts of `easyspec` you use, please also cite the corresponding works below:
