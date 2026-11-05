@@ -26,6 +26,28 @@ class cleaning:
         pass
 
 
+    @staticmethod
+    def _files_in_directories(directories, label, data_file_extension="fits", allow_several=False):
+
+        """
+        Sorted list of the data files (extension data_file_extension) in a directory, given as a string or a pathlib.Path, or, if
+        allow_several=True, in a list of directories (the files of each directory in turn). None gives an empty list.
+        """
+
+        if directories is None:
+            return []
+        if isinstance(directories, (str, Path)):
+            directories = [directories]
+        elif not (allow_several and isinstance(directories, (list, tuple))):
+            kind = "a directory (string or Path) or a list of directories" if allow_several else "a directory (string or Path)"
+            raise RuntimeError(f"The {label} files must be given as {kind}.")
+        files = []
+        for directory in directories:
+            if not isinstance(directory, (str, Path)) or not Path(directory).is_dir():
+                raise TypeError(f"Invalid directory for {label} files: {directory}")
+            files = files + np.sort(glob.glob(str(Path(directory).resolve())+f'/*.{data_file_extension}')).tolist()
+        return files
+
     def data_paths(self,bias=None,flats=None,lamp=None,standard_star=None,targets=None,darks=None,data_file_extension="fits"):
 
         """
@@ -36,11 +58,15 @@ class cleaning:
 
         Parameters
         ----------
-        bias,flats,lamp,standard_star,darks: strings
-            Strings containing the path to the directory containing the data files.
-        
-        targets: string or list of strings
-            You can pass a single directory path as a string or a list of paths. E.g. targets = "./spectra_target1" or targets = ["./spectra_target1","./spectra_target2"].
+        bias,flats,lamp,darks: string or pathlib.Path
+            Path to the directory containing the data files.
+
+        standard_star: string, pathlib.Path or a list of them
+            Directory of the standard star files, or a list of directories (e.g. several standard fields observed in imaging, one directory
+            per field). With a list, master() combines the frames of each directory separately, as for the targets.
+
+        targets: string, pathlib.Path or a list of them
+            You can pass a single directory path (string or Path) or a list of paths. E.g. targets = "./spectra_target1" or targets = ["./spectra_target1","./spectra_target2"].
 
         data_file_extension: string
             Extension of the data files. Default = "fits"
@@ -53,80 +79,15 @@ class cleaning:
         
         self.all_images_list = []  # Master list with the paths to all data files
 
-        if bias is not None:
-            if Path(bias).is_dir():
-                # Make a list with the bias files:
-                self.bias_list = np.sort(glob.glob(str(Path(bias).resolve())+f'/*.{data_file_extension}')).tolist()
-                self.all_images_list = self.all_images_list + self.bias_list
-            else:
-                raise TypeError("Invalid directory for bias files.")
-        else:
-            self.bias_list = []
-
-        if flats is not None:
-            if Path(flats).is_dir():
-                # Make a list with the flat images:
-                self.flat_list = np.sort(glob.glob(str(Path(flats).resolve())+f'/*.{data_file_extension}')).tolist()
-                self.all_images_list = self.all_images_list + self.flat_list
-            else:
-                raise TypeError("Invalid directory for flat files.")
-        else:
-            self.flat_list = []
-
-        if lamp is not None:
-            if Path(lamp).is_dir():
-                # Make a list with the lamp images:
-                self.lamp_list = np.sort(glob.glob(str(Path(lamp).resolve())+f'/*.{data_file_extension}')).tolist()
-                self.all_images_list = self.all_images_list + self.lamp_list
-            else:
-                raise TypeError("Invalid directory for lamp files.")
-        else:
-            self.lamp_list = []
-
-        if standard_star is not None:
-            if Path(standard_star).is_dir():
-                # Make a list with the standard star images:
-                self.std_list = np.sort(glob.glob(str(Path(standard_star).resolve())+f'/*.{data_file_extension}')).tolist()
-                self.all_images_list = self.all_images_list + self.std_list
-            else:
-                raise TypeError("Invalid directory for standard star files.")
-        else:
-            self.std_list = []
-
-
-        if targets is not None:
-            if isinstance(targets,str):
-                if Path(targets).is_dir():
-                    # Make a list with the raw science images:
-                    self.target_list = np.sort(glob.glob(str(Path(targets).resolve())+f'/*.{data_file_extension}')).tolist()
-                    self.all_images_list = self.all_images_list + self.target_list
-                else:
-                    raise TypeError("Invalid directory for target files.")
-            elif isinstance(targets,list):
-                self.target_list = []
-                for target in targets:
-                    if Path(target).is_dir():
-                        # Make a list with the raw science images:
-                        self.target_list = self.target_list + np.sort(glob.glob(str(Path(target).resolve())+f'/*.{data_file_extension}')).tolist()
-                    else:
-                        raise TypeError("Invalid directory for target files.")
-                
-                self.all_images_list = self.all_images_list + self.target_list
-            else:
-                raise RuntimeError("Variable 'target' must be a string or a list of strings.")
-        else:
-            self.target_list = []
-
-
-        if darks is not None:
-            if Path(darks).is_dir():
-                # Make a list with the dark files:
-                self.darks_list = np.sort(glob.glob(str(Path(darks).resolve())+f'/*.{data_file_extension}')).tolist()
-                self.all_images_list = self.all_images_list + self.darks_list
-            else:
-                raise TypeError("Invalid directory for dark files.")
-        else:
-            self.darks_list = []
+        # Each input can be a directory (string or pathlib.Path) or, for the standard stars and the targets, a list of directories
+        self.bias_list = self._files_in_directories(bias, "bias", data_file_extension)
+        self.flat_list = self._files_in_directories(flats, "flat", data_file_extension)
+        self.lamp_list = self._files_in_directories(lamp, "lamp", data_file_extension)
+        self.std_list = self._files_in_directories(standard_star, "standard star", data_file_extension, allow_several=True)
+        self.target_list = self._files_in_directories(targets, "target", data_file_extension, allow_several=True)
+        self.darks_list = self._files_in_directories(darks, "dark", data_file_extension)
+        self.all_images_list = (self.bias_list + self.flat_list + self.lamp_list + self.std_list + self.target_list
+                                + self.darks_list)
 
         # Here we create a dictionary with all raw images:
         all_raw_data = {}
@@ -398,6 +359,8 @@ class cleaning:
         master_TYPE.fits: data file
             This function automatically saves a file named master_TYPE.fits in the working directory. If Type = "target" and there are
             several target directories, one master per target is saved (master_target_DIRECTORYNAME.fits) and a list of arrays is returned.
+            The same holds for Type = "standard_star" with several standard star directories (master_standard_star_DIRECTORYNAME.fits);
+            with a single one, the file is master_standard_star.fits, as in previous versions.
             The header of each master is built from the headers of the frames combined into it (see combined_header). If the variance of
             the master is known, it is saved in an extension called "VAR", and its data quality mask in an extension called "MASK" (see the
             module easyspec.data_io for the file format).
@@ -423,7 +386,8 @@ class cleaning:
           compute_variance().
  
         The masters, their variances and their masks are stored in the attributes 'self.masters', 'self.master_variances' and
-        'self.master_masks' (dictionaries whose keys are "bias", "dark", "flat", "lamp", "standard_star" or "target_DIRECTORYNAME").
+        'self.master_masks' (dictionaries whose keys are "bias", "dark", "flat", "lamp", "standard_star", "standard_star_DIRECTORYNAME" (several
+        standard star directories) or "target_DIRECTORYNAME").
         compute_variance() and norm_master_flat() use them automatically.
         """
  
@@ -467,8 +431,8 @@ class cleaning:
  
         data_cube = np.stack([trimmed_data[frame] for frame in data_list],axis=0)
  
-        # If Type == target, we have to check if we have more than one target:
-        if Type == "target":
+        # If Type == target or standard_star, we have to check if we have more than one directory (one master per directory):
+        if Type in ("target", "standard_star"):
             data_path = ""
             data_splitter = []
             for n,file in enumerate(data_list):
@@ -515,9 +479,12 @@ class cleaning:
             elif method == "mean":
                 master = np.mean(group, axis=0)  # To combine with a mean
  
-            if Type == "target":
+            # One master per directory. A single standard star directory keeps the names of previous versions ("standard_star",
+            # master_standard_star.fits); with several, each master is named after its directory, as for the targets.
+            several_standard_stars = Type == "standard_star" and len(data_splitter) > 2
+            if Type == "target" or several_standard_stars:
                 target_name = Path(data_list[data_splitter[n]]).parent.resolve().name
-                key = f"target_{target_name}"
+                key = f"{Type}_{target_name}"
             else:
                 key = Type
  
@@ -592,7 +559,7 @@ class cleaning:
                 if variance_method == "empirical":
                     hdr['COMMENT'] = 'The variance (VAR extension) does not include the noise of masters previously subtracted from the input frames.'
             in_electrons = all(frame in getattr(self, "gain_used", {}) for frame in data_list[data_splitter[n]:data_splitter[n+1]])
-            if Type == "target":
+            if Type == "target" or several_standard_stars:
                 output_file = 'master_'+Type+f'_{target_name}.fits'
             else:
                 output_file = 'master_'+Type+'.fits'
@@ -606,7 +573,7 @@ class cleaning:
                 image_shape = np.shape(master)
                 aspect_ratio = image_shape[0]/image_shape[1]
                 plt.figure(figsize=(12,12*aspect_ratio))
-                if Type == "target":
+                if Type == "target" or several_standard_stars:
                     plt.title('Master '+Type+f' {target_name} - Method: '+method)
                 else:
                     plt.title('Master '+Type+' - Method: '+method)
