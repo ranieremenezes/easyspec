@@ -404,6 +404,13 @@ class analysis:
                 plt.plot(x[bad], np.nan_to_num(f[bad]), "x", color="red", ms=4, label="Flagged pixels")
             finite = np.isfinite(f)
             ylim = np.nanpercentile(f[finite], [0.5, 99.8])
+            # The top is raised to the highest point of the spectrum smoothed with a 3-pixel running median: strong narrow lines (a few
+            # pixels above the 99.8% percentile) are then fully shown, while single-pixel spikes (e.g. cosmic rays) are ignored
+            usable = finite if not n_bad else finite & ~((self.spectrum_mask & BAD_SPECTRUM_BITS) > 0)
+            if np.count_nonzero(usable) > 3:
+                values = f[usable]
+                running_median = np.median(np.vstack([values[:-2], values[1:-1], values[2:]]), axis=0)
+                ylim[1] = max(ylim[1], np.nanmax(running_median))
             plt.ylim(min(0, 1.2*ylim[0]), 1.2*ylim[1])
             plt.xlim(x.min(), x.max())
             plt.minorticks_on()
@@ -542,6 +549,7 @@ class analysis:
                 plt.axvspan(region[0], region[1], color="C2", alpha=0.15, label="Continuum regions" if number == 0 else None)
             plt.plot(x[index], residual[index], "v", color="C3", ms=6, label="Detected lines")
             ylim = np.nanpercentile(residual[good], [0.2, 99.8])
+            ylim = [min(ylim[0], np.nanmin(residual[index])), max(ylim[1], np.nanmax(residual[index]))]
             noise_level = line_significance_sigma*np.nanpercentile(noise[good], 95)
             plt.ylim(1.3*min(ylim[0], -noise_level), 1.3*max(ylim[1], noise_level))
             plt.xlim(x.min(), x.max())
@@ -555,6 +563,9 @@ class analysis:
         if plot_lines:
             plt.figure(figsize=(12,5))
             top = np.nanpercentile(f[good], 99.8)
+            emission_peaks = [height for height, kind in zip(f[index], kinds) if kind == "emission"]
+            if emission_peaks:
+                top = max(top, np.nanmax(emission_peaks))
             for w, height, kind, baseline in zip(x[index], f[index], kinds, continuum_baseline[index]):
                 if kind == "emission":
                     plt.text(w, height + 0.05*top, f"{w:.1f}"+r"$\AA$", color="C0", rotation=90, fontsize=10, ha="center", va="bottom")
@@ -1216,7 +1227,11 @@ class analysis:
             per parameter of the model of that line, in the order: Location (Angstrom), Amplitude (in units of the normalization of the
             spectrum, i.e. a power of 10 printed by fit_lines()), then the FWHM(s) in Angstroms ("fwhm_Lorentz" and then "fwhm_Gauss" for the
             Voigt model) and the skewness (skewed models). E.g. for 4 Lorentzian lines: priors = [None, None, [[7496,7696],[0.1,150],[2,150]],
-            None]. The location range also defines the fit window of that line.
+            None]. The location range also defines the fit window of that line. For blended lines, the window is the range covered by the
+            location ranges of the components if all of them have user-defined priors (a common range, e.g. [4200, 4700] for all, is
+            the simplest choice), and each component is in addition confined between the midpoints to its neighbouring lines, so that
+            the components cannot swap. Components given at the same position (e.g. the narrow and broad components of one line) share the
+            same location range: give them different FWHM ranges, so that each one keeps its role.
         MCMC_walkers: "auto" or int
             Number of walkers. "auto" (default): max(32, 8 x number of parameters).
         MCMC_iterations: "auto" or int
@@ -1329,13 +1344,24 @@ class analysis:
                 lower = max(lower, 0.5*(peaks[first - 1] + peaks[first]))
             if last < n_lines - 1:
                 upper = min(upper, 0.5*(peaks[last] + peaks[last + 1]))
-            for i in group:   # user-defined location priors define the window
-                if priors[i] is not None:
-                    location_low, location_high = float(np.min(priors[i][0])), float(np.max(priors[i][0]))
-                    if len(group) == 1:
-                        lower, upper = location_low, location_high
-                    else:
-                        lower, upper = min(lower, location_low), max(upper, location_high)
+            # User-defined location priors define the window: if all the lines of the group have them, the window is the range they
+            # cover (it can be smaller than the automatic one, e.g. to leave out a region badly described by the model); otherwise it
+            # is enlarged to include them.
+            user_ranges = [(float(np.min(priors[i][0])), float(np.max(priors[i][0]))) for i in group if priors[i] is not None]
+            if user_ranges and len(user_ranges) == len(group):
+                lower, upper = min(low for low, _ in user_ranges), max(high for _, high in user_ranges)
+            elif user_ranges:
+                lower, upper = min([lower] + [low for low, _ in user_ranges]), max([upper] + [high for _, high in user_ranges])
+
+            def neighbour_limits(position):
+                # Midpoints to the neighbouring lines of the blend (None at the ends). Components given at the same position (within one
+                # pixel), e.g. the narrow and broad components of a line, are not neighbours: they share the same location range.
+                line = group[position]
+                previous = [group[p] for p in range(position) if peaks[group[p]] < peaks[line] - pixel]
+                following = [group[p] for p in range(position + 1, len(group)) if peaks[group[p]] > peaks[line] + pixel]
+                low = 0.5*(peaks[previous[-1]] + peaks[line]) if previous else None
+                high = 0.5*(peaks[line] + peaks[following[0]]) if following else None
+                return low, high
 
             # ---------------------------------------------------------------- Initial values and priors of each line of the group
             initial, bounds, labels = [], [], []
@@ -1344,10 +1370,19 @@ class analysis:
                 if priors[i] is not None:
                     line_initial, line_bounds = aux_parse_custom_priors(priors[i], models[i], peaks[i], height)
                     line_labels = list(MODEL_PARAMETERS[models[i]])
+                    if len(group) > 1:
+                        # In a blend, each line is also confined between the midpoints to its neighbours (as with the automatic
+                        # priors), so that the components cannot swap even if they are given the same location range.
+                        neighbour_low, neighbour_high = neighbour_limits(position)
+                        line_bounds[0] = [line_bounds[0][0] if neighbour_low is None else max(line_bounds[0][0], neighbour_low),
+                                          line_bounds[0][1] if neighbour_high is None else min(line_bounds[0][1], neighbour_high)]
+                        if not line_bounds[0][0] < line_initial[0] < line_bounds[0][1]:
+                            line_initial[0] = 0.5*(line_bounds[0][0] + line_bounds[0][1])
                 else:
                     # In a blend, each line is confined between the midpoints to its neighbours, which avoids that two components swap.
-                    location_low = lower if position == 0 else 0.5*(peaks[group[position - 1]] + peaks[i])
-                    location_high = upper if position == len(group) - 1 else 0.5*(peaks[i] + peaks[group[position + 1]])
+                    neighbour_low, neighbour_high = neighbour_limits(position)
+                    location_low = lower if neighbour_low is None else neighbour_low
+                    location_high = upper if neighbour_high is None else neighbour_high
                     line_initial, line_bounds, line_labels = aux_automatic_priors(models[i], peaks[i], height, fwhm_estimates[i],
                                                                                   [location_low, location_high],
                                                                                   [max(0.5*pixel, 0.05), max(4*pixel, upper - lower)])
@@ -1659,7 +1694,7 @@ class analysis:
 
     @_plot_style
     def line_physics(self, wavelengths, flux_density, continuum_baseline, par_values_list, par_values_errors_list, par_names_list, line_windows,
-                     line_std_deviation, sistemic_redshift = None, plot = True, save_file = True, instrumental_fwhm = "auto", n_realizations = 500,
+                     line_std_deviation, plot = True, save_file = True, instrumental_fwhm = "auto", n_realizations = 500,
                      systemic_redshift = None):
 
         """
@@ -1705,7 +1740,7 @@ class analysis:
             The noise of the local continuum at each line (output of analysis.find_lines()); used when the spectrum has no flux uncertainties.
         systemic_redshift: float or [float, float]
             Optional. The systemic redshift (and, optionally, its uncertainty) used to convert all quantities to the rest frame. By default, the
-            redshift of each line is used. ('sistemic_redshift' is accepted as an alias, for compatibility.)
+            redshift of each line is used.
         plot: boolean
             If True, the profile of each line is shown with its integration limits, centroid, line dispersion and FWHM.
         save_file: boolean
@@ -1737,8 +1772,7 @@ class analysis:
         self.line_physics_results (a list of dictionaries).
         """
 
-        if systemic_redshift is None:
-            systemic_redshift = sistemic_redshift
+        
         x_all = self._values(wavelengths)
         f_all = self._values(flux_density)
         continuum_all = np.asarray(continuum_baseline, dtype=float)
@@ -1942,7 +1976,7 @@ class analysis:
                       f"({coverage}), so the luminosity-based mass cannot be computed.", stacklevel=3)
         return None, None
 
-    def BH_mass_Hbeta_VP2006(self, wavelengths, continuum_baseline, FWHM_Hbeta, sistemic_redshift, integrated_flux_Hbeta, Hbeta_rest_wavelength = 4861.333,
+    def BH_mass_Hbeta_VP2006(self, wavelengths, continuum_baseline, FWHM_Hbeta, systemic_redshift, integrated_flux_Hbeta, Hbeta_rest_wavelength = 4861.333,
                              H0 = 70, Om0 = 0.3, n_samples = 20000):
 
         """
@@ -1964,7 +1998,7 @@ class analysis:
         FWHM_Hbeta: float, Quantity or [value, error_down, error_up]
             The rest-frame FWHM of the broad H-beta line in Angstroms, corrected for the instrumental resolution, e.g. one row of the
             output modeled_rest_frame_fhwm of line_physics().
-        sistemic_redshift: float or [value, error]
+        systemic_redshift: float or [value, error]
             The systemic redshift of the AGN.
         integrated_flux_Hbeta: float, Quantity or [value, error_down, error_up]
             The flux of the broad H-beta line in erg/cm2/s.
@@ -1984,7 +2018,7 @@ class analysis:
         """
 
         rng = np.random.default_rng()
-        fwhm, z_value, z_samples, distance = self._mass_inputs(FWHM_Hbeta, Hbeta_rest_wavelength, sistemic_redshift, H0, Om0, n_samples, rng)
+        fwhm, z_value, z_samples, distance = self._mass_inputs(FWHM_Hbeta, Hbeta_rest_wavelength, systemic_redshift, H0, Om0, n_samples, rng)
         flux_value, flux_down, flux_up = aux_line_physics.value_and_errors(integrated_flux_Hbeta, u.erg/u.cm**2/u.s)
         line_luminosity = aux_line_physics.asymmetric_samples(flux_value, flux_down, flux_up, n_samples, rng, positive=True)*4*np.pi*distance**2
         luminosity, _ = self._continuum_luminosity(wavelengths, continuum_baseline, z_value, z_samples, distance, [5100])
@@ -1993,7 +2027,7 @@ class analysis:
         mass_line = self._virial_mass("Hbeta (VP06, L_Hbeta)", [(fwhm, 1000, 2), (line_luminosity, 1e42, 0.63)], 6.67, 0.43)
         return mass_continuum, mass_line
 
-    def BH_mass_CIV_VP2006(self, wavelengths, continuum_baseline, FWHM_CIV, sistemic_redshift, CIV_rest_wavelength = 1549.4795, H0 = 70, Om0 = 0.3,
+    def BH_mass_CIV_VP2006(self, wavelengths, continuum_baseline, FWHM_CIV, systemic_redshift, CIV_rest_wavelength = 1549.4795, H0 = 70, Om0 = 0.3,
                            n_samples = 20000):
 
         """
@@ -2014,7 +2048,7 @@ class analysis:
             The continuum flux density (output of analysis.find_lines()).
         FWHM_CIV: float, Quantity or [value, error_down, error_up]
             The rest-frame FWHM of the C IV line in Angstroms, corrected for the instrumental resolution.
-        sistemic_redshift: float or [value, error]
+        systemic_redshift: float or [value, error]
             The systemic redshift of the AGN.
         CIV_rest_wavelength: float
             The rest wavelength of the C IV line in Angstroms.
@@ -2030,13 +2064,13 @@ class analysis:
         """
 
         rng = np.random.default_rng()
-        fwhm, z_value, z_samples, distance = self._mass_inputs(FWHM_CIV, CIV_rest_wavelength, sistemic_redshift, H0, Om0, n_samples, rng)
+        fwhm, z_value, z_samples, distance = self._mass_inputs(FWHM_CIV, CIV_rest_wavelength, systemic_redshift, H0, Om0, n_samples, rng)
         luminosity, used = self._continuum_luminosity(wavelengths, continuum_baseline, z_value, z_samples, distance, [1350, 1450])
         if luminosity is None:
             return [np.nan, np.nan]
         return self._virial_mass(f"CIV (VP06, L{used})", [(fwhm, 1000, 2), (luminosity, 1e44, 0.53)], 6.66, 0.36)
 
-    def BH_mass_CIV_Coatman2017(self, wavelengths, continuum_baseline, FWHM_CIV, CIV_redshift, sistemic_redshift, CIV_rest_wavelength = 1549.48, H0 = 71,
+    def BH_mass_CIV_Coatman2017(self, wavelengths, continuum_baseline, FWHM_CIV, CIV_redshift, systemic_redshift, CIV_rest_wavelength = 1549.48, H0 = 71,
                                 Om0 = 0.27, blueshift = None, n_samples = 20000):
 
         """
@@ -2062,7 +2096,7 @@ class analysis:
             The rest-frame FWHM of the C IV line in Angstroms, corrected for the instrumental resolution.
         CIV_redshift: float or [value, error]
             The redshift of the C IV line (from its centroid). Ignored if 'blueshift' is given.
-        sistemic_redshift: float or [value, error]
+        systemic_redshift: float or [value, error]
             The systemic redshift of the AGN (e.g. from narrow lines, or from low-ionization lines such as Mg II).
         CIV_rest_wavelength: float
             The rest wavelength of the C IV line in Angstroms (vacuum).
@@ -2080,7 +2114,7 @@ class analysis:
         """
 
         rng = np.random.default_rng()
-        fwhm, z_value, z_samples, distance = self._mass_inputs(FWHM_CIV, CIV_rest_wavelength, sistemic_redshift, H0, Om0, n_samples, rng)
+        fwhm, z_value, z_samples, distance = self._mass_inputs(FWHM_CIV, CIV_rest_wavelength, systemic_redshift, H0, Om0, n_samples, rng)
         if blueshift is not None:
             value, down, up = aux_line_physics.value_and_errors(blueshift)
             blueshift_samples = aux_line_physics.asymmetric_samples(value, down, up, n_samples, rng)
@@ -2107,7 +2141,7 @@ class analysis:
         return self._virial_mass(f"CIV (Coatman+17, L{used})", [(corrected_fwhm, 1000, 2), (luminosity, 1e44, 0.53)], 6.71, 0.36)
 
 
-    def BH_mass_MgII_VO2009(self, wavelengths, continuum_baseline, FWHM_MgII, sistemic_redshift, MgII_rest_wavelength = 2798.75, H0 = 70, Om0 = 0.3,
+    def BH_mass_MgII_VO2009(self, wavelengths, continuum_baseline, FWHM_MgII, systemic_redshift, MgII_rest_wavelength = 2798.75, H0 = 70, Om0 = 0.3,
                             n_samples = 20000):
 
         """
@@ -2127,7 +2161,7 @@ class analysis:
             The continuum flux density (output of analysis.find_lines()).
         FWHM_MgII: float, Quantity or [value, error_down, error_up]
             The rest-frame FWHM of the Mg II line in Angstroms, corrected for the instrumental resolution.
-        sistemic_redshift: float or [value, error]
+        systemic_redshift: float or [value, error]
             The systemic redshift of the AGN.
         MgII_rest_wavelength: float
             The rest wavelength of the Mg II line in Angstroms.
@@ -2144,13 +2178,13 @@ class analysis:
 
         rng = np.random.default_rng()
         zero_points = {3000: 6.86, 2100: 6.79}
-        fwhm, z_value, z_samples, distance = self._mass_inputs(FWHM_MgII, MgII_rest_wavelength, sistemic_redshift, H0, Om0, n_samples, rng)
+        fwhm, z_value, z_samples, distance = self._mass_inputs(FWHM_MgII, MgII_rest_wavelength, systemic_redshift, H0, Om0, n_samples, rng)
         luminosity, used = self._continuum_luminosity(wavelengths, continuum_baseline, z_value, z_samples, distance, list(zero_points))
         if luminosity is None:
             return [np.nan, np.nan]
         return self._virial_mass(f"MgII (VO09, L{used})", [(fwhm, 1000, 2), (luminosity, 1e44, 0.5)], zero_points[used], 0.55)
 
-    def BH_mass_Halpha_Shen2011(self, FWHM_Halpha, sistemic_redshift, integrated_flux_Halpha, Halpha_rest_wavelength = 6562.819, H0 = 70, Om0 = 0.3,
+    def BH_mass_Halpha_Shen2011(self, FWHM_Halpha, systemic_redshift, integrated_flux_Halpha, Halpha_rest_wavelength = 6562.819, H0 = 70, Om0 = 0.3,
                                 systematic_error = 0.18, n_samples = 20000):
 
         """
@@ -2163,7 +2197,7 @@ class analysis:
         ----------
         FWHM_Halpha: float, Quantity or [value, error_down, error_up]
             The rest-frame FWHM of the broad H-alpha line in Angstroms, corrected for the instrumental resolution.
-        sistemic_redshift: float or [value, error]
+        systemic_redshift: float or [value, error]
             The systemic redshift of the AGN.
         integrated_flux_Halpha: float, Quantity or [value, error_down, error_up]
             The flux of the broad H-alpha line in erg/cm2/s.
@@ -2185,7 +2219,7 @@ class analysis:
         """
 
         rng = np.random.default_rng()
-        fwhm, z_value, z_samples, distance = self._mass_inputs(FWHM_Halpha, Halpha_rest_wavelength, sistemic_redshift, H0, Om0, n_samples, rng)
+        fwhm, z_value, z_samples, distance = self._mass_inputs(FWHM_Halpha, Halpha_rest_wavelength, systemic_redshift, H0, Om0, n_samples, rng)
         flux_value, flux_down, flux_up = aux_line_physics.value_and_errors(integrated_flux_Halpha, u.erg/u.cm**2/u.s)
         luminosity = aux_line_physics.asymmetric_samples(flux_value, flux_down, flux_up, n_samples, rng, positive=True)*4*np.pi*distance**2
         return self._virial_mass("Halpha (Shen+11)", [(fwhm, 1, 2.1), (luminosity, 1e42, 0.43)], 0.379, systematic_error)

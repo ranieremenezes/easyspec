@@ -18,7 +18,7 @@ The easiest way to do long-slit spectroscopy and imaging photometry.
     <img src="https://raw.githubusercontent.com/ranieremenezes/easyspec/main/src/easyspec/images/cbpf_logo.png" alt="CBPF" height="70">
   </a>
   <br>
-  <em><code>easyspec</code> is developed at the Centro Brasileiro de Pesquisas Físicas (CBPF), Rio de Janeiro, Brazil.</em>
+  <em><code>easyspec</code> is developed at the Centro Brasileiro de Pesquisas Físicas (CBPF).</em>
 </p>
 
 If you'd like to support the maintenance of `easyspec` (or [easyfermi](https://github.com/ranieremenezes/easyfermi)), consider buying us a coffee:
