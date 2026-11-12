@@ -31,6 +31,14 @@ Photometry tutorials
 * `tutorial_photometry_2_globular_cluster <https://github.com/ranieremenezes/easyspec/blob/main/tutorial/tutorial_photometry_2_globular_cluster.ipynb>`_: PSF photometry of the crowded globular cluster M79 (NGC 1904) with the NTT/EFOSC2: calibration with several standard fields and the built-in standard-star catalogues, color-magnitude diagram, and surface photometry with a King-profile fit.
 * `tutorial_photometry_3_exoplanet_transit <https://github.com/ranieremenezes/easyspec/blob/main/tutorial/tutorial_photometry_3_exoplanet_transit.ipynb>`_: differential photometry of a time series of images, the light curve of an exoplanet transit, and the fit of a transit model.
 
+Gemini GMOS tutorials
+~~~~~~~~~~~~~~~~~~~~~
+
+Raw data of the Gemini GMOS instruments are first converted into single images with ``easyspec.gemini.gmos``, and then reduced with the usual ``easyspec`` classes.
+
+* `GMOS_longslit_dithers_tutorial <https://github.com/ranieremenezes/easyspec/blob/main/tutorial/GMOS_longslit_dithers_tutorial.ipynb>`_: reduction of a GMOS-S long-slit dataset with spectral and spatial dithers: conversion of the raw data, reduction of the target and of a standard star observed in another night, wavelength calibration with the CuAr lamp, flux and telluric calibrations, and stacking of all the exposures into a single spectrum.
+* `GMOS_imaging_cleaning_tutorial <https://github.com/ranieremenezes/easyspec/blob/main/tutorial/GMOS_imaging_cleaning_tutorial.ipynb>`_: cleaning of dithered GMOS-N images, from the raw files to a single combined image in which the gaps between the CCDs are filled by the other exposures.
+
 Advanced spectroscopy tutorials
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

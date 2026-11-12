@@ -163,9 +163,11 @@ def detect_lamp_lines(spectrum, detection_sigma=5.0, min_distance=3):
                                           distance=max(1, int(min_distance)))
     if len(peaks) == 0:
         return np.array([]), np.array([]), np.array([]), np.nan
-    positions = optimal_extraction.refine_peak_positions(spectrum, peaks)
     widths = signal.peak_widths(residual, peaks, rel_height=0.5)[0]
     fwhm = float(np.median(widths)) if len(widths) else np.nan
+    # The window of the fit follows the width of the lines (at least +-4 pixels): a narrow window on wide lines sees only their top
+    half_window = max(4, int(round(1.5*fwhm))) if np.isfinite(fwhm) else 4
+    positions = optimal_extraction.refine_peak_positions(spectrum, peaks, half_window=half_window)
     heights = properties["peak_heights"]
     return positions, heights, heights/noise, fwhm
 

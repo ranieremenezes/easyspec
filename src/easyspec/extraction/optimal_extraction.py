@@ -419,9 +419,10 @@ def refine_peak_positions(spectrum, peaks, half_window=4):
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    p0 = [spectrum[p] - np.min(yy), center, 1.5, np.min(yy)]
+                    p0 = [spectrum[p] - np.min(yy), center, max(1.5, half_window/4), np.min(yy)]
                     popt, _ = optimize.curve_fit(_gaussian_with_constant, xx, yy, p0=p0, maxfev=2000)
-                if abs(popt[1] - center) < 1.0 and 0.3 < abs(popt[2]) < half_window and popt[0] > 0:
+                # Wide lines (e.g. a wide slit, or binned data) have flat tops: their centre can be more than one pixel from the highest pixel
+                if abs(popt[1] - center) < max(1.0, half_window/4) and 0.3 < abs(popt[2]) < half_window and popt[0] > 0:
                     center = float(popt[1])
             except (RuntimeError, ValueError):
                 pass

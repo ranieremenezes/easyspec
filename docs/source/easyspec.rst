@@ -9,3 +9,4 @@ easyspec package
    easyspec.analysis
    easyspec.data_io
    easyspec.photometry
+   easyspec.gemini

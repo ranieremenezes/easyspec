@@ -24,3 +24,8 @@ In the ``easyspec`` `cleaning tutorial <https://github.com/ranieremenezes/easysp
 
    The ``cleaning()`` class of ``easyspec`` can also be used to clean photometric data.
 
+
+.. note::
+
+   Data from the Gemini GMOS instruments come in a different format (one fits extension per amplifier, and three CCDs separated by gaps). They must first be converted with ``easyspec.gemini.gmos.convert()``, which produces single images, sorted into the directories expected by ``cleaning()``. See the `GMOS tutorials <https://github.com/ranieremenezes/easyspec/tree/main/tutorial>`_ and the `gemini documentation <https://easyspec.readthedocs.io/en/latest/easyspec.gemini.html>`_.
+

@@ -88,7 +88,10 @@ def align_images(data, groups, method="auto", reference=None, allow_rotation=Tru
         else:
             reference_name = files[0]
 
-        reference_image = np.nan_to_num(np.asarray(data[reference_name], dtype=float))
+        # Pixels without data (NaN, e.g. gaps between CCDs or bad columns) are set to 0 only to measure the shifts and to interpolate;
+        # they are set back to NaN in the aligned images (see below), so that master() can ignore them.
+        reference_raw = np.asarray(data[reference_name], dtype=float)
+        reference_image = np.nan_to_num(reference_raw)
         reference_estimate = prefilter(reference_image, median_prefilter)
         shape = reference_image.shape
         if common_shape is None:
@@ -108,10 +111,12 @@ def align_images(data, groups, method="auto", reference=None, allow_rotation=Tru
             if name == reference_name:
                 transforms[name] = transform_record(np.eye(2), np.zeros(2), center, "reference", None, None)
                 aligned_data[name] = reference_image.copy()
+                aligned_data[name][~np.isfinite(reference_raw)] = np.nan
                 footprints[name] = np.ones(shape, dtype=bool)
                 continue
 
-            image = np.nan_to_num(np.asarray(data[name], dtype=float))
+            raw_image = np.asarray(data[name], dtype=float)
+            image = np.nan_to_num(raw_image)
             if image.shape != shape:
                 raise RuntimeError(f"Image {Path(name).name} has shape {image.shape}, while its reference has "
                                    f"shape {shape}.")
@@ -142,6 +147,14 @@ def align_images(data, groups, method="auto", reference=None, allow_rotation=Tru
             order = interpolation_order if subpixel else 0
 
             aligned_data[name] = warp(image, matrix, offset, shape, order=order, cval=0.0)
+            invalid = ~np.isfinite(raw_image)
+            if np.any(invalid):
+                # Output pixels that received any contribution from a pixel without data are set to NaN (the spline interpolation of
+                # the zeros used in their place would bias them); the margin follows the size of the interpolation kernel.
+                touched = warp(invalid.astype(float), matrix, offset, shape, order=min(order, 1), cval=0.0) > 1e-3
+                if order > 1:
+                    touched = ndimage.binary_dilation(touched, iterations=order // 2 + 1)
+                aligned_data[name][touched] = np.nan
             footprint = warp(np.ones(shape), matrix, offset, shape, order=min(order, 1), cval=0.0) > 0.999
             if order > 1:
                 # Spline interpolation may ring close to the edges of the field of view: we discard a thin margin.

@@ -319,7 +319,7 @@ class cleaning:
         header["HISTORY"] = f"Master {Type} generated with easyspec (method: {method})."
         return header
 
-    def master(self,Type,trimmed_data,method="median",header_hdu_entry=0,exposure_header_entry=None,airmass_header_entry=None,plot=True,variance=None,mask=None):
+    def master(self,Type,trimmed_data,method="median",header_hdu_entry=0,exposure_header_entry=None,airmass_header_entry=None,plot=True,variance=None,mask=None,min_frames=None):
  
         """
         Function to stack the data files into a master file.
@@ -351,6 +351,11 @@ class cleaning:
             output of compute_variance()). The mask of the master flags a pixel if it is flagged in ALL frames (for "median" and "mode", which
             reject outliers) or in ANY frame (for "mean", and whenever only one or two
             frames are combined, since then the median equals the mean).
+        min_frames: int or None
+            How pixels without data (NaN) in some of the frames are combined, e.g. the gaps between the CCDs of a mosaic (Gemini GMOS) or the
+            regions outside the field of view after align(..., crop=False, fill_value=np.nan). None (default): a pixel without data in any
+            frame is NaN in the master. An integer: the frames without data in a pixel are ignored, and the pixel is combined if at least
+            'min_frames' frames have data in it (e.g. min_frames=1 to fill the CCD gaps of dithered images with the other frames).
  
         Returns
         -------
@@ -466,18 +471,27 @@ class cleaning:
             # Flats: the lamp intensity changes slightly from exposure to exposure. Each flat is scaled to the median level of the group
             # before combining, otherwise the median would be dominated by these level differences (and not reject outliers properly).
             if Type == "flat" and n_frames > 1 and method != "mode":  # Scaling would make the pixel values non-integer, breaking "mode"
-                levels = np.median(group.reshape(n_frames, -1), axis=1).astype(float)
+                levels = np.nanmedian(group.reshape(n_frames, -1), axis=1).astype(float)  # nanmedian: images may have NaN (e.g. CCD gaps)
                 if np.all(levels > 0):
                     group = group * (np.median(levels) / levels)[:, None, None]
                 else:
                     warnings.warn("Some flat frames have a non-positive median level, so the flats were combined without scaling.")
  
-            if method == "median":
-                master = np.median(group, axis=0)  # To combine with a median
-            elif method == "mode":
-                master = st.mode(group, axis=0, keepdims=True)[0][0].astype(int)  # To combine with a mode
-            elif method == "mean":
-                master = np.mean(group, axis=0)  # To combine with a mean
+            # Pixels without data (NaN: e.g. gaps between CCDs, or pixels outside the field of view after align(..., fill_value=np.nan))
+            # are ignored, so that dithered frames fill each other's gaps. A pixel without data in all frames stays NaN.
+            frame_valid = np.isfinite(group)
+            has_nan = min_frames is not None and not np.all(frame_valid)   # NaN-aware combination only if requested (min_frames)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)   # All-NaN pixels
+                if method == "median":
+                    master = np.nanmedian(group, axis=0) if has_nan else np.median(group, axis=0)  # To combine with a median
+                elif method == "mode":
+                    master = st.mode(group, axis=0, keepdims=True)[0][0].astype(int)  # To combine with a mode
+                elif method == "mean":
+                    master = np.nanmean(group, axis=0) if has_nan else np.mean(group, axis=0)  # To combine with a mean
+            if has_nan:
+                too_few = np.sum(frame_valid, axis=0) < max(1, int(min_frames))
+                master = np.where(too_few, np.nan, master)
  
             # One master per directory. A single standard star directory keeps the names of previous versions ("standard_star",
             # master_standard_star.fits); with several, each master is named after its directory, as for the targets.
@@ -498,12 +512,25 @@ class cleaning:
                 if n_frames == 1:
                     master_variance = np.asarray(variance[group_frames[0]], dtype=float)  # a single frame: the variance is passed unchanged
                 elif all(c is not None and np.shape(c) == np.shape(variance[frame]) for c, frame in zip(common, group_frames)):
+                    # Only the frames with data in each pixel contribute (see the combination above)
+                    used = [frame_valid[k] & np.isfinite(np.asarray(variance[frame], dtype=float)) for k, frame in enumerate(group_frames)]
+                    n_used = np.sum(used, axis=0)
+                    n_safe = np.maximum(n_used, 1)
                     common = [np.asarray(c, dtype=float) for c in common]
-                    independent = sum(np.clip(np.asarray(variance[frame], dtype=float) - c, 0, None)
-                                      for frame, c in zip(group_frames, common)) / n_frames**2
+                    independent = sum(np.where(u, np.clip(np.nan_to_num(np.asarray(variance[frame], dtype=float)) - np.nan_to_num(c), 0, None), 0.0)
+                                      for frame, c, u in zip(group_frames, common, used)) / n_safe**2
                     # Fully correlated errors add linearly in standard deviation (and pass unchanged through a median):
-                    common_part = (sum(np.sqrt(c) for c in common) / n_frames)**2
-                    master_variance = factor * independent + common_part
+                    common_part = (sum(np.where(u, np.sqrt(np.clip(np.nan_to_num(c), 0, None)), 0.0) for c, u in zip(common, used)) / n_safe)**2
+                    if not has_nan:
+                        master_variance = factor * independent + common_part
+                    else:
+                        # The median factor depends on the number of frames that contribute to each pixel
+                        factors = np.ones(n_used.shape)
+                        if method != "mean":
+                            for value in np.unique(n_safe):
+                                factors[n_safe == value] = self._median_variance_factor(int(value))
+                        master_variance = factors * independent + common_part
+                    master_variance = np.where(n_used >= max(1, int(min_frames)) if has_nan else n_used > 0, master_variance, np.nan)
                 else:
                     warnings.warn("The calibration part of the variance (see compute_variance()) is not available for all frames, so the "
                                   "noise of the calibration masters is treated as independent between frames. The variance of the master "
@@ -524,7 +551,16 @@ class cleaning:
                 group_masks = np.stack([np.asarray(mask[frame], dtype=np.uint8) for frame in data_list[data_splitter[n]:data_splitter[n+1]]])
                 # (with 1 or 2 frames the median equals the mean, so the "mean" rule applies)
                 averaging = method == "mean" or n_frames <= 2
-                master_mask = np.bitwise_or.reduce(group_masks, axis=0) if averaging else np.bitwise_and.reduce(group_masks, axis=0)
+                if has_nan and group_masks.shape == group.shape:
+                    # Frames without data in a pixel did not contribute to it, so their flags are ignored there
+                    any_valid = np.any(frame_valid, axis=0)
+                    if averaging:
+                        master_mask = np.bitwise_or.reduce(np.where(frame_valid, group_masks, 0).astype(np.uint8), axis=0)
+                    else:
+                        master_mask = np.bitwise_and.reduce(np.where(frame_valid, group_masks, 255).astype(np.uint8), axis=0)
+                    master_mask = np.where(any_valid & ~too_few, master_mask, 4).astype(np.uint8)
+                else:
+                    master_mask = np.bitwise_or.reduce(group_masks, axis=0) if averaging else np.bitwise_and.reduce(group_masks, axis=0)
             else:
                 master_mask = None
  
@@ -625,7 +661,7 @@ class cleaning:
                           "It will be treated as noiseless, which underestimates the final uncertainties.")
             return None
  
-        levels = np.median(group.reshape(n_frames, -1), axis=1).astype(float)
+        levels = np.nanmedian(group.reshape(n_frames, -1), axis=1).astype(float)  # nanmedian: images may have NaN (e.g. CCD gaps)
         reference_level = np.median(levels)
         first = None
         sum_1 = np.zeros(group.shape[1:])
@@ -792,7 +828,8 @@ class cleaning:
 
     def norm_master_flat(self, masterflat, method="polynomial", degree=5, smooth_window=51, surface_degree_y=5, surface_degree_x=5, illumination_threshold=0.5,
                          low_signal_threshold=0.1, clip_sigma=3.0, max_iterations=10, bin_size=8, header_hdu_entry=0, plots=True,
-                         output_file="norm_master_flat.fits", masterflat_variance=None, bad_column_window=15, surface_profile="median_filter", max_flat_noise=None):
+                         output_file="norm_master_flat.fits", masterflat_variance=None, bad_column_window=15, surface_profile="median_filter", max_flat_noise=None,
+                         keep_ccd_steps=False, ccd_gaps=None, min_gap_width=25):
 
         """
         Function to normalize the master flat.
@@ -879,6 +916,21 @@ class cleaning:
             neighbours on each side, and flagged if it deviates by more than clip_sigma times the robust scatter. Bad columns are excluded from
             the models and therefore corrected by the flat. Structures broader than ~bad_column_window/2 are treated as real features of the
             profile. Default = 15.
+        keep_ccd_steps: boolean
+            Only for spectroscopy, with detectors made of several CCDs separated by gaps (columns without data, NaN), e.g. Gemini GMOS. The
+            CCDs do not have the same sensitivity, so the spectrum of the flat lamp has a step at each gap. If True, these steps are measured
+            (by extrapolating the profile from both sides of each gap) and removed from the profile before the 1D model is built: the model
+            is continuous across the gaps, so the steps stay in the normalized flat and are corrected by flatten(). This puts all the CCDs on
+            the same scale, which is needed for the flux calibration (a smooth sensitivity function cannot follow a step) and to combine
+            spectra observed with different central wavelengths (whose gaps fall at different wavelengths). If False (default), the 1D model
+            follows the steps (median_filter) or bends to follow them (polynomial).
+        ccd_gaps: list or None
+            The gaps between the CCDs, as a list of [first column, last column + 1], e.g. [[1024, 1055], [2079, 2110]]. For GMOS data
+            converted by easyspec, use gemini_gmos.ccd_gaps(file). Used only if keep_ccd_steps = True. Default: the runs of at least
+            'min_gap_width' consecutive columns without data.
+        min_gap_width: int
+            Used only if keep_ccd_steps = True and ccd_gaps = None: minimum number of consecutive columns without data that are considered
+            a gap between CCDs. Narrower runs of NaN columns (e.g. bad columns of a bad pixel mask) are ignored. Default = 25.
 
         Returns
         -------
@@ -940,6 +992,45 @@ class cleaning:
         yerr = 1.2533 * robust_std / np.sqrt(n_illuminated)  # Standard error of the median of each column
         yerr = np.where(yerr > 0, yerr, np.nanmedian(yerr[yerr > 0]) if np.any(yerr > 0) else 1.0)
 
+        # ---------------------- Steps between CCDs ----------------------
+        # step_profile is the relative sensitivity of each CCD (1 for the reference CCD). The profile is divided by it, so that the 1D
+        # model built below is continuous across the gaps and the steps stay in the normalized flat.
+        step_profile = np.ones(nx)
+        self.flat_ccd_steps = []
+        if keep_ccd_steps:
+            if ccd_gaps is not None:
+                gaps = sorted((int(start), int(stop)) for start, stop in ccd_gaps)
+            else:
+                empty = ~np.isfinite(yvals)
+                edges = np.flatnonzero(np.diff(np.r_[0, empty.astype(int), 0]))
+                gaps = [(start, stop) for start, stop in zip(edges[::2], edges[1::2])
+                        if stop - start >= min_gap_width and start > 0 and stop < nx]   # Runs of NaN columns inside the image
+            if len(gaps) == 0:
+                warnings.warn("keep_ccd_steps=True, but no gap between CCDs (runs of at least 'min_gap_width' columns without data) was found.")
+            boundaries = [0] + [stop for _, stop in gaps] + [nx]
+            segment_factor = [1.0]
+            for start, stop in gaps:
+                # Straight lines fitted to the 30 columns with data closest to the gap, on each side, extrapolated to the centre of the gap
+                left = np.flatnonzero(np.isfinite(yvals[:start]))[-30:]
+                right = stop + np.flatnonzero(np.isfinite(yvals[stop:]))[:30]
+                centre = 0.5*(start + stop - 1)
+                if len(left) < 5 or len(right) < 5:
+                    segment_factor.append(segment_factor[-1])
+                    continue
+                left_value = np.polyval(np.polyfit(left, yvals[left], 1), centre)
+                right_value = np.polyval(np.polyfit(right, yvals[right], 1), centre)
+                ratio = right_value/left_value if left_value > 0 and right_value > 0 else 1.0
+                segment_factor.append(segment_factor[-1]*ratio)
+            # Reference: the middle CCD
+            reference_factor = segment_factor[len(segment_factor)//2]
+            for number in range(len(segment_factor)):
+                step_profile[boundaries[number]:boundaries[number + 1]] = segment_factor[number]/reference_factor
+                self.flat_ccd_steps.append(segment_factor[number]/reference_factor)
+            print("Relative sensitivity of the CCDs (from left to right, measured on the flat): "
+                  + ", ".join(f"{value:.3f}" for value in self.flat_ccd_steps))
+            yvals = yvals/step_profile
+            yerr = yerr/step_profile
+
         # ---------------------- Model ----------------------
         signal_columns = np.isfinite(yvals) & (yvals > low_signal_threshold*np.nanmedian(yvals))  # Columns with enough signal
 
@@ -948,7 +1039,12 @@ class cleaning:
         # not with the smooth model: otherwise, broad (and real) structures of the lamp spectrum that a polynomial cannot follow would be
         # mistaken for bad columns. Bad columns are excluded from the models, so they remain in (and are corrected by) the normalized flat.
         half_window = max(1, bad_column_window // 2)
-        padded_profile = np.pad(np.where(np.isfinite(yvals), yvals, np.nanmedian(yvals)), half_window, mode="edge")
+        # Columns without data (e.g. CCD gaps, or columns masked by a bad pixel mask) are interpolated from their neighbours, so that they
+        # do not disturb the running medians below (scipy's median filter does not ignore NaN: it spreads them and biases the neighbours).
+        # They are never used in the fits (see signal_columns) and stay uncorrected in the normalized flat.
+        finite_profile = np.isfinite(yvals)
+        filled_profile = np.interp(xvals, xvals[finite_profile], yvals[finite_profile]) if np.any(finite_profile) else np.ones(nx)
+        padded_profile = np.pad(filled_profile, half_window, mode="edge")
         windows = np.lib.stride_tricks.sliding_window_view(padded_profile, 2*half_window + 1)
         local_trend = 0.5 * (np.median(windows[:, :half_window], axis=1) + np.median(windows[:, half_window + 1:], axis=1))
         narrow_residuals = (yvals - local_trend) / yerr
@@ -990,7 +1086,7 @@ class cleaning:
 
         if profile_method == "median_filter":
             # mode="nearest" repeats the edge values instead of padding with zeros, which would bias the profile close to the edges:
-            profile_without_bad_columns = np.where(bad_columns, local_trend, yvals)
+            profile_without_bad_columns = np.where(bad_columns, local_trend, filled_profile)
             model_1d = ndimage.median_filter(profile_without_bad_columns, size=smooth_window, mode="nearest")
             model = np.broadcast_to(model_1d, masterflat.shape)
 
@@ -1004,7 +1100,7 @@ class cleaning:
             if nby < surface_degree_y + 2 or nbx < surface_degree_x + 2:
                 raise ValueError("The image is too small for the requested degrees and bin_size. Please reduce bin_size or the degrees.")
             with np.errstate(divide="ignore", invalid="ignore"):
-                ratio = masterflat / model_1d[None, :]
+                ratio = masterflat / (model_1d*step_profile)[None, :]   # The steps between CCDs are not part of the illumination
             ratio[:, ~used] = np.nan  # Columns rejected by the 1D fit (bad columns, very low signal) do not constrain the surface
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)  # bins made only of excluded columns give NaN and are not used
