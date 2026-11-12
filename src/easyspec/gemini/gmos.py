@@ -819,24 +819,22 @@ def convert(input_directory, output_directory, bad_pixel_mask="auto", overscan="
     """
     Convert all the raw GMOS frames of a directory into single-extension images, sorted into the directories expected by
     easyspec.cleaning().
-
-    The output directory has one subdirectory per instrument setup::
-
-        imaging_FILTER_BINNING/                          e.g. imaging_i_2x2
-        longslit_GRATING_WAVELENGTHnm_SLIT_BINNING/      e.g. longslit_B600_515nm_1.0arcsec_2x2
-        mos_GRATING_WAVELENGTHnm_MASK_BINNING/, ifu_.../
-
-    and each setup has the subdirectories (only those with data)::
-
-        bias/  flat/  lamp/  dark/  standard_star_NAME/  target_NAME/  twilight/  acquisition/
-        flat_standard_star/  lamp_standard_star/   (calibrations of a standard star observed in another night; see below)
-
+ 
+    The output directory has one subdirectory per instrument setup, named after the observing mode and the setup, e.g. ``imaging_i_2x2``
+    (filter and binning) or ``longslit_B600_515nm_1.0arcsec_2x2`` (grating, central wavelength, slit and binning). MOS and IFU setups
+    start with ``mos_`` and ``ifu_``. Each setup has the subdirectories (only those with data):
+ 
+    - ``bias``, ``flat``, ``lamp``, ``dark``, ``twilight`` and ``acquisition``;
+    - ``standard_star_NAME`` and ``target_NAME`` (one per object);
+    - ``flat_standard_star`` and ``lamp_standard_star``: calibrations of a standard star observed in another night (see
+      'calibration_time_limit').
+ 
     In spectroscopy, the exposures taken at different positions along the slit (spatial dithers) go to different directories
     (target_NAME_dither1, target_NAME_dither2...), and those taken with different central wavelengths (spectral dithers) to different
     setups, each one with its own flats and lamps. In imaging, all the dithered exposures of a field go to the same directory (they are
     aligned by cleaning.align()). The bias frames, which do not depend on the optical setup, are copied to every setup with the same
     binning, read mode and detector region.
-
+ 
     Parameters
     ----------
     input_directory: string or Path
@@ -868,15 +866,21 @@ def convert(input_directory, output_directory, bad_pixel_mask="auto", overscan="
         If False (default), an error is raised if a converted file already exists.
     verbose: boolean
         If True, a summary of the conversion is printed.
-
+ 
     Returns
     -------
     setups: dict
-        For each setup, the dictionary of directories to give to cleaning.data_paths(): {"bias": ..., "flats": ..., "lamp": ..., "darks":
-        ..., "standard_star": [...], "targets": [...]} (only the keys with data), e.g.::
-
-            raw = cleaning.data_paths(**setups["longslit_B600_515nm_1.0arcsec_2x2"])
-
+        For each setup, the dictionary of directories to give to cleaning.data_paths(), with the keys "bias", "flats", "lamp", "darks",
+        "standard_star" and "targets" (only those with data).
+ 
+    Examples
+    --------
+    ::
+ 
+        setups = gmos.convert("raw_gemini_data", "gmos_converted")
+        setup = "longslit_B600_515nm_1.0arcsec_2x2"
+        raw = cleaning.data_paths(**setups[setup])
+ 
     Notes
     -----
     A table with every converted frame is saved in the output directory (gmos_conversion_log.csv) and returned by
