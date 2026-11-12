@@ -90,6 +90,7 @@ The instructions on how to use `easyspec` can be found in the GitHub directory [
 * [tutorial\_photometry\_1\_open\_cluster\_NGC4755](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/tutorial_photometry_1_open_cluster_NGC4755.ipynb): aperture photometry of the Jewel Box (NGC 4755) with the ESO/WFI: reduction of the images, color image of the cluster, photometric calibration with Landolt standard stars (zero points, extinction and color terms), calibrated color-magnitude diagrams, and how to calibrate with less data.
 * [tutorial\_photometry\_2\_globular\_cluster](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/tutorial_photometry_2_globular_cluster.ipynb): PSF photometry of the crowded globular cluster M79 (NGC 1904) with the NTT/EFOSC2: calibration with several standard fields and the built-in standard-star catalogues, color-magnitude diagram, and surface photometry with a King-profile fit.
 * [tutorial\_photometry\_3\_exoplanet\_transit](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/tutorial_photometry_3_exoplanet_transit.ipynb): differential photometry of a time series of images, the light curve of an exoplanet transit, and the fit of a transit model.
+* [GMOS\_imaging\_cleaning\_tutorial](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/GMOS_imaging_cleaning_tutorial.ipynb): cleaning of dithered Gemini/GMOS-N images, from the raw files (one extension per amplifier) to a single combined image in which the gaps between the CCDs are filled by the other exposures. The data are the "starfield" package of the [DRAGONS GMOS imaging tutorial](https://dragons.readthedocs.io/projects/gmosimg-drtutorial/en/stable/).
 
 ### Advanced spectroscopy tutorials
 
@@ -97,6 +98,7 @@ The instructions on how to use `easyspec` can be found in the GitHub directory [
 * [asymmetrical\_lines\_easyspec](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/asymmetrical_lines_easyspec.ipynb): here we fit a skewed Lorentzian model to a C IV emission line, demonstrate how to construct a synthetic spectrum, and show how to manually define MCMC priors.
 * [Stacking\_reduced\_spectra](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/Stacking_reduced_spectra.ipynb): in this tutorial, we show you how to stack several spectra of the same target collected with different instruments.
 * [Emission-in-Absorption](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/Emission-in-Absorption.ipynb): here we show how to fit an emission-in-absorption Hβ line in a transition star-forming–AGN spectrum.
+* [GMOS\_longslit\_dithers\_tutorial](https://github.com/ranieremenezes/easyspec/blob/main/tutorial/GMOS_longslit_dithers_tutorial.ipynb): reduction of Gemini/GMOS-S long-slit data with spectral and spatial dithers: conversion of the raw data, reduction of the target and of a standard star observed in another night, wavelength calibration with the CuAr lamp, flux and telluric calibrations, and stacking of all the exposures into a single spectrum. The data are the "dithered" package of the [DRAGONS GMOS long-slit tutorial](https://dragons.readthedocs.io/projects/gmosls-drtutorial/en/stable/ex1_gmosls_dithered.html).
 
 The documentation of `easyspec` can be found in the header of all the functions, and at [this link](https://easyspec.readthedocs.io/en/latest/index.html).
 
@@ -121,6 +123,7 @@ credit for their work. Depending on which parts of `easyspec` you use, please al
     * surface photometry: [King (1962)](https://doi.org/10.1086/108756) for the King profile, [Sérsic (1963)](https://ui.adsabs.harvard.edu/abs/1963BAAA....6...41S) for the Sérsic profile, and [Jedrzejewski (1987)](https://doi.org/10.1093/mnras/226.4.747) for the isophote fits;
     * exoplanet transits: [Mandel & Agol (2002)](https://doi.org/10.1086/345520) for the transit model and [Kipping (2013)](https://doi.org/10.1093/mnras/stt1435) for the limb-darkening parametrization;
     * color images: [Lupton et al. (2004)](https://doi.org/10.1086/382245), if you use `color_mode="preserve"`.
+* **Gemini GMOS data** (`gemini`): the detector tables (gains, read noise, saturation levels and geometry of the CCDs) and the line list of the GMOS CuAr arc lamp were taken from DRAGONS ([Labrie et al. 2023](https://doi.org/10.3847/2515-5172/ad0044); BSD-3-Clause license, see `gemini/gemini_gmos_lookup.py`): if you use them, please cite Labrie et al. (2023) and the [DRAGONS DOI in Zenodo](https://doi.org/10.5281/zenodo.10841622).
 
 The fine-tuning of `easyspec` (code, tests, documentation and tutorials) was greatly helped by Claude, an AI assistant by Anthropic.
 
